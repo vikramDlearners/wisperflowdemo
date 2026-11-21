@@ -1,0 +1,545 @@
+/* Appointments page (pages/Appointments.tsx). Classes are prefixed ap- ; builds on pp- and md- styles. */
+
+.ap-banner {
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+}
+.ap-banner.is-warn {
+  background: #fdf3e4;
+  border: 1px solid #f3e0bf;
+  color: #7a5418;
+}
+.ap-banner.is-error {
+  background: #fbeceb;
+  border: 1px solid #f1d2ce;
+  color: #8a3a30;
+}
+.ap-profile {
+  max-width: 320px;
+  margin-bottom: 16px;
+}
+
+.ap-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 18px;
+  align-items: start;
+}
+.ap-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---------- Calendar ---------- */
+.ap-cal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.ap-cal-head h2 {
+  margin: 0;
+}
+.ap-cal-nav {
+  display: flex;
+  gap: 8px;
+}
+.ap-cal-nav button {
+  height: 34px;
+  min-width: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--pp-line);
+  border-radius: 9px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pp-ink);
+  cursor: pointer;
+}
+.ap-cal-nav button:hover {
+  background: var(--pp-bg);
+}
+.ap-weekdays,
+.ap-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.ap-weekdays span {
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pp-muted);
+  padding: 6px 0 8px;
+}
+.ap-day {
+  position: relative;
+  min-height: 72px;
+  border: 1px solid var(--pp-line);
+  border-radius: 10px;
+  background: #fafcfb;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ap-day.is-outside {
+  opacity: 0.45;
+}
+.ap-day.is-today {
+  border-color: var(--pp-teal);
+  background: #f2f9f7;
+}
+.ap-day.is-selected {
+  box-shadow: 0 0 0 2px var(--pp-teal);
+}
+.ap-day-btn {
+  align-self: flex-start;
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--pp-ink);
+  cursor: pointer;
+}
+.ap-day-btn::after {
+  /* whole cell is clickable to select the day */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+}
+.ap-chips {
+  position: relative; /* above the day button's click area */
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ap-chip,
+.ap-more {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 5px;
+  padding: 2px 5px;
+  font: inherit;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.ap-chip {
+  background: var(--pp-teal-soft);
+  color: var(--pp-teal-dark);
+}
+.ap-chip.is-rescheduled {
+  background: #e6eef8;
+  color: #3e6aa0;
+}
+.ap-chip.is-completed {
+  background: #eef0ef;
+  color: #5d6f6a;
+}
+.ap-chip.is-cancelled {
+  background: #fbeceb;
+  color: #a4493d;
+  text-decoration: line-through;
+}
+.ap-more {
+  background: none;
+  color: var(--pp-muted);
+  padding: 0 5px;
+}
+.ap-dot {
+  display: none;
+}
+
+/* Selected day */
+.ap-dayview {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--pp-line);
+}
+.ap-dayview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+.ap-link {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pp-teal-dark);
+  cursor: pointer;
+}
+.ap-link:hover {
+  text-decoration: underline;
+}
+.ap-link-danger {
+  color: #a4493d;
+}
+.ap-empty {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* Rows (day view, list view, recent visits) */
+.ap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ap-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--pp-line);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.ap-row:hover {
+  border-color: #b9d4cd;
+  background: #fafcfb;
+}
+.ap-row-time {
+  display: flex;
+  flex-direction: column;
+  min-width: 74px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.ap-row-date {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--pp-muted);
+}
+.ap-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+}
+.ap-row-main strong,
+.ap-row-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-row-main span {
+  color: var(--pp-muted);
+  font-size: 0.78rem;
+}
+.ap-row.is-cancelled .ap-row-main strong {
+  text-decoration: line-through;
+  color: var(--pp-muted);
+}
+.ap-list-gap {
+  margin-top: 20px !important;
+}
+
+/* Status pill */
+.ap-status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--pp-teal-soft);
+  color: var(--pp-teal-dark);
+}
+.ap-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.ap-status.is-rescheduled {
+  background: #e6eef8;
+  color: #3e6aa0;
+}
+.ap-status.is-completed {
+  background: #eef0ef;
+  color: #5d6f6a;
+}
+.ap-status.is-cancelled {
+  background: #fbeceb;
+  color: #a4493d;
+}
+
+/* Next appointment card */
+.ap-next {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ap-when {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e6eef8;
+  color: #3e6aa0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.ap-next-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 6px 0 2px;
+  overflow-wrap: anywhere;
+}
+.ap-next .pp-muted {
+  overflow-wrap: anywhere;
+}
+.ap-next-notes {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pp-line);
+  font-size: 0.85rem;
+}
+.ap-next-notes span,
+.ap-dl dt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pp-muted);
+}
+.ap-next-notes p {
+  margin: 4px 0 0;
+}
+.ap-next-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 0 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pp-line);
+  font-size: 0.85rem;
+}
+.ap-full {
+  width: 100%;
+  height: 42px;
+}
+.ap-next-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ap-next-empty p {
+  margin: 0;
+}
+
+/* ---------- Modal ---------- */
+.ap-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(27, 43, 40, 0.45);
+}
+.ap-modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px 22px 22px;
+  box-shadow: 0 24px 60px rgba(27, 43, 40, 0.25);
+}
+.ap-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.ap-modal-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.ap-close {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--pp-bg);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--pp-ink);
+}
+.ap-dl {
+  margin: 14px 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ap-dl dd {
+  margin: 3px 0 0;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+.ap-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.ap-wrap {
+  flex-wrap: wrap;
+}
+.ap-spacer {
+  flex: 1;
+}
+.ap-danger {
+  background: #a4493d;
+  border-color: #a4493d;
+}
+.ap-danger:hover:not(:disabled) {
+  background: #8a3a30;
+}
+.ap-confirm {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fbeceb;
+  color: #8a3a30;
+}
+.ap-confirm p {
+  margin: 0;
+  font-weight: 600;
+}
+.ap-confirm .ap-modal-actions {
+  margin-top: 10px;
+}
+.ap-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ap-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.ap-form .pp-field textarea {
+  padding: 10px 11px;
+  border: 1px solid var(--pp-line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pp-ink);
+  resize: vertical;
+}
+
+.ap-cal-nav button:focus-visible,
+.ap-day-btn:focus-visible,
+.ap-chip:focus-visible,
+.ap-row:focus-visible,
+.ap-link:focus-visible,
+.ap-close:focus-visible {
+  outline: 2px solid var(--pp-teal);
+  outline-offset: 2px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1100px) {
+  .ap-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 700px) {
+  /* Phone: compact calendar with dots; details appear in the day list below it. */
+  .ap-weekdays,
+  .ap-days {
+    gap: 4px;
+  }
+  .ap-weekdays span {
+    font-size: 0.6rem;
+    letter-spacing: 0.02em;
+  }
+  .ap-day {
+    min-height: 0;
+    aspect-ratio: 1;
+    padding: 4px;
+    align-items: center;
+    justify-content: center;
+  }
+  .ap-day-btn {
+    align-self: center;
+    font-size: 0.85rem;
+  }
+  .ap-chips {
+    display: none;
+  }
+  .ap-dot {
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--pp-teal);
+  }
+  .ap-dot.is-cancelled {
+    background: #c97f74;
+  }
+  .ap-dot.is-completed {
+    background: #9aa8a5;
+  }
+  .ap-cal-head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ap-row {
+    flex-wrap: wrap;
+  }
+  .ap-row-main {
+    flex-basis: calc(100% - 90px);
+  }
+  .ap-form-row {
+    grid-template-columns: 1fr;
+  }
+  .ap-modal {
+    padding: 18px 16px;
+  }
+  .ap-modal-actions > .pp-btn {
+    flex: 1 1 auto;
+    height: 44px;
+  }
+}

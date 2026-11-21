@@ -548,3 +548,49 @@ export function confirmPrescriptionScan(
 }
 
 
+
+// ---- appointments (verified against api/appointments.py) ----
+// The family is not in the URL: list by care_recipient_id (a care profile id);
+// get/update/delete look the family up from the appointment itself.
+
+export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "rescheduled";
+
+export interface AppointmentOut {
+  id: string;
+  care_recipient_id: string;
+  scheduled_date: string; // YYYY-MM-DD
+  start_time: string; // HH:MM
+  provider: string;
+  reason: string;
+  notes: string;
+  status: AppointmentStatus;
+}
+
+export interface AppointmentListOut {
+  upcoming: AppointmentOut[]; // today or later, soonest first
+  past: AppointmentOut[]; // before today, most recent first
+}
+
+export interface AppointmentCreate {
+  family_id: string;
+  care_recipient_id: string;
+  scheduled_date: string;
+  start_time: string;
+  provider: string;
+  reason: string;
+  notes?: string;
+}
+
+export type AppointmentUpdate = Partial<Omit<AppointmentCreate, "family_id">> & {
+  status?: AppointmentStatus;
+};
+
+export const appointments = {
+  list: (careRecipientId: string) =>
+    get<AppointmentListOut>(`/api/appointments?care_recipient_id=${encodeURIComponent(careRecipientId)}`),
+  get: (appointmentId: string) => get<AppointmentOut>(`/api/appointments/${appointmentId}`),
+  create: (body: AppointmentCreate) => post<AppointmentOut>("/api/appointments", body),
+  update: (appointmentId: string, body: AppointmentUpdate) =>
+    patch<AppointmentOut>(`/api/appointments/${appointmentId}`, body),
+  remove: (appointmentId: string) => del(`/api/appointments/${appointmentId}`),
+};

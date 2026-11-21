@@ -68,6 +68,14 @@ export default function App() {
         }
       />
       <Route
+        path="/family/:familyId/medicines/:medicineId/edit"
+        element={
+          <MedicineRoute
+            render={(familyId, medicineId) => <MedicineForm familyId={familyId} medicineId={medicineId} />}
+          />
+        }
+      />
+      <Route
         path="/family/:familyId/medicines/:medicineId"
         element={
           <MedicineRoute

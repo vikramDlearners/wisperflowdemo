@@ -4,8 +4,15 @@ import "../medicines.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import { createCareProfileFromOnboarding } from "../careProfileSetup";
 import {
+  checkImageFile,
+  ImageUploadUnavailable,
+  uploadMedicineImage,
+  useMedicineImage,
+} from "../medicineImage";
+import {
   ApiError,
   careProfiles,
+  families,
   medicines,
   members,
   type CareProfileOut,
@@ -53,6 +60,35 @@ export default function MedicineForm({
   const [responsible, setResponsible] = useState("");
   const [active, setActive] = useState(true);
 
+  // Medicine photo. Only members with medicines.edit can add or remove it.
+  const [canEditPhoto, setCanEditPhoto] = useState(true);
+  // The saved photo (GET .../image), shown when editing an existing medicine.
+  const currentImage = useMedicineImage(familyId, isEdit ? medicineId : null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photo) {
+      setPhotoPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(photo);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
+  function pickPhoto(file: File | null | undefined) {
+    setPhotoError(null);
+    if (!file) return;
+    const problem = checkImageFile(file);
+    if (problem) {
+      setPhotoError(problem);
+      return;
+    }
+    setPhoto(file);
+  }
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -61,11 +97,14 @@ export default function MedicineForm({
       careProfiles.list(familyId).catch(() => [] as CareProfileOut[]),
       members.list(familyId).catch(() => [] as MemberOut[]),
       isEdit ? medicines.get(familyId, medicineId) : Promise.resolve(null),
+      families.me(familyId).catch(() => null),
     ])
-      .then(([profileList, memberList, med]) => {
+      .then(([profileList, memberList, med, access]) => {
         if (cancelled) return;
         setProfiles(profileList);
         setPeople(memberList);
+        // If permissions can't be read, show the controls; the server still enforces them.
+        setCanEditPhoto(access ? access.permissions.includes("medicines.edit") : true);
         if (med) {
           setProfileId(med.care_profile_id);
           setDisplayName(med.display_name);
@@ -130,8 +169,22 @@ export default function MedicineForm({
         };
         result = await medicines.create(familyId, body);
       }
+      // Photo is a separate upload after the medicine itself is saved.
+      let photoProblem: string | null = null;
+      try {
+        if (photo) await uploadMedicineImage(familyId, result.id, photo);
+      } catch (err) {
+        photoProblem =
+          err instanceof ImageUploadUnavailable
+            ? "the server doesn't support medicine photos yet"
+            : errorText(err, "the photo upload failed");
+      }
+      const saved = isEdit ? "Medicine updated" : "Medicine added";
+      const notice = photoProblem
+        ? `${saved}, but the photo wasn't uploaded: ${photoProblem}.`
+        : `${saved}.`;
       if (onSaved) onSaved(result);
-      else navigate(listPath);
+      else navigate(listPath, { state: { notice, warn: Boolean(photoProblem) } });
     } catch (err) {
       setError(errorText(err, "Could not save medicine."));
     } finally {
@@ -261,6 +314,81 @@ export default function MedicineForm({
             </section>
 
             <aside className="mf-side">
+              <section className="pp-card">
+                <div className="pp-card-head">
+                  <h2>Medicine photo</h2>
+                  <span className="md-sub">Optional</span>
+                </div>
+                {(() => {
+                  const shown = photoPreview ?? currentImage;
+                  return (
+                    <>
+                      {shown ? (
+                        <div className="mf-photo">
+                          <img src={shown} alt={`Photo of ${displayName || "the medicine"}`} />
+                        </div>
+                      ) : (
+                        !canEditPhoto && <p className="pp-muted mf-side-text">No photo yet.</p>
+                      )}
+
+                      {canEditPhoto ? (
+                        <>
+                          {!shown && (
+                            <label className="mf-photo-drop">
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                capture="environment"
+                                className="mf-photo-input"
+                                onChange={(e) => {
+                                  pickPhoto(e.target.files?.[0]);
+                                  e.target.value = "";
+                                }}
+                              />
+                              <span className="mf-photo-icon" aria-hidden="true">📷</span>
+                              <strong>Add a photo of the medicine</strong>
+                              <span className="md-sub">Strip or box · JPG, PNG or WebP · up to 10 MB</span>
+                            </label>
+                          )}
+                          {shown && (
+                            <div className="mf-photo-actions">
+                              <label className="pp-btn pp-btn-ghost md-btn-link mf-photo-change">
+                                Change photo
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  className="mf-photo-input"
+                                  onChange={(e) => {
+                                    pickPhoto(e.target.files?.[0]);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                              {photo && (
+                                <button
+                                  type="button"
+                                  className="mf-photo-remove"
+                                  onClick={() => {
+                                    setPhoto(null);
+                                    setPhotoError(null);
+                                  }}
+                                >
+                                  {currentImage ? "Keep current" : "Remove"}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {photoError && <p role="alert" className="mf-photo-error">{photoError}</p>}
+                          {photo && <p className="md-sub mf-photo-note">The photo is uploaded when you save.</p>}
+                        </>
+                      ) : (
+                        <p className="md-sub mf-photo-note">Only members who can edit medicines can add a photo.</p>
+                      )}
+                    </>
+                  );
+                })()}
+              </section>
+
               <section className="pp-card">
                 <h2>Prefer to scan?</h2>
                 <p className="pp-muted mf-side-text">

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import "../medicines.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import { ApiError, medicines, members, type MedicineOut, type MemberOut } from "../api";
+import { useMedicineImage } from "../medicineImage";
 
 interface MedicineListProps {
   familyId: string;
@@ -53,6 +54,8 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [caregiverFilter, setCaregiverFilter] = useState<string>("all");
+  // Message passed back from the Add/Edit medicine page (e.g. photo not uploaded).
+  const flash = (useLocation().state ?? null) as { notice?: string; warn?: boolean } | null;
 
   useEffect(() => {
     let cancelled = false;
@@ -149,6 +152,12 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
           </div>
         </div>
 
+        {flash?.notice && (
+          <p role="status" className={`md-notice${flash.warn ? " is-warn" : ""}`}>
+            {flash.warn ? "⚠ " : "✓ "}
+            {flash.notice}
+          </p>
+        )}
         {loading && <p role="status" className="pp-muted">Loading medicines…</p>}
         {error && <p role="alert" className="pp-alert">{error}</p>}
 
@@ -230,9 +239,7 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
                           <tr key={m.id} onClick={() => onSelect?.(m)}>
                             <td className="md-cell-med">
                               <div className="md-med">
-                                <span className={`md-med-icon ${ICON_TONES[i % ICON_TONES.length]}`} aria-hidden="true">
-                                  ✚
-                                </span>
+                                <MedThumb familyId={familyId} medicine={m} tone={ICON_TONES[i % ICON_TONES.length]} />
                                 <div>
                                   <div className="md-strong">{m.display_name}</div>
                                   <div className="md-sub">
@@ -310,5 +317,17 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
         )}
       </div>
     </WorkspaceLayout>
+  );
+}
+
+// Photo thumbnail (GET .../image), or the ✚ icon when the medicine has no photo.
+function MedThumb({ familyId, medicine, tone }: { familyId: string; medicine: MedicineOut; tone: string }) {
+  const url = useMedicineImage(familyId, medicine.id);
+  return url ? (
+    <img className="md-med-photo" src={url} alt={`Photo of ${medicine.display_name}`} />
+  ) : (
+    <span className={`md-med-icon ${tone}`} aria-hidden="true">
+      ✚
+    </span>
   );
 }
