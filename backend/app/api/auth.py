@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -24,9 +24,10 @@ from app.schemas import (
 )
 from app.services.auth import (
     accept_parent_invite,
-    issue_session_token,
+    create_auth_session,
     login_with_otp,
     request_sign_in_link,
+    revoke_auth_session,
     signup_with_otp,
     verify_otp,
     verify_sign_in_token,
@@ -57,7 +58,7 @@ def request_link(body: SignInRequest, db: Session = DbSession) -> dict:
 def verify(body: VerifyRequest, db: Session = DbSession) -> SessionOut:
     user = verify_sign_in_token(db, body.token)
     return SessionOut(
-        session_token=issue_session_token(user.id),
+        session_token=create_auth_session(db, user.id),
         user=UserOut(id=user.id, email=user.email, display_name=user.display_name),
     )
 
@@ -66,7 +67,7 @@ def verify(body: VerifyRequest, db: Session = DbSession) -> SessionOut:
 def accept_invite(body: ParentInviteAccept, db: Session = DbSession) -> SessionOut:
     user = accept_parent_invite(db, body.token)
     return SessionOut(
-        session_token=issue_session_token(user.id),
+        session_token=create_auth_session(db, user.id),
         user=UserOut(id=user.id, email=user.email, display_name=user.display_name),
     )
 
@@ -88,9 +89,19 @@ def login(body: LoginRequest, db: Session = DbSession) -> dict:
 def verify_code(body: VerifyOtpRequest, db: Session = DbSession) -> SessionOut:
     user = verify_otp(db, body.email, body.code)
     return SessionOut(
-        session_token=issue_session_token(user.id),
+        session_token=create_auth_session(db, user.id),
         user=_user_out(user),
     )
+
+
+@router.post("/logout", status_code=204)
+def logout(authorization: str | None = Header(default=None), db: Session = DbSession) -> Response:
+    # Same bearer parsing and 401 messages as current_user in deps.py.
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in required")
+    if not revoke_auth_session(db, authorization[7:].strip()):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session is invalid")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=UserOut)

@@ -1,7 +1,6 @@
-"""Passwordless sign-in: one-time link by email, then a signed session token.
+"""Passwordless sign-in: one-time link by email, then a server-side session token.
 
-Dev-grade: the session token is HMAC(secret_key, user_id). Replace with a proper
-session store or JWT before any real deployment.
+The session token is random; only its sha256 is stored in auth_sessions.
 """
 
 import hashlib
@@ -14,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.login_token import LoginToken
+from app.models.session import AuthSession
 from app.models.parent_invite import ParentInvite
 from app.models.user import User
 from app.services.adapters.messaging import get_email_provider
@@ -167,17 +167,55 @@ def accept_parent_invite(db: Session, token: str) -> User:
     return user
 
 
+def create_auth_session(db: Session, user_id: str) -> str:
+    """Store a new server-side session (hash only) and return the raw token."""
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    db.add(
+        AuthSession(
+            user_id=user_id,
+            token_hash=_hash_token(token),
+            created_at=now,
+            expires_at=now + timedelta(days=settings.session_days),
+            revoked_at=None,
+        )
+    )
+    db.commit()
+    return token
+
+
 def issue_session_token(user_id: str) -> str:
+    # Legacy stateless HMAC token. Not accepted by user_from_session_token any more;
+    # sign-in routes use create_auth_session instead.
     sig = hmac.new(settings.secret_key.encode("utf-8"), user_id.encode("utf-8"), hashlib.sha256)
     return f"{user_id}.{sig.hexdigest()}"
 
 
 def user_from_session_token(db: Session, token: str) -> User | None:
-    user_id, _, sig = token.rpartition(".")
-    if not user_id:
+    now = datetime.now(timezone.utc)
+    row = db.execute(
+        select(AuthSession).where(
+            AuthSession.token_hash == _hash_token(token),
+            AuthSession.revoked_at.is_(None),
+            AuthSession.expires_at > now,
+        )
+    ).scalar_one_or_none()
+    if row is None:
         return None
-    expected = issue_session_token(user_id).rpartition(".")[2]
-    if not hmac.compare_digest(sig, expected):
-        return None
-    user = db.get(User, user_id)
+    user = db.get(User, row.user_id)
     return user if user and user.status == "active" else None
+
+
+def revoke_auth_session(db: Session, token: str) -> bool:
+    """Mark the session for this raw token as revoked. Returns False if none is active."""
+    row = db.execute(
+        select(AuthSession).where(
+            AuthSession.token_hash == _hash_token(token),
+            AuthSession.revoked_at.is_(None),
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return False
+    row.revoked_at = datetime.now(timezone.utc)
+    db.commit()
+    return True

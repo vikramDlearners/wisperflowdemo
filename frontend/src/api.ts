@@ -296,6 +296,13 @@ export const auth = {
     return session;
   },
   me: () => get<UserOut>("/api/auth/me"),
+  logout: async (): Promise<void> => {
+    try {
+      await post<void>("/api/auth/logout");
+    } finally {
+      setSessionToken(null);
+    }
+  },
 };
 
 // ---- email OTP auth (paths from backend api/auth.py) ----

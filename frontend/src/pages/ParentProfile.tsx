@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ApiError, careProfiles, type CareProfileOut } from "../api";
+import { useNavigate } from "react-router-dom";
+import { ApiError, auth, careProfiles, type CareProfileOut } from "../api";
 
 interface ParentProfileProps {
   familyId: string;
@@ -17,6 +18,8 @@ export default function ParentProfile({ familyId }: ParentProfileProps) {
   const [greetingName, setGreetingName] = useState("");
   const [language, setLanguage] = useState("");
   const [timezone, setTimezone] = useState("");
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +77,15 @@ export default function ParentProfile({ familyId }: ParentProfileProps) {
     }
   }
 
+  async function handleSignOut() {
+    try {
+      await auth.logout();
+    } catch {
+      // Token is cleared even if the request fails; ignore the error.
+    }
+    navigate("/");
+  }
+
   if (loading) return <p role="status">Loading care profiles…</p>;
   if (error && !profiles) return <p role="alert">{error}</p>;
   if (!profiles || profiles.length === 0) return <p>No care profiles yet.</p>;
@@ -118,6 +130,10 @@ export default function ParentProfile({ familyId }: ParentProfileProps) {
           {error && <p role="alert">{error}</p>}
         </form>
       )}
+
+      <button type="button" onClick={handleSignOut}>
+        Sign out
+      </button>
     </main>
   );
 }

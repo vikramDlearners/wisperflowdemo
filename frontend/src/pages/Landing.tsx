@@ -1,6 +1,16 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ApiError, login, setRole, signUp, verifyOtp, type RoleChoice } from "../api";
+import {
+  ApiError,
+  auth,
+  getSessionToken,
+  login,
+  setRole,
+  setSessionToken,
+  signUp,
+  verifyOtp,
+  type RoleChoice,
+} from "../api";
 
 type Step = "home" | "signup" | "login" | "code" | "role";
 
@@ -23,6 +33,21 @@ export default function Landing() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Returning visitor: if a session token is already stored, check it with the server.
+  useEffect(() => {
+    if (getSessionToken() == null) return;
+    async function restoreSession() {
+      try {
+        await auth.me();
+        navigate("/onboarding/parent");
+      } catch {
+        // Token is invalid or expired (including 401): forget it and stay on the landing page.
+        setSessionToken(null);
+      }
+    }
+    void restoreSession();
+  }, [navigate]);
 
   const errorText = (err: unknown) =>
     err instanceof ApiError ? err.detail : "Something went wrong. Please try again.";

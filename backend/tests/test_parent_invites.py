@@ -10,7 +10,7 @@ from app.models.parent_invite import ParentInvite
 from app.models.role import Role
 from app.models.user import User
 from app.services import families as families_svc
-from app.services.auth import create_otp, issue_session_token
+from app.services.auth import create_auth_session, create_otp, user_from_session_token
 from app.services.adapters import messaging
 
 
@@ -56,8 +56,8 @@ def family_setup(db_session):
     }
 
 
-def _auth(user: User) -> dict:
-    return {"Authorization": f"Bearer {issue_session_token(user.id)}"}
+def _auth(db, user: User) -> dict:
+    return {"Authorization": f"Bearer {create_auth_session(db, user.id)}"}
 
 
 def _invite_url(family_id: str, membership_id: str) -> str:
@@ -72,7 +72,7 @@ def _token_from(email: RecordingEmail) -> str:
 def test_invite_sends_email_with_link_and_stores_only_hash(client, db_session, family_setup, email):
     setup = family_setup
     response = client.post(
-        _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(setup["manager"])
+        _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(db_session, setup["manager"])
     )
     assert response.status_code == 201
     assert response.json()["email"] == "parent@example.com"
@@ -89,30 +89,30 @@ def test_invite_sends_email_with_link_and_stores_only_hash(client, db_session, f
     assert row.used_at is None
 
 
-def test_invite_rejects_non_parent_member(client, family_setup, email):
+def test_invite_rejects_non_parent_member(client, db_session, family_setup, email):
     setup = family_setup
     response = client.post(
         _invite_url(setup["family_id"], setup["caregiver_membership"].id),
-        headers=_auth(setup["manager"]),
+        headers=_auth(db_session, setup["manager"]),
     )
     assert response.status_code == 400
     assert email.sent == []
 
 
-def test_invite_requires_members_manage(client, family_setup, email):
+def test_invite_requires_members_manage(client, db_session, family_setup, email):
     setup = family_setup
     response = client.post(
         _invite_url(setup["family_id"], setup["membership"].id),
-        headers={"Authorization": f"Bearer {issue_session_token(setup['membership'].user_id)}"},
+        headers={"Authorization": f"Bearer {create_auth_session(db_session, setup['membership'].user_id)}"},
     )
     assert response.status_code == 403
     assert email.sent == []
 
 
-def test_accept_invite_signs_parent_in_once(client, family_setup, email):
+def test_accept_invite_signs_parent_in_once(client, db_session, family_setup, email):
     setup = family_setup
     client.post(
-        _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(setup["manager"])
+        _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(db_session, setup["manager"])
     )
     token = _token_from(email)
 
@@ -120,7 +120,10 @@ def test_accept_invite_signs_parent_in_once(client, family_setup, email):
     assert response.status_code == 200
     body = response.json()
     assert body["user"]["id"] == setup["membership"].user_id
-    assert body["session_token"] == issue_session_token(setup["membership"].user_id)
+    assert isinstance(body["session_token"], str) and body["session_token"]
+    authed = user_from_session_token(db_session, body["session_token"])
+    assert authed is not None
+    assert authed.id == setup["membership"].user_id
 
     again = client.post("/api/auth/accept-invite", json={"token": token})
     assert again.status_code == 401
@@ -129,7 +132,7 @@ def test_accept_invite_signs_parent_in_once(client, family_setup, email):
 def test_accept_invite_rejects_expired_token(client, db_session, family_setup, email):
     setup = family_setup
     client.post(
-        _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(setup["manager"])
+        _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(db_session, setup["manager"])
     )
     token = _token_from(email)
     row = db_session.execute(select(ParentInvite)).scalar_one()
@@ -143,7 +146,7 @@ def test_accept_invite_rejects_expired_token(client, db_session, family_setup, e
 def test_otp_for_parent_does_not_cancel_invite(client, db_session, family_setup, email):
     setup = family_setup
     client.post(
-        _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(setup["manager"])
+        _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(db_session, setup["manager"])
     )
     token = _token_from(email)
     parent = db_session.get(User, setup["membership"].user_id)

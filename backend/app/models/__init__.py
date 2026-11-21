@@ -2,6 +2,7 @@
 
 from app.models.user import User
 from app.models.login_token import LoginToken
+from app.models.session import AuthSession
 from app.models.family import Family
 from app.models.role import Role, RolePermission
 from app.models.membership import FamilyMember
@@ -17,6 +18,7 @@ from app.models.app_setting import AppSetting
 __all__ = [
     "User",
     "LoginToken",
+    "AuthSession",
     "Family",
     "Role",
     "RolePermission",
