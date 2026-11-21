@@ -10,6 +10,7 @@ from app.models.medicine import Medicine
 from app.services.activity import log_activity
 from app.services.errors import NotFound
 from app.services.permissions import require
+from app.services.prescription_scan import ALLOWED_MIME_TYPES, MAX_IMAGE_BYTES
 
 ALLOWED_LANGUAGES = frozenset({"en", "ta", "hi"})
 
@@ -185,3 +186,35 @@ def delete_medicine(db: Session, actor_id: str, family_id: str, medicine_id: str
     log_activity(db, family_id, actor_id, "medicine.deleted", "medicine", medicine.id)
     db.delete(medicine)
     db.commit()
+
+
+def upload_medicine_image(
+    db: Session,
+    actor_id: str,
+    family_id: str,
+    medicine_id: str,
+    image_bytes: bytes,
+    mime_type: str,
+) -> Medicine:
+    require(db, actor_id, family_id, "medicines.edit")
+    medicine = _medicine_in_family(db, family_id, medicine_id)
+    if mime_type not in ALLOWED_MIME_TYPES:
+        raise ValueError("Upload a JPEG, PNG or WebP image")
+    if not image_bytes:
+        raise ValueError("Uploaded image is empty")
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        raise ValueError("Uploaded image must be 10 MB or smaller")
+    medicine.image_data = image_bytes
+    medicine.image_content_type = mime_type
+    log_activity(db, family_id, actor_id, "medicine.image_uploaded", "medicine", medicine.id)
+    db.commit()
+    return medicine
+
+
+def get_medicine_image(db: Session, actor_id: str, family_id: str, medicine_id: str) -> tuple[bytes, str]:
+    """Return (image_bytes, content_type) for a medicine that has an image."""
+    require(db, actor_id, family_id, "medicines.view")
+    medicine = _medicine_in_family(db, family_id, medicine_id)
+    if medicine.image_data is None or medicine.image_content_type is None:
+        raise NotFound("Medicine image not found")
+    return medicine.image_data, medicine.image_content_type
