@@ -22,6 +22,7 @@ import ParentCheckin from "./pages/ParentCheckin";
 import ParentConfirmation from "./pages/ParentConfirmation";
 import ParentHelp from "./pages/ParentHelp";
 import ParentOnboarding from "./pages/ParentOnboarding";
+import ParentProfilePage from "./pages/ParentProfilePage";
 
 // Reads :familyId from the URL and renders the page with it.
 function FamilyRoute({ render }: { render: (familyId: string) => ReactNode }) {
@@ -103,6 +104,7 @@ export default function App() {
       <Route path="/parent/confirmation" element={<ParentConfirmation />} />
       <Route path="/parent/help" element={<ParentHelp />} />
       <Route path="/onboarding/parent" element={<ParentOnboarding />} />
+      <Route path="/parent-profile" element={<ParentProfilePage />} />
     </Routes>
   );
 }

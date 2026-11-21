@@ -2,6 +2,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ApiError,
+  families,
   getProfile,
   saveProfileSection,
   type ParentProfileFields,
@@ -175,6 +176,9 @@ export default function ParentOnboarding() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Shown after Finish: choose to add more users or open the parent profile.
+  const [finished, setFinished] = useState(false);
+  const [nextError, setNextError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -232,9 +236,24 @@ export default function ParentOnboarding() {
     const saved = await saveCurrentStep();
     if (!saved) return;
     if (isFinal) {
-      navigate("/start");
+      setFinished(true);
     } else {
       setStep((s) => s + 1);
+    }
+  }
+
+  // "Add more users" goes to the members page of the user's first family.
+  async function goAddUsers() {
+    setNextError(null);
+    try {
+      const list = await families.list();
+      if (list.length === 0) {
+        setNextError("Create a family first, then you can add more users.");
+        return;
+      }
+      navigate(`/family/${list[0].id}/members`);
+    } catch (err) {
+      setNextError(errorText(err));
     }
   }
 
@@ -438,7 +457,7 @@ export default function ParentOnboarding() {
           <section className="wizard-summary">
             <h2>Profile complete: {percent}%</h2>
             <p className="muted">
-              Review is done. Press Finish to return home. You can update any section later.
+              Review is done. Press Finish to save and choose what to do next. You can update any section later.
             </p>
             <div className="wizard-completion">
               <h3>Completion by section</h3>
@@ -474,6 +493,33 @@ export default function ParentOnboarding() {
           </button>
         </div>
       </form>
+
+      {finished && (
+        <div className="finish-overlay">
+          <div
+            className="finish-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="finish-title"
+          >
+            <div className="finish-icon" aria-hidden="true">✓</div>
+            <h2 id="finish-title">Profile complete</h2>
+            <p className="muted">
+              {form.preferred_name.trim() || "Your parent"}'s profile is saved. What would you like
+              to do next?
+            </p>
+            {nextError && <p role="alert" className="wizard-error">{nextError}</p>}
+            <div className="finish-actions">
+              <button type="button" className="btn btn-secondary" onClick={goAddUsers}>
+                Add more users
+              </button>
+              <button type="button" className="btn" autoFocus onClick={() => navigate("/parent-profile")}>
+                Go to parent profile
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
