@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../medicines.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
+import { createCareProfileFromOnboarding } from "../careProfileSetup";
 import {
   ApiError,
   careProfiles,
@@ -111,11 +112,16 @@ export default function MedicineForm({
         };
         result = await medicines.update(familyId, medicineId, body);
       } else {
-        if (!profileId) {
-          throw new ApiError(400, "Add a care profile for your parent before adding medicines.");
+        // No care profile yet: create one from the onboarding details first.
+        let careProfile = profileId;
+        if (!careProfile) {
+          const created = await createCareProfileFromOnboarding(familyId);
+          setProfiles([created]);
+          setProfileId(created.id);
+          careProfile = created.id;
         }
         const body: MedicineCreate = {
-          care_profile_id: profileId,
+          care_profile_id: careProfile,
           display_name: displayName.trim(),
           instructions_text: instructions.trim() || null,
           quantity_remaining: quantity === "" ? null : Number(quantity),
@@ -134,7 +140,6 @@ export default function MedicineForm({
   }
 
   const title = isEdit ? "Edit medicine" : "Add medicine";
-  const noProfile = !loading && !isEdit && profiles.length === 0;
 
   return (
     <WorkspaceLayout familyId={familyId} current="medicines" title={title}>
@@ -155,7 +160,7 @@ export default function MedicineForm({
             <Link to={listPath} className="pp-btn pp-btn-ghost md-btn-link">
               Cancel
             </Link>
-            <button type="submit" className="pp-btn" disabled={saving || loading || noProfile}>
+            <button type="submit" className="pp-btn" disabled={saving || loading}>
               {saving ? "Saving…" : isEdit ? "Save changes" : "Add medicine"}
             </button>
           </div>
@@ -163,11 +168,6 @@ export default function MedicineForm({
 
         {loading && <p role="status" className="pp-muted">Loading…</p>}
         {error && <p role="alert" className="pp-alert">{error}</p>}
-        {noProfile && (
-          <p role="alert" className="pp-alert">
-            There is no care profile in this family yet, so medicines can't be added.
-          </p>
-        )}
 
         {!loading && (
           <div className="mf-grid">
@@ -290,7 +290,7 @@ export default function MedicineForm({
             <Link to={listPath} className="pp-btn pp-btn-ghost md-btn-link">
               Cancel
             </Link>
-            <button type="submit" className="pp-btn" disabled={saving || noProfile}>
+            <button type="submit" className="pp-btn" disabled={saving}>
               {saving ? "Saving…" : isEdit ? "Save changes" : "Add medicine"}
             </button>
           </div>

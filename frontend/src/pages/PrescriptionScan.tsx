@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import "../medicines.css";
 import "../prescription-scan.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
+import { createCareProfileFromOnboarding } from "../careProfileSetup";
 import {
   ApiError,
   careProfiles,
@@ -192,15 +193,25 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
     pickFile(e.dataTransfer.files?.[0]);
   }
 
+  // Scans are filed under a care profile; create one first if the family has none.
+  async function ensureCareProfile(): Promise<string> {
+    if (careProfileId) return careProfileId;
+    const created = await createCareProfileFromOnboarding(familyId);
+    setProfiles([created]);
+    setCareProfileId(created.id);
+    return created.id;
+  }
+
   async function handleUpload(e: FormEvent) {
     e.preventDefault();
-    if (!file || !careProfileId) return;
+    if (!file) return;
     setUploading(true);
     setError(null);
     try {
-      const s = await uploadPrescriptionScan(familyId, careProfileId, file);
+      const profileId = await ensureCareProfile();
+      const s = await uploadPrescriptionScan(familyId, profileId, file);
       showScan(s);
-      setParams({ scan: s.id, profile: careProfileId }, { replace: true });
+      setParams({ scan: s.id, profile: profileId }, { replace: true });
     } catch (err) {
       handleError(err, "upload");
     } finally {
@@ -323,15 +334,8 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
           </div>
         )}
 
-        {!loading && profiles.length === 0 && error?.kind !== "auth" && (
-          <div className="ps-banner ps-banner-warn" role="alert">
-            <strong>No care profile yet.</strong>
-            <span>Add your parent's care profile before scanning a prescription.</span>
-          </div>
-        )}
-
         {/* Step 1: upload (also shown again after a rejected document) */}
-        {!loading && profiles.length > 0 && (step === 1) && error?.kind !== "auth" && error?.kind !== "notFound" && (
+        {!loading && step === 1 && error?.kind !== "auth" && error?.kind !== "notFound" && (
           <div className="ps-grid">
             <form className="pp-card" onSubmit={handleUpload}>
               <div className="pp-card-head">
@@ -399,7 +403,7 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
 
               <div className="ps-actions">
                 <Link to={medsPath} className="pp-btn pp-btn-ghost md-btn-link">Cancel</Link>
-                <button type="submit" className="pp-btn" disabled={!file || !careProfileId || uploading}>
+                <button type="submit" className="pp-btn" disabled={!file || uploading}>
                   {uploading ? "Reading prescription…" : "Upload and read"}
                 </button>
               </div>

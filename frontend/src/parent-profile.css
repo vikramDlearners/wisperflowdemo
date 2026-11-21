@@ -508,3 +508,14 @@
   opacity: 0.6;
   cursor: progress;
 }
+
+/* Link styled as a button (e.g. "+ Add users" on the Parent profile page). */
+.pp-btn-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.pp-btn-link.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

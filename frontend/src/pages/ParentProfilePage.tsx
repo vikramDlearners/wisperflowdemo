@@ -261,6 +261,19 @@ export default function ParentProfilePage() {
               </p>
             </div>
             <div className="pp-head-actions">
+              {familyId ? (
+                <Link to={`/family/${familyId}/members`} className="pp-btn pp-btn-ghost pp-btn-link">
+                  + Add users
+                </Link>
+              ) : (
+                <span
+                  className="pp-btn pp-btn-ghost pp-btn-link is-disabled"
+                  aria-disabled="true"
+                  title="Create a family first to add users"
+                >
+                  + Add users
+                </span>
+              )}
               <button type="button" className="pp-btn pp-btn-ghost" onClick={handleCancel} disabled={saving || !form}>
                 Cancel
               </button>
