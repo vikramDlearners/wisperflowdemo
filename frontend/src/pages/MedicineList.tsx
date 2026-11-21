@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, medicines, type MedicineOut } from "../api";
 
 interface MedicineListProps {
@@ -41,6 +42,7 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
       <header>
         <h1>Medicine list</h1>
         {onAdd && <button type="button" onClick={onAdd}>Add medicine</button>}
+        <Link to={`/family/${familyId}/prescription-scan`}>Scan prescription</Link>
       </header>
 
       {!items || items.length === 0 ? (

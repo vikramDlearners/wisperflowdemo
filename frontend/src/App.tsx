@@ -9,6 +9,7 @@ import ParentProfile from "./pages/ParentProfile";
 import MedicineList from "./pages/MedicineList";
 import MedicineForm from "./pages/MedicineForm";
 import MedicineDetail from "./pages/MedicineDetail";
+import PrescriptionScan from "./pages/PrescriptionScan";
 import CareVoiceActivity from "./pages/CareVoiceActivity";
 import FamilyTasks from "./pages/FamilyTasks";
 import Appointments from "./pages/Appointments";
@@ -58,6 +59,12 @@ export default function App() {
       <Route
         path="/family/:familyId/medicines/new"
         element={<FamilyRoute render={(familyId) => <MedicineForm familyId={familyId} />} />}
+      />
+      <Route
+        path="/family/:familyId/prescription-scan"
+        element={
+          <FamilyRoute render={(familyId) => <PrescriptionScan familyId={familyId} />} />
+        }
       />
       <Route
         path="/family/:familyId/medicines/:medicineId"

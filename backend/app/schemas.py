@@ -1,5 +1,6 @@
 """Request and response models for the API."""
 
+import re
 from datetime import date, datetime
 from typing import Literal
 
@@ -333,5 +334,40 @@ class ProfileOut(BaseModel):
     caregiver_email: str | None
     updated_at: datetime | None
     completion: CompletionOut
+
+
+_HH_MM = re.compile(r"([01][0-9]|2[0-3]):[0-5][0-9]")
+
+
+class PrescriptionScanOut(BaseModel):
+    id: str
+    document_type: str
+    status: str
+    proposed: dict | None
+
+
+class PrescriptionMedicineIn(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    dose: str | None = Field(default=None, max_length=120)
+    instructions: str | None = Field(default=None, max_length=2000)
+    times: list[str] = Field(min_length=1, max_length=12)
+    responsible_user_id: str | None = None
+
+    @field_validator("times")
+    @classmethod
+    def _times_are_hh_mm(cls, values: list[str]) -> list[str]:
+        for value in values:
+            if not _HH_MM.fullmatch(value):
+                raise ValueError(f"time must be 24-hour HH:MM: {value}")
+        return values
+
+
+class PrescriptionScanConfirm(BaseModel):
+    medicines: list[PrescriptionMedicineIn] = Field(min_length=1, max_length=50)
+
+
+class PrescriptionScanConfirmOut(BaseModel):
+    medicine_ids: list[str]
+    notified_user_ids: list[str]
 
 

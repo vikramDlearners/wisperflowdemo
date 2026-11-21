@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     sms_provider: str = "mock"
 
     gemini_api_key: Optional[str] = None
+    gemini_model: str = "gemini-2.0-flash"
     elevenlabs_api_key: Optional[str] = None
 
     intent_mode: str = "offline_rules"

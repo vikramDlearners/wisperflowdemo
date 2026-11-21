@@ -254,12 +254,14 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
   const headers: Record<string, string> = { Accept: "application/json" };
   const token = getSessionToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // FormData: let the browser set the multipart Content-Type with its boundary.
+  const isForm = body instanceof FormData;
+  if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -483,6 +485,66 @@ export function saveProfileSection(
   fields: ParentProfileFields,
 ): Promise<ParentProfileOut> {
   return patch<ParentProfileOut>("/api/auth/me/profile", { section, ...fields });
+}
+
+// ---- prescription scans (verified against api/prescription_scans.py) ----
+
+export interface PrescriptionMedicineIn {
+  name: string;
+  dose: string | null;
+  instructions: string | null;
+  times: string[]; // 24-hour "HH:MM"
+  responsible_user_id?: string | null;
+}
+
+export interface PrescriptionScanOut {
+  id: string;
+  document_type: string; // 'prescription' | 'invoice' | 'other'
+  status: string; // 'pending_review' | 'rejected' | 'confirmed'
+  proposed: { medicines: PrescriptionMedicineIn[] } | null;
+}
+
+export interface PrescriptionScanConfirm {
+  medicines: PrescriptionMedicineIn[];
+}
+
+export interface PrescriptionScanConfirmOut {
+  medicine_ids: string[];
+  notified_user_ids: string[];
+}
+
+function prescriptionScanBase(familyId: string, careProfileId: string): string {
+  return `/api/families/${familyId}/care-profiles/${careProfileId}/prescription-scans`;
+}
+
+export function uploadPrescriptionScan(
+  familyId: string,
+  careProfileId: string,
+  file: File,
+): Promise<PrescriptionScanOut> {
+  const form = new FormData();
+  form.append("file", file);
+  return request<PrescriptionScanOut>("POST", prescriptionScanBase(familyId, careProfileId), form);
+}
+
+export function getPrescriptionScan(
+  familyId: string,
+  careProfileId: string,
+  scanId: string,
+): Promise<PrescriptionScanOut> {
+  return get<PrescriptionScanOut>(`${prescriptionScanBase(familyId, careProfileId)}/${scanId}`);
+}
+
+export function confirmPrescriptionScan(
+  familyId: string,
+  careProfileId: string,
+  scanId: string,
+  body: PrescriptionScanConfirm,
+): Promise<PrescriptionScanConfirmOut> {
+  return post<PrescriptionScanConfirmOut>(
+    `${prescriptionScanBase(familyId, careProfileId)}/${scanId}/confirm`,
+    body,
+  );
 }
 
 
