@@ -1,0 +1,496 @@
+/* Medicines page (pages/MedicineList.tsx). Builds on the pp- workspace styles. */
+
+.md-btn-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.pp-btn.md-btn-link {
+  color: #fff;
+}
+.pp-btn.pp-btn-ghost.md-btn-link {
+  color: var(--pp-ink);
+}
+
+.md-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.md-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.md-stat strong {
+  font-size: 1.8rem;
+  line-height: 1.2;
+}
+.md-stat span {
+  color: var(--pp-muted);
+  font-size: 0.8rem;
+}
+
+.md-table-card {
+  padding-bottom: 8px;
+}
+.md-filters {
+  display: flex;
+  gap: 8px;
+}
+.md-filters select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 30px;
+  padding: 0 28px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pp-bg)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%234a5b57' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E")
+    no-repeat right 11px center;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #4a5b57;
+  cursor: pointer;
+}
+.md-filters select:focus-visible {
+  outline: 2px solid var(--pp-teal);
+}
+
+.md-table-wrap {
+  position: relative; /* contains the visually-hidden header labels */
+  overflow-x: auto;
+}
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.md-table th {
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pp-muted);
+  padding: 10px 9px;
+  border-bottom: 1px solid var(--pp-line);
+  white-space: nowrap;
+}
+.md-table td {
+  padding: 13px 9px;
+  border-bottom: 1px solid var(--pp-line);
+  vertical-align: middle;
+}
+.md-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.md-table tbody tr:hover {
+  background: #fafbfb;
+}
+.md-strong {
+  font-weight: 700;
+}
+.md-sub {
+  font-size: 0.72rem;
+  color: var(--pp-muted);
+}
+.md-med,
+.md-owner {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.md-med-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.md-tone-green {
+  background: var(--pp-teal-soft);
+  color: var(--pp-teal);
+}
+.md-tone-warm {
+  background: #fdf0e3;
+  color: #c27a2c;
+}
+.md-tone-blue {
+  background: #e6eef8;
+  color: #3e6aa0;
+}
+.md-av {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.md-av-blue {
+  background: #e6eef8;
+  color: #3e6aa0;
+}
+.md-av-warm {
+  background: #fbf0dc;
+  color: #9a6b1f;
+}
+.md-av-green {
+  background: var(--pp-teal-soft);
+  color: var(--pp-teal-dark);
+}
+.md-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e3f4ea;
+  color: #1f6b43;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.md-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.md-status.is-off {
+  background: var(--pp-bg);
+  color: var(--pp-muted);
+}
+.md-more {
+  color: #4a5b57;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.md-more:hover {
+  background: var(--pp-bg);
+}
+.md-more:focus-visible {
+  outline: 2px solid var(--pp-teal);
+}
+.md-empty {
+  padding: 24px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+}
+.md-empty p {
+  margin: 0;
+}
+.md-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.md-note {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px 14px;
+  border-radius: 12px;
+  background: #eaf3f0;
+  color: #3d5a53;
+  font-size: 0.75rem;
+}
+.md-note strong {
+  color: var(--pp-teal-dark);
+  font-size: 0.8rem;
+}
+.md-note p {
+  margin: 6px 0 0;
+}
+.md-note-icon {
+  color: var(--pp-teal);
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+/* Tablet: keep the table, let it scroll sideways instead of squashing. */
+@media (max-width: 1024px) {
+  .md-table {
+    min-width: 820px;
+  }
+  .md-table-card .pp-card-head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
+
+/* Phone: stats stack, table rows become cards. */
+@media (max-width: 700px) {
+  .md-stats {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .md-stat {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  .md-stat strong {
+    font-size: 1.5rem;
+    min-width: 28px;
+  }
+  .md-filters {
+    width: 100%;
+  }
+  .md-filters select {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .md-table-wrap {
+    overflow: visible;
+  }
+  .md-table {
+    min-width: 0;
+  }
+  .md-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .md-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .md-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    column-gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--pp-line);
+    border-radius: 12px;
+  }
+  .md-table tbody tr:hover {
+    background: #fff;
+  }
+  .md-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  .md-table td.md-cell-med {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .md-table td.md-cell-status {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .md-table td.md-cell-more {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .md-table td[data-label] {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 16px;
+    padding-top: 10px;
+    margin-top: 10px;
+    border-top: 1px solid var(--pp-line);
+    text-align: right;
+  }
+  .md-table td[data-label]::before {
+    content: attr(data-label);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pp-muted);
+    text-align: left;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .md-table td[data-label] > * {
+    grid-column: 2;
+    justify-self: end;
+  }
+  .md-table td[data-label] .md-owner {
+    flex-direction: row-reverse;
+  }
+  .md-more {
+    display: inline-block;
+    padding: 6px 8px;
+  }
+  .md-note {
+    padding: 14px 12px;
+  }
+}
+
+/* Outline bell with unread dot (WorkspaceLayout top bar). */
+.ws-bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  color: var(--pp-muted);
+}
+.ws-bell-dot {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e0634f;
+  border: 1px solid #fff;
+}
+
+/* ---------- Add / edit medicine form (pages/MedicineForm.tsx) ---------- */
+.mf-back {
+  color: var(--pp-teal-dark);
+  text-decoration: none;
+}
+.mf-back:hover {
+  text-decoration: underline;
+}
+.mf-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+  max-width: 1120px;
+}
+.mf-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.mf-span {
+  grid-column: 1 / -1;
+}
+.mf-req {
+  margin-left: 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pp-muted);
+}
+.pp-field textarea {
+  padding: 10px 11px;
+  border: 1px solid var(--pp-line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pp-ink);
+  resize: vertical;
+  min-height: 84px;
+}
+.pp-field textarea:focus-visible {
+  outline: 2px solid var(--pp-teal);
+  outline-offset: 0;
+  border-color: var(--pp-teal);
+}
+.pp-field input::placeholder,
+.pp-field textarea::placeholder {
+  color: #a3b0ad;
+}
+.mf-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--pp-line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.mf-toggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--pp-teal);
+}
+.mf-toggle > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mf-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.mf-side-text {
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+}
+.mf-full {
+  width: 100%;
+  justify-content: center;
+}
+.mf-note {
+  margin-top: 0;
+}
+.mf-bottom-actions {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .mf-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .mf-fields {
+    grid-template-columns: 1fr;
+  }
+  .ws .pp-head-actions.mf-head-actions {
+    display: none;
+  }
+  /* Phone: actions live in a sticky bar at the bottom of the screen. */
+  .mf-bottom-actions {
+    display: flex;
+    gap: 10px;
+    position: sticky;
+    bottom: 0;
+    margin: 18px -16px -32px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid var(--pp-line);
+    z-index: 5;
+  }
+  .mf-bottom-actions > * {
+    flex: 1 1 0;
+    justify-content: center;
+    height: 44px;
+  }
+  .ws .pp-field input,
+  .ws .pp-field select,
+  .ws .pp-field textarea {
+    font-size: 16px; /* stops iOS zooming into fields */
+  }
+  .ws .pp-field input,
+  .ws .pp-field select {
+    height: 44px;
+  }
+}

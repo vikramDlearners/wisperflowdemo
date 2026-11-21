@@ -1,0 +1,111 @@
+/* Responsive behaviour for components/WorkspaceLayout.tsx.
+   Scoped to .ws so pages that still use the pp- shell directly are unaffected.
+   Desktop (> 1024px): fixed sidebar. Tablet/mobile: sidebar becomes a drawer. */
+
+.ws-menu,
+.ws-backdrop {
+  display: none;
+}
+
+.ws-menu {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid var(--pp-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--pp-ink);
+  cursor: pointer;
+}
+.ws-menu:focus-visible {
+  outline: 3px solid #9fd3c9;
+  outline-offset: 2px;
+}
+
+@media (max-width: 1024px) {
+  .pp.ws {
+    grid-template-columns: 1fr;
+  }
+  .ws .pp-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 40;
+    width: 272px;
+    max-width: 85vw;
+    height: 100vh;
+    height: 100dvh;
+    border-right: 1px solid var(--pp-line);
+    border-bottom: 0;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.22s ease, visibility 0s linear 0.22s;
+  }
+  .ws.ws-nav-open .pp-sidebar {
+    transform: none;
+    visibility: visible;
+    box-shadow: 12px 0 40px rgba(27, 43, 40, 0.18);
+    transition: transform 0.22s ease;
+  }
+  .ws.ws-nav-open .ws-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(27, 43, 40, 0.4);
+  }
+  .ws-menu {
+    display: grid;
+  }
+  .ws .pp-topbar {
+    gap: 12px;
+    padding: 0 24px;
+  }
+  .ws .pp-content {
+    padding: 26px 24px 40px;
+  }
+}
+
+@media (max-width: 600px) {
+  .ws .pp-topbar {
+    height: 60px;
+    padding: 0 14px;
+    gap: 10px;
+  }
+  .ws .pp-breadcrumb span {
+    display: none;
+  }
+  .ws-user-text {
+    display: none;
+  }
+  .ws .ws-user {
+    padding: 0;
+  }
+  .ws .pp-content {
+    padding: 20px 16px 32px;
+  }
+  .ws .pp-page-head {
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .ws .pp-page-head h1 {
+    font-size: 1.6rem;
+  }
+  .ws .pp-head-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .ws .pp-head-actions > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws .pp-sidebar,
+  .ws.ws-nav-open .pp-sidebar {
+    transition: none;
+  }
+}
