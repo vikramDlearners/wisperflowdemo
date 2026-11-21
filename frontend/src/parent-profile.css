@@ -519,3 +519,146 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ---------- Parent profile: small screens (inside the shared .ws layout) ---------- */
+.pp-bottom-actions {
+  display: none;
+}
+@media (max-width: 600px) {
+  /* Header keeps "+ Add users"; Cancel / Save move to the bottom bar. */
+  .ws .pp-head-actions .pp-save-btn {
+    display: none;
+  }
+  .ws .pp-head-actions .pp-btn-link {
+    justify-content: center;
+    height: 44px;
+  }
+  .pp-bottom-actions {
+    display: flex;
+    gap: 10px;
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin: 18px -16px -32px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid var(--pp-line);
+  }
+  .pp-bottom-actions .pp-btn {
+    flex: 1 1 0;
+    height: 44px;
+  }
+  .ws .pp-card {
+    padding: 16px;
+  }
+  .ws .pp-card-head {
+    gap: 10px;
+  }
+  .ws .pp-preview {
+    padding: 16px;
+  }
+  .ws .pp-preview-btn {
+    margin: 14px 0 0;
+  }
+  .ws .pp-access-row {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  .pp-bottom-actions {
+    flex-wrap: wrap;
+  }
+  .pp-bottom-status {
+    flex: 1 0 100%;
+    margin: 0 0 2px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--pp-teal-dark);
+    text-align: center;
+  }
+  .pp-bottom-status.is-error {
+    color: #a4493d;
+  }
+}
+
+/* "Give link to parent" (Linked device card). */
+.pp-invite {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pp-invite-btn {
+  width: 100%;
+  height: 42px;
+}
+.pp-invite-ok,
+.pp-invite-err,
+.pp-invite-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.pp-invite-ok {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pp-teal-soft);
+  color: var(--pp-teal-dark);
+  font-weight: 600;
+}
+.pp-invite-err {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fbeceb;
+  color: #8a3a30;
+}
+.pp-invite-hint {
+  color: var(--pp-muted);
+}
+.pp-invite-hint a {
+  color: var(--pp-teal-dark);
+  font-weight: 700;
+}
+
+/* ---------- Parent profile: view mode (default) vs edit mode ---------- */
+.pp-value {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 1px;
+  border-bottom: 1px solid var(--pp-line);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pp-ink);
+  overflow-wrap: anywhere;
+}
+.pp-value.is-empty {
+  color: var(--pp-muted);
+  font-weight: 400;
+}
+.pp-access .pp-value {
+  border-bottom: 0;
+  min-height: 0;
+}
+.pp-chip.is-static {
+  cursor: default;
+}
+.pp-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* A light teal edge shows the form is now editable. */
+.pp-content.is-editing .pp-grid > .pp-card:first-child {
+  border-color: #a9d3c9;
+  box-shadow: 0 0 0 3px rgba(31, 122, 110, 0.08);
+}
+@media (max-width: 600px) {
+  .ws .pp-head-actions .pp-edit-btn {
+    justify-content: center;
+    height: 44px;
+  }
+}

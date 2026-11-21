@@ -109,3 +109,16 @@
     transition: none;
   }
 }
+
+/* Phones: larger form controls, and 16px text so iOS doesn't zoom into fields. */
+@media (max-width: 600px) {
+  .ws .pp-field input,
+  .ws .pp-field select,
+  .ws .pp-field textarea {
+    font-size: 16px;
+  }
+  .ws .pp-field input,
+  .ws .pp-field select {
+    height: 44px;
+  }
+}

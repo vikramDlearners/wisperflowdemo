@@ -37,11 +37,12 @@ interface NavItem {
   key: WorkspacePage;
   icon: string;
   label: string;
-  to: string;
+  to: string | null; // null while the family is unknown: shown disabled
 }
 
 interface WorkspaceLayoutProps {
-  familyId: string;
+  /** null when the user has no family yet: family links are shown disabled. */
+  familyId: string | null;
   current: WorkspacePage;
   title: string;
   children: ReactNode;
@@ -81,34 +82,41 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
     };
   }, []);
 
-  const base = `/family/${familyId}`;
+  const fam = (path: string) => (familyId ? `/family/${familyId}${path}` : null);
   const workspace: NavItem[] = [
-    { key: "overview", icon: "⌂", label: "Overview", to: base },
+    { key: "overview", icon: "⌂", label: "Overview", to: fam("") },
     { key: "parent-profile", icon: "♡", label: "Parent profile", to: "/parent-profile" },
-    { key: "medicines", icon: "▤", label: "Medicines", to: `${base}/medicines` },
-    { key: "activity", icon: "◉", label: "CareVoice activity", to: `${base}/activity` },
-    { key: "tasks", icon: "☷", label: "Tasks", to: `${base}/tasks` },
-    { key: "appointments", icon: "▦", label: "Appointments", to: `${base}/appointments` },
-    { key: "records", icon: "▧", label: "Records", to: `${base}/records` },
-    { key: "timeline", icon: "↗", label: "Family timeline", to: `${base}/timeline` },
+    { key: "medicines", icon: "▤", label: "Medicines", to: fam("/medicines") },
+    { key: "activity", icon: "◉", label: "CareVoice activity", to: fam("/activity") },
+    { key: "tasks", icon: "☷", label: "Tasks", to: fam("/tasks") },
+    { key: "appointments", icon: "▦", label: "Appointments", to: fam("/appointments") },
+    { key: "records", icon: "▧", label: "Records", to: fam("/records") },
+    { key: "timeline", icon: "↗", label: "Family timeline", to: fam("/timeline") },
   ];
   const settings: NavItem[] = [
-    { key: "members", icon: "♙", label: "Family members", to: `${base}/members` },
-    { key: "notifications", icon: "⚙", label: "Notification settings", to: `${base}/notifications` },
+    { key: "members", icon: "♙", label: "Family members", to: fam("/members") },
+    { key: "notifications", icon: "⚙", label: "Notification settings", to: fam("/notifications") },
   ];
 
   const renderNav = (items: NavItem[]) =>
-    items.map((item) => (
-      <Link
-        key={item.key}
-        to={item.to}
-        className={`pp-nav-item${item.key === current ? " is-current" : ""}`}
-        aria-current={item.key === current ? "page" : undefined}
-      >
-        <span className="pp-nav-icon" aria-hidden="true">{item.icon}</span>
-        {item.label}
-      </Link>
-    ));
+    items.map((item) =>
+      item.to ? (
+        <Link
+          key={item.key}
+          to={item.to}
+          className={`pp-nav-item${item.key === current ? " is-current" : ""}`}
+          aria-current={item.key === current ? "page" : undefined}
+        >
+          <span className="pp-nav-icon" aria-hidden="true">{item.icon}</span>
+          {item.label}
+        </Link>
+      ) : (
+        <span key={item.key} className="pp-nav-item is-disabled" title="Create a family first">
+          <span className="pp-nav-icon" aria-hidden="true">{item.icon}</span>
+          {item.label}
+        </span>
+      ),
+    );
 
   const parent = parentName?.trim() || "Your parent";
   const userName = user?.display_name ?? "You";
