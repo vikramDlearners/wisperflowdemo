@@ -475,3 +475,36 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Log out button (components/LogoutButton.tsx), shown at the foot of the sidebar. */
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: #a4493d;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.logout-btn svg {
+  width: 18px;
+  flex-shrink: 0;
+}
+.logout-btn:hover:not(:disabled) {
+  background: #fbeceb;
+}
+.logout-btn:focus-visible {
+  outline: 3px solid #f1c9c3;
+  outline-offset: 2px;
+}
+.logout-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

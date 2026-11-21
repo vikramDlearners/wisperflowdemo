@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import "../parent-profile.css";
+import LogoutButton from "../components/LogoutButton";
 import {
   ApiError,
   auth,
@@ -223,6 +224,7 @@ export default function ParentProfilePage() {
               <div className="pp-person-sub">{userRole}</div>
             </div>
           </div>
+          <LogoutButton />
         </div>
       </aside>
 

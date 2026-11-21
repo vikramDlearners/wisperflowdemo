@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import "../parent-profile.css";
 import "../workspace.css";
 import { auth, getProfile, type UserOut } from "../api";
+import LogoutButton from "./LogoutButton";
 
 // Family workspace shell: sidebar navigation + top bar. Uses the pp- styles
 // from parent-profile.css so it matches the Parent profile page.
@@ -148,6 +149,7 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
               <div className="pp-person-sub">{userRole}</div>
             </div>
           </div>
+          <LogoutButton />
         </div>
       </aside>
 
