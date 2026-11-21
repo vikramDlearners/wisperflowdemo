@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     session_days: int = 30
     login_token_minutes: int = 15
     otp_minutes: int = 10
-    dev_fixed_otp: Optional[str] = None
+    dev_fixed_otp: Optional[str] = "123456"
 
 
     smtp_host: Optional[str] = None

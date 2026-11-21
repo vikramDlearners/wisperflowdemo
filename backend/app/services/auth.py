@@ -70,7 +70,7 @@ def create_otp(db: Session, user: User, purpose: str) -> str:
     ).scalars().all()
     for row in previous:
         row.used_at = now
-    code = settings.dev_fixed_otp or f"{secrets.randbelow(1_000_000):06d}"
+    code = "123456"
     expires = now + timedelta(minutes=settings.otp_minutes)
     db.add(
         LoginToken(
@@ -95,12 +95,8 @@ def signup_with_otp(db: Session, email: str, display_name: str) -> None:
     from app.services.families import create_family
 
     create_family(db, user, f"{user.display_name}'s family")
-    code = create_otp(db, user, "signup")
-    get_email_provider().send(
-        email,
-        "Your CareCircle verification code",
-        f"Your CareCircle verification code is {code}. It expires in {settings.otp_minutes} minutes.",
-    )
+    # OTP email skipped for now; the code is always 123456.
+    create_otp(db, user, "signup")
 
 
 def login_with_otp(db: Session, email: str) -> None:
@@ -109,12 +105,8 @@ def login_with_otp(db: Session, email: str) -> None:
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is None or user.status != "active":
         return
-    code = create_otp(db, user, "login")
-    get_email_provider().send(
-        email,
-        "Your CareCircle verification code",
-        f"Your CareCircle verification code is {code}. It expires in {settings.otp_minutes} minutes.",
-    )
+    # OTP email skipped for now; the code is always 123456.
+    create_otp(db, user, "login")
 
 
 def verify_otp(db: Session, email: str, code: str) -> User:
