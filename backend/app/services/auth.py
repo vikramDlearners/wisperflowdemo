@@ -91,6 +91,10 @@ def signup_with_otp(db: Session, email: str, display_name: str) -> None:
     user = User(email=email, display_name=display_name.strip())
     db.add(user)
     db.commit()
+    # Local import: services/families.py imports _hash_token from this module, so a top-level import would be circular.
+    from app.services.families import create_family
+
+    create_family(db, user, f"{user.display_name}'s family")
     code = create_otp(db, user, "signup")
     get_email_provider().send(
         email,

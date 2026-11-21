@@ -125,12 +125,16 @@ export default function ParentProfilePage() {
     setError(null);
     setSaved(false);
     try {
-      const updated = await saveProfileSection("parent", {
+      await saveProfileSection("parent", {
         parent_full_name: orNull(form.parent_full_name),
         preferred_name: orNull(form.preferred_name),
         relationship: orNull(form.relationship),
-        parent_mobile: orNull(form.parent_mobile),
         preferred_language: orNull(form.preferred_language),
+      });
+      await saveProfileSection("communication", {
+        parent_mobile: orNull(form.parent_mobile),
+      });
+      const updated = await saveProfileSection("care", {
         caregiver_name: orNull(form.caregiver_name),
       });
       setProfile(updated);

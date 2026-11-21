@@ -1,0 +1,335 @@
+{
+  "info": {
+    "_postman_id": "5c1d2e7a-8b3f-4a10-9e2c-7f4a1b6d0c11",
+    "name": "CareCircle - Prescription Scans",
+    "description": "Mock collection for the prescription-scan endpoints in backend/app/api/prescription_scans.py. Auth matches frontend/src/api.ts: 'Authorization: Bearer <session token>'. Response bodies follow PrescriptionScanOut, PrescriptionScanConfirmOut and PrescriptionMedicineIn in backend/app/schemas.py. Error bodies use FastAPI's {\"detail\": ...} shape and their message text is illustrative.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "familyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "careProfileId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "scanId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Upload prescription scan",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code < 300) {",
+              "    try {",
+              "        const body = pm.response.json();",
+              "        if (body && body.id) {",
+              "            pm.collectionVariables.set(\"scanId\", body.id);",
+              "        }",
+              "    } catch (e) {}",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": ""
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/care-profiles/{{careProfileId}}/prescription-scans",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "care-profiles",
+            "{{careProfileId}}",
+            "prescription-scans"
+          ]
+        },
+        "description": "Upload a prescription photo as multipart/form-data, field 'file' (File). Returns 201 with PrescriptionScanOut. Needs medicines.edit."
+      },
+      "response": [
+        {
+          "name": "201 - prescription (pending_review)",
+          "status": "Created",
+          "code": 201,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"id\":\"b1e7c9d2-4f3a-4c8e-9a61-2d5f0e7a8b01\",\"document_type\":\"prescription\",\"status\":\"pending_review\",\"proposed\":{\"medicines\":[{\"name\":\"Amlodipine\",\"dose\":\"5 mg\",\"instructions\":\"after food\",\"times\":[\"08:00\",\"20:00\"]}]}}"
+        },
+        {
+          "name": "201 - invoice (rejected)",
+          "status": "Created",
+          "code": 201,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"id\":\"c2f8d0e3-5a4b-4d9f-8b72-3e6f1f8b9c02\",\"document_type\":\"invoice\",\"status\":\"rejected\",\"proposed\":{\"medicines\":[]}}"
+        },
+        {
+          "name": "400 - unsupported file type",
+          "status": "Bad Request",
+          "code": 400,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"detail\":\"Unsupported file type\"}"
+        },
+        {
+          "name": "401 - no token",
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"detail\":\"Not authenticated\"}"
+        }
+      ]
+    },
+    {
+      "name": "Get prescription scan",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code < 300) {",
+              "    try {",
+              "        const body = pm.response.json();",
+              "        if (body && body.id) {",
+              "            pm.collectionVariables.set(\"scanId\", body.id);",
+              "        }",
+              "    } catch (e) {}",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/care-profiles/{{careProfileId}}/prescription-scans/{{scanId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "care-profiles",
+            "{{careProfileId}}",
+            "prescription-scans",
+            "{{scanId}}"
+          ]
+        },
+        "description": "Fetch one scan. Returns 200 with PrescriptionScanOut, or 404 when the scan is not found. Needs medicines.view."
+      },
+      "response": [
+        {
+          "name": "200 - pending_review",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"id\":\"b1e7c9d2-4f3a-4c8e-9a61-2d5f0e7a8b01\",\"document_type\":\"prescription\",\"status\":\"pending_review\",\"proposed\":{\"medicines\":[{\"name\":\"Amlodipine\",\"dose\":\"5 mg\",\"instructions\":\"after food\",\"times\":[\"08:00\",\"20:00\"]}]}}"
+        },
+        {
+          "name": "404 - scan not found",
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"detail\":\"Scan not found\"}"
+        }
+      ]
+    },
+    {
+      "name": "Confirm prescription scan",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code < 300) {",
+              "    try {",
+              "        const body = pm.response.json();",
+              "        if (body && body.id) {",
+              "            pm.collectionVariables.set(\"scanId\", body.id);",
+              "        }",
+              "    } catch (e) {}",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"medicines\":[{\"name\":\"Amlodipine\",\"dose\":\"5 mg\",\"instructions\":\"after food\",\"times\":[\"08:00\",\"20:00\"],\"responsible_user_id\":null}]}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/care-profiles/{{careProfileId}}/prescription-scans/{{scanId}}/confirm",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "care-profiles",
+            "{{careProfileId}}",
+            "prescription-scans",
+            "{{scanId}}",
+            "confirm"
+          ]
+        },
+        "description": "Confirm the proposed medicines. Body is PrescriptionScanConfirm: medicines (1-50 PrescriptionMedicineIn items). Each time must be 24-hour HH:MM. Returns 200 with PrescriptionScanConfirmOut. Needs medicines.edit."
+      },
+      "response": [
+        {
+          "name": "200 - confirmed",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"medicine_ids\":[\"e4a1b2c3-6d5e-4f70-9a83-4b7c2d9e0f03\"],\"notified_user_ids\":[\"d5b6c7d8-7e6f-4a81-8b94-5c8d3e0f1a04\"]}"
+        },
+        {
+          "name": "400 - scan not pending_review",
+          "status": "Bad Request",
+          "code": 400,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"detail\":\"Scan is not pending review\"}"
+        },
+        {
+          "name": "422 - invalid time format",
+          "status": "Unprocessable Entity",
+          "code": 422,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"medicines\",0,\"times\",0],\"msg\":\"Value error, time must be 24-hour HH:MM: 25:00\",\"input\":\"25:00\",\"ctx\":{\"error\":\"time must be 24-hour HH:MM: 25:00\"}}]}"
+        }
+      ]
+    }
+  ]
+}
