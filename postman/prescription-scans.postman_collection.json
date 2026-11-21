@@ -32,6 +32,16 @@
       "type": "string"
     },
     {
+      "key": "careRecipientId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "appointmentId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "scanId",
       "value": "",
       "type": "string"
@@ -328,6 +338,168 @@
             }
           ],
           "body": "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"medicines\",0,\"times\",0],\"msg\":\"Value error, time must be 24-hour HH:MM: 25:00\",\"input\":\"25:00\",\"ctx\":{\"error\":\"time must be 24-hour HH:MM: 25:00\"}}]}"
+        }
+      ]
+    },
+    {
+      "name": "Appointments",
+      "item": [
+        {
+          "name": "List appointments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments?care_recipient_id={{careRecipientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "appointments"
+              ],
+              "query": [
+                {
+                  "key": "care_recipient_id",
+                  "value": "{{careRecipientId}}"
+                }
+              ]
+            },
+            "description": "List appointments for a care recipient. Required query: care_recipient_id. Returns 200 with AppointmentListOut (upcoming, past)."
+          }
+        },
+        {
+          "name": "Get appointment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "appointments",
+                "{{appointmentId}}"
+              ]
+            },
+            "description": "Fetch one appointment by id. Returns 200 with AppointmentOut."
+          }
+        },
+        {
+          "name": "Create appointment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"family_id\":\"{{familyId}}\",\"care_recipient_id\":\"{{careRecipientId}}\",\"scheduled_date\":\"2025-01-15\",\"start_time\":\"09:30\",\"provider\":\"Dr. Sarah Lee\",\"reason\":\"Annual checkup\",\"notes\":\"Bring recent lab results\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "appointments"
+              ]
+            },
+            "description": "Create an appointment (AppointmentCreate). Body fields: family_id, care_recipient_id, scheduled_date (YYYY-MM-DD), start_time (HH:MM, max 8 chars), provider (max 255), reason (max 255), notes (optional, defaults to empty string). Returns 201 with AppointmentOut. The status field is not accepted on create."
+          }
+        },
+        {
+          "name": "Update appointment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"cancelled\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "appointments",
+                "{{appointmentId}}"
+              ]
+            },
+            "description": "Partially update an appointment (AppointmentUpdate). All fields optional: care_recipient_id, scheduled_date (YYYY-MM-DD), start_time, provider, reason, notes, status (scheduled, completed, cancelled, rescheduled). Returns 200 with AppointmentOut."
+          }
+        },
+        {
+          "name": "Delete appointment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "appointments",
+                "{{appointmentId}}"
+              ]
+            },
+            "description": "Delete one appointment by id. Returns 204 with no body."
+          }
         }
       ]
     }

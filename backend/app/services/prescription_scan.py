@@ -6,6 +6,7 @@ Staging and commits follow the other services: notify() only stages rows, the ca
 import base64
 import json
 import re
+import urllib.error
 import urllib.request
 from typing import Any
 
@@ -25,6 +26,10 @@ MAX_IMAGE_BYTES = 10 * 1024 * 1024
 DOCUMENT_TYPES = frozenset({"prescription", "invoice", "other"})
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 GEMINI_TIMEOUT_SECONDS = 60
+
+
+class PrescriptionScanUpstreamError(Exception):
+    """The Gemini request failed or returned a response that could not be read."""
 
 PROMPT = (
     "You are reading a photo of a document for a family caring for an elderly parent. "
@@ -65,8 +70,15 @@ def scan_document(image_bytes: bytes, mime_type: str) -> dict[str, Any]:
         headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=GEMINI_TIMEOUT_SECONDS) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=GEMINI_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise PrescriptionScanUpstreamError(f"Gemini request failed with HTTP status {exc.code}") from None
+    except urllib.error.URLError:
+        raise PrescriptionScanUpstreamError("Gemini request failed (network error)") from None
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        raise PrescriptionScanUpstreamError("Gemini request failed (could not read response)") from None
     try:
         text = payload["candidates"][0]["content"]["parts"][0]["text"]
         result = json.loads(text)

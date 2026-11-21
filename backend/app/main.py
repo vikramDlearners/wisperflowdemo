@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import (
     activity,
+    appointments,
     auth,
     care_profiles,
     families,
@@ -70,6 +71,7 @@ for _router in (
     medicines.router,
     prescription_scans.router,
     tasks.router,
+    appointments.router,
     notifications.router,
     activity.router,
     settings.router,

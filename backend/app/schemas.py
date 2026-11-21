@@ -212,6 +212,45 @@ class TaskUpdate(BaseModel):
     priority: str | None = None
 
 
+AppointmentStatusIn = Literal["scheduled", "completed", "cancelled", "rescheduled"]
+
+
+class AppointmentCreate(BaseModel):
+    family_id: str
+    care_recipient_id: str
+    scheduled_date: date
+    start_time: str = Field(min_length=1, max_length=8)
+    provider: str = Field(min_length=1, max_length=255)
+    reason: str = Field(min_length=1, max_length=255)
+    notes: str = ""
+
+
+class AppointmentUpdate(BaseModel):
+    care_recipient_id: str | None = None
+    scheduled_date: date | None = None
+    start_time: str | None = Field(default=None, min_length=1, max_length=8)
+    provider: str | None = Field(default=None, min_length=1, max_length=255)
+    reason: str | None = Field(default=None, min_length=1, max_length=255)
+    notes: str | None = None
+    status: AppointmentStatusIn | None = None
+
+
+class AppointmentOut(BaseModel):
+    id: str
+    care_recipient_id: str
+    scheduled_date: date
+    start_time: str
+    provider: str
+    reason: str
+    notes: str
+    status: AppointmentStatusIn
+
+
+class AppointmentListOut(BaseModel):
+    upcoming: list[AppointmentOut]
+    past: list[AppointmentOut]
+
+
 class SignUpRequest(BaseModel):
     email: str
     display_name: str = Field(min_length=1, max_length=255)

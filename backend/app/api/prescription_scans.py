@@ -1,6 +1,6 @@
 """Prescription photo scans for a care profile. Upload and confirm need medicines.edit; viewing needs medicines.view."""
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, DbSession
@@ -34,7 +34,10 @@ def upload_prescription_scan(
 ) -> PrescriptionScanOut:
     # Read one byte past the limit so the service can reject oversized uploads.
     image_bytes = file.file.read(svc.MAX_IMAGE_BYTES + 1)
-    scan = svc.create_scan(db, user.id, family_id, care_profile_id, image_bytes, file.content_type or "")
+    try:
+        scan = svc.create_scan(db, user.id, family_id, care_profile_id, image_bytes, file.content_type or "")
+    except svc.PrescriptionScanUpstreamError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Prescription scanning is temporarily unavailable") from exc
     return _out(scan)
 
 
