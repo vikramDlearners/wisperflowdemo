@@ -232,7 +232,7 @@ export default function ParentOnboarding() {
     const saved = await saveCurrentStep();
     if (!saved) return;
     if (isFinal) {
-      navigate("/");
+      navigate("/start");
     } else {
       setStep((s) => s + 1);
     }

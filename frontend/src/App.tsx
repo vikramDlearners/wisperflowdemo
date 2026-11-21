@@ -3,6 +3,7 @@ import { Route, Routes, useParams } from "react-router-dom";
 import SignIn from "./pages/SignIn";
 import ParentAcceptInvite from "./pages/ParentAcceptInvite";
 import Landing from "./pages/Landing";
+import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import ParentProfile from "./pages/ParentProfile";
 import MedicineList from "./pages/MedicineList";
@@ -40,7 +41,8 @@ function MedicineRoute({
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Landing />} />
+      <Route path="/" element={<Home />} />
+      <Route path="/start" element={<Landing />} />
       <Route path="/signin" element={<SignIn />} />
       <Route path="/parent/accept-invite" element={<ParentAcceptInvite />} />
 
