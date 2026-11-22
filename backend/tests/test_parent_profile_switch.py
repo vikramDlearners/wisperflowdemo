@@ -117,3 +117,36 @@ def test_patch_on_unlinked_care_profile_is_conflict(client, db_session, switch_s
     assert response.json()["detail"] == (
         "This parent has no linked account yet, so their profile cannot be saved."
     )
+
+
+def test_delete_removes_only_the_selected_parents_profile(client, db_session, switch_setup):
+    s = switch_setup
+    response = client.delete(_url(s["family"].id, s["dad"].id), headers=_auth(db_session, s["manager"]))
+    assert response.status_code == 204, response.text
+
+    dad_view = client.get(_url(s["family"].id, s["dad"].id), headers=_auth(db_session, s["manager"]))
+    assert dad_view.status_code == 200, dad_view.text
+    assert dad_view.json()["parent_full_name"] != "Dad Full Name"
+    assert dad_view.json()["preferred_name"] != "Dad"
+
+    mom_view = client.get(_url(s["family"].id, s["mom"].id), headers=_auth(db_session, s["manager"]))
+    assert mom_view.status_code == 200, mom_view.text
+    assert mom_view.json()["parent_full_name"] == "Mom Full Name"
+    assert mom_view.json()["preferred_name"] == "Mom"
+
+
+def test_delete_with_care_profile_from_other_family_is_not_found(client, db_session, switch_setup):
+    s = switch_setup
+    response = client.delete(_url(s["family"].id, s["rival"].id), headers=_auth(db_session, s["manager"]))
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Parent not found in this family"
+
+
+def test_delete_on_unlinked_care_profile_is_conflict(client, db_session, switch_setup):
+    s = switch_setup
+    response = client.delete(_url(s["family"].id, s["unlinked"].id), headers=_auth(db_session, s["manager"]))
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "This parent has no linked account yet, so their profile cannot be deleted."
+    )
+

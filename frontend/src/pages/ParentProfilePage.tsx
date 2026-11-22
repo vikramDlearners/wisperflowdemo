@@ -4,10 +4,15 @@ import "../parent-profile.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import {
   ApiError,
+  deleteFamilyParentProfile,
   families,
   members,
+  getFamilyDashboard,
+  getFamilyParentProfile,
   getProfile,
+  saveFamilyParentProfileSection,
   saveProfileSection,
+  type DashboardParentOut,
   type MemberOut,
   type ParentProfileOut,
 } from "../api";
@@ -82,6 +87,15 @@ export default function ParentProfilePage() {
   const [voiceSpeed, setVoiceSpeed] = useState(VOICE_SPEEDS[0]);
   const [access, setAccess] = useState<string[]>(ACCESSIBILITY);
 
+  // Profile tabs: null = the signed-in user's own profile; otherwise a parent's care profile id.
+  const [selectedCareProfileId, setSelectedCareProfileId] = useState<string | null>(null);
+  const [parentTabs, setParentTabs] = useState<
+    Pick<DashboardParentOut, "care_profile_id" | "display_name" | "relationship">[]
+  >([]);
+  const [ownLabel, setOwnLabel] = useState("My profile");
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
   useEffect(() => {
     let active = true;
     Promise.all([getProfile(), families.list().catch(() => [])])
@@ -90,6 +104,7 @@ export default function ParentProfilePage() {
         setProfile(p);
         setForm(toForm(p));
         setFamilyId(fams[0]?.id ?? null);
+        setOwnLabel(p.parent_full_name?.trim() || "My profile");
       })
       .catch((err: unknown) => {
         if (active) setError(errorText(err));
@@ -101,6 +116,70 @@ export default function ParentProfilePage() {
       active = false;
     };
   }, []);
+
+  // Parents in this family, one tab each.
+  useEffect(() => {
+    if (!familyId) return;
+    let active = true;
+    getFamilyDashboard(familyId)
+      .then((d) => {
+        if (active)
+          setParentTabs(
+            d.parents.map((p) => ({
+              care_profile_id: p.care_profile_id,
+              display_name: p.display_name,
+              relationship: p.relationship,
+            })),
+          );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [familyId]);
+
+  async function handleSelectTab(careProfileId: string | null) {
+    if (careProfileId === selectedCareProfileId) return;
+    setSelectedCareProfileId(careProfileId);
+    setEditing(false);
+    setError(null);
+    setSaved(false);
+    setNotice(null);
+    setLoading(true);
+    try {
+      const p =
+        careProfileId && familyId
+          ? await getFamilyParentProfile(familyId, careProfileId)
+          : await getProfile();
+      setProfile(p);
+      setForm(toForm(p));
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Deletes the selected parent's profile after confirmation, then returns to the own profile.
+  async function handleDeleteProfile() {
+    if (!familyId || !selectedCareProfileId) return;
+    if (!window.confirm("Delete this parent's profile? This cannot be undone.")) return;
+    const deletedId = selectedCareProfileId;
+    setDeleting(true);
+    setError(null);
+    setSaved(false);
+    setNotice(null);
+    try {
+      await deleteFamilyParentProfile(familyId, deletedId);
+      setParentTabs((prev) => prev.filter((t) => t.care_profile_id !== deletedId));
+      await handleSelectTab(null);
+      setNotice("Profile deleted.");
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   // Find the family member who has the Parent role; the invite is sent to them.
   useEffect(() => {
@@ -195,17 +274,22 @@ export default function ParentProfilePage() {
     setSaving(true);
     setError(null);
     setSaved(false);
+    // A selected parent's profile is saved through the family route; the own profile keeps the existing calls.
+    const save: typeof saveProfileSection =
+      selectedCareProfileId && familyId
+        ? (section, fields) => saveFamilyParentProfileSection(familyId, selectedCareProfileId, section, fields)
+        : saveProfileSection;
     try {
-      await saveProfileSection("parent", {
+      await save("parent", {
         parent_full_name: orNull(form.parent_full_name),
         preferred_name: orNull(form.preferred_name),
         relationship: orNull(form.relationship),
         preferred_language: orNull(form.preferred_language),
       });
-      await saveProfileSection("communication", {
+      await save("communication", {
         parent_mobile: orNull(form.parent_mobile),
       });
-      const updated = await saveProfileSection("care", {
+      const updated = await save("care", {
         caregiver_name: orNull(form.caregiver_name),
       });
       setProfile(updated);
@@ -288,12 +372,52 @@ export default function ParentProfilePage() {
                   ✎ Edit profile
                 </button>
               )}
+              {selectedCareProfileId !== null && (
+                <button
+                  type="button"
+                  className="pp-btn pp-delete-btn"
+                  onClick={handleDeleteProfile}
+                  disabled={deleting || saving}
+                >
+                  {deleting ? "Deleting…" : "Delete profile"}
+                </button>
+              )}
             </div>
           </div>
 
           {loading && <p role="status" className="pp-muted">Loading profile…</p>}
           {error && <p role="alert" className="pp-alert">{error}</p>}
           {saved && <p role="status" className="pp-saved">Changes saved.</p>}
+          {notice && <p role="status" className="pp-saved">{notice}</p>}
+
+          {form && (
+            <div className="pp-tabs" role="tablist" aria-label="Profiles">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={selectedCareProfileId === null}
+                className={`pp-tab${selectedCareProfileId === null ? " is-active" : ""}`}
+                onClick={() => handleSelectTab(null)}
+                disabled={saving}
+              >
+                {ownLabel}
+              </button>
+              {parentTabs.map((t) => (
+                <button
+                  key={t.care_profile_id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedCareProfileId === t.care_profile_id}
+                  className={`pp-tab${selectedCareProfileId === t.care_profile_id ? " is-active" : ""}`}
+                  onClick={() => handleSelectTab(t.care_profile_id)}
+                  disabled={saving}
+                >
+                  {t.display_name}
+                  {t.relationship ? ` · ${t.relationship}` : ""}
+                </button>
+              ))}
+            </div>
+          )}
 
           {form && (
             <div className="pp-grid">
