@@ -85,11 +85,16 @@ _NOT_FINISHED = re.compile(
     r"|\b(?:isn't|is not|aren't|are not|not|haven't|hasn't|have not|has not)\s+(?:yet\s+)?(?:finished|over)\b"
     r"|\bnot\s+out\s+of\s+(?:medicines?|tablets?|pills?)\b"
     r"|\b(?:ran|run|running)\s+out\s+of\s+(?:time|patience)\b"
-    r"|தீர\S*(?:\s+\S*)?(?:வில்லை|இல்லை)"  # ta: தீர்ந்துவிடவில்லை / தீரவில்லை (has not run out)
+    # ta: தீர்ந்துவிடவில்லை / தீரவில்லை in one word, or தீர்ந்து followed by a separate இல்லை (has not run out).
+    # Never spans into another word: "தீர்ந்துவிட்டது எடுக்கவில்லை" (ran out, didn't take) stays "finished".
+    # [஀-௿] is the Tamil block, so punctuation and spaces end the word.
+    r"|தீர[஀-௿]*(?:வில்லை|இல்லை)(?![஀-௿])|தீர[஀-௿]*\s+இல்லை(?![஀-௿])"
     r"|(?:दवा|दवाई|गोली)?\s*खत्म\s+नहीं(?:\s+(?:हुई|हुआ|हुयी|है|हुई है|हुआ है))?",  # hi: has not run out
 )
 # Words that show an answer is about the medicine (used when the reply also has urgent words: "I took a fall").
-_MEDICINE_WORDS = re.compile(r"\b(?:medicines?|meds|tablets?|pills?|doses?|capsules?|both|them)\b")
+_MEDICINE_WORDS = re.compile(r"\b(?:medicines?|meds|tablets?|pills?|doses?|capsules?)\b")
+# "took both" / "took them" refers to the medicines only when several are due ("hurt both knees" does not).
+_TOOK_ALL = re.compile(r"\btook\s+(?:both|them|all)\b")
 _MEDICINE_WORDS_NON_LATIN = ("மருந்து", "மாத்திரை", "दवा", "दवाई", "गोली", "మందు", "మాత్ర", "മരുന്ന", "ഗുളിക",
                              "ಔಷಧ", "ಮಾತ್ರೆ")
 
@@ -212,6 +217,8 @@ def _rule_outcome(normalised: str) -> str | None:
 
 def _mentions_medicine(normalised: str, due: list[DueDose]) -> bool:
     if _MEDICINE_WORDS.search(normalised) or any(w in normalised for w in _MEDICINE_WORDS_NON_LATIN):
+        return True
+    if len(due) > 1 and _TOOK_ALL.search(normalised):
         return True
     return any(d.name and d.name.lower() in normalised for d in due)
 

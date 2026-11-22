@@ -213,7 +213,35 @@ def test_rules_urgent_took_a_fall_is_not_taken_as_a_dose():
 
 
 @pytest.mark.parametrize("text", ["I took my tablets but I feel dizzy", "took Amlodipine, then I fell",
-                                  "I took both but I feel dizzy"])
+                                  "I took my pills, but I feel dizzy"])
 def test_rules_urgent_with_a_medicine_reference_is_still_taken(text):
     r = understand_medicines(text, [_dose("a", "Amlodipine")], OFFLINE_RULES)
     assert [i.outcome for i in r.items] == ["taken"], text
+
+
+# ---------- round 3 ----------
+
+def test_rules_tamil_ran_out_then_separate_negative_word_is_finished():
+    r = understand_medicines("தீர்ந்துவிட்டது எடுக்கவில்லை", [_dose("a")], OFFLINE_RULES)
+    assert [i.outcome for i in r.items] == ["finished"]
+
+
+@pytest.mark.parametrize("text", ["தீர்ந்துவிடவில்லை", "தீரவில்லை", "தீர்ந்து இல்லை"])
+def test_rules_tamil_not_finished_forms_are_not_finished(text):
+    r = understand_medicines(text, [_dose("a")], OFFLINE_RULES)
+    assert all(i.outcome != "finished" for i in r.items), text
+
+
+def test_rules_urgent_both_knees_is_not_taken():
+    r = understand_medicines("I took a fall and hurt both knees", [_dose("a"), _dose("b")], OFFLINE_RULES)
+    assert r.unclear is True and r.items == []
+
+
+def test_rules_urgent_took_both_with_two_due_is_taken():
+    r = understand_medicines("I took both but I feel dizzy", [_dose("a"), _dose("b")], OFFLINE_RULES)
+    assert [i.outcome for i in r.items] == ["taken", "taken"]
+
+
+def test_rules_took_both_not_urgent_still_taken():
+    r = understand_medicines("I took both", [_dose("a"), _dose("b")], OFFLINE_RULES)
+    assert [i.outcome for i in r.items] == ["taken", "taken"]
