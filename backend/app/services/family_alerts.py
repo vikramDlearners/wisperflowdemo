@@ -10,7 +10,7 @@ The parent never alerts themselves.
 import logging
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import exists, select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -322,14 +322,14 @@ def alert_missed_doses(db: Session, now: datetime) -> int:
 
 
 def _slot_since(db: Session, medicine_id: str, slot: str) -> datetime | None:
-    """When this medicine's slot started to exist: the later of the medicine's and its reminder's creation."""
+    """When this medicine's slot started to exist: the later of the medicine's creation and the FIRST reminder
+    row ever made for this time. Inactive rows count too: set_reminder_times recreates every row on each edit,
+    so re-saving the times later in the day must not hide an earlier slot that existed all along."""
     med = db.get(Medicine, medicine_id)
     reminder_at = db.execute(
-        select(MedicineReminder.created_at)
-        .where(MedicineReminder.medicine_id == medicine_id, MedicineReminder.time_of_day == slot,
-               MedicineReminder.active.is_(True))
-        .order_by(MedicineReminder.created_at)
-    ).scalars().first()
+        select(func.min(MedicineReminder.created_at))
+        .where(MedicineReminder.medicine_id == medicine_id, MedicineReminder.time_of_day == slot)
+    ).scalar()
     times = [_aware(t) for t in (med.created_at if med else None, reminder_at) if t is not None]
     return max(times) if times else None
 

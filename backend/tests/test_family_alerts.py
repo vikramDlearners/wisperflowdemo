@@ -399,3 +399,16 @@ def test_no_summary_for_a_day_before_the_profile_existed(db_session, world, emai
     db_session.commit()
     assert alerts.send_daily_summaries(db_session, IST_0900 + timedelta(days=1)) == 0
     assert email.sent == []
+
+
+def test_editing_reminder_times_later_keeps_the_earlier_slot_alert(db_session, world, email):
+    from app.services.reminders import set_reminder_times
+
+    amlodipine, metformin = world["meds"]
+    doses_svc.record_dose(db_session, world["profile"], metformin.id, "08:00", "taken", world["parent"].id,
+                          "chatbot", IST_0859)
+    # Later the manager re-saves Amlodipine's times (08:00 kept, 20:00 added): the 08:00 reminder row is
+    # recreated with a new created_at, but 08:00 existed all along, so its slot still counts.
+    set_reminder_times(db_session, world["manager"].id, world["family_id"], amlodipine.id, ["08:00", "20:00"])
+    assert alerts.alert_missed_doses(db_session, IST_0900) == 1
+    assert {s for _, s, _ in email.sent} == {"Medicine not taken: Amma - Amlodipine"}
