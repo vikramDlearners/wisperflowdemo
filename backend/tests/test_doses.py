@@ -71,7 +71,7 @@ def test_record_twice_updates(db_session, setup):
     assert len(rows) == 1 and rows[0].status == "taken" and rows[0].source == "manual"
 
 
-def test_dose_date_uses_profile_timezone(db_session, setup):
+def test_dose_date_2350_ist_same_day(db_session, setup):
     m = _med(db_session, setup["profile"])
     now = datetime(2026, 11, 22, 18, 20, tzinfo=timezone.utc)
     d = svc.record_dose(db_session, setup["profile"], m.id, "any", "taken", setup["manager"].id, "chatbot", now)
@@ -108,3 +108,55 @@ def test_today_route(client, db_session, setup):
         f"/api/families/{setup['family'].id}/medicines/doses/today",
         params={"care_profile_id": setup["profile"].id},
     ).status_code in (401, 403)
+
+
+def _rec(db, setup, m, slot="any", status="taken", source="chatbot", now=NOW):
+    return svc.record_dose(db, setup["profile"], m.id, slot, status, setup["manager"].id, source, now)
+
+
+def test_dose_date_ahead_of_utc(db_session, setup):
+    m = _med(db_session, setup["profile"])
+    d = _rec(db_session, setup, m, now=datetime(2026, 11, 22, 19, 0, tzinfo=timezone.utc))
+    assert d.dose_date == date(2026, 11, 23)  # 00:30 IST next day
+
+
+def test_dose_date_behind_utc(db_session, setup):
+    setup["profile"].timezone = "America/New_York"
+    db_session.commit()
+    m = _med(db_session, setup["profile"])
+    d = _rec(db_session, setup, m, now=datetime(2026, 11, 23, 2, 0, tzinfo=timezone.utc))
+    assert d.dose_date == date(2026, 11, 22)  # 21:00 local previous day
+
+
+def test_medicine_must_belong_to_profile_and_be_active(db_session, setup):
+    other = CareProfile(family_id=setup["family"].id, display_name="Appa", greeting_name="Appa")
+    db_session.add(other)
+    db_session.commit()
+    foreign = _med(db_session, other, name="Other")
+    inactive = _med(db_session, setup["profile"], name="Old", active=False)
+    for bad in (foreign.id, inactive.id, "missing-id"):
+        with pytest.raises(ValueError):
+            svc.record_dose(db_session, setup["profile"], bad, "any", "taken", None, "chatbot", NOW)
+        with pytest.raises(ValueError):
+            svc.set_remind_later(db_session, setup["profile"], bad, "any", 15, NOW)
+    assert db_session.execute(select(MedicineDose)).scalars().all() == []
+
+
+@pytest.mark.parametrize("status,source,slot", [
+    ("takne", "chatbot", "any"),
+    ("taken", "robot", "any"),
+    ("taken", "chatbot", "9am"),
+    ("taken", "chatbot", "24:00"),
+    ("taken", "chatbot", "08:60"),
+    ("taken", "chatbot", "8:00"),
+])
+def test_record_dose_validates_inputs(db_session, setup, status, source, slot):
+    m = _med(db_session, setup["profile"])
+    with pytest.raises(ValueError):
+        svc.record_dose(db_session, setup["profile"], m.id, slot, status, None, source, NOW)
+
+
+def test_remind_later_validates_slot(db_session, setup):
+    m = _med(db_session, setup["profile"])
+    with pytest.raises(ValueError):
+        svc.set_remind_later(db_session, setup["profile"], m.id, "9am", 15, NOW)

@@ -1,5 +1,6 @@
 """Dose log and what is due today for a care profile, in the profile's local time."""
 
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -14,6 +15,9 @@ from app.services.adapters.intent import ALLOWED_DELAY_MINUTES
 from app.services.reminders import list_reminder_times
 
 ANY_SLOT = "any"
+STATUSES = frozenset({"taken", "not_taken", "skipped"})
+SOURCES = frozenset({"chatbot", "manual"})
+_SLOT_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 @dataclass
@@ -88,6 +92,17 @@ def due_untaken(db: Session, profile: CareProfile, now: datetime) -> list[DueDos
     return out
 
 
+def _validate_slot(slot: str) -> None:
+    if slot != ANY_SLOT and not _SLOT_RE.match(slot or ""):
+        raise ValueError("slot must be HH:MM or 'any'")
+
+
+def _validate_medicine(db: Session, profile: CareProfile, medicine_id: str) -> None:
+    med = db.get(Medicine, medicine_id)
+    if med is None or med.care_profile_id != profile.id or not med.active:
+        raise ValueError("Medicine is not an active medicine of this care profile")
+
+
 def _existing(db: Session, medicine_id: str, day: date, slot: str) -> MedicineDose | None:
     return db.execute(
         select(MedicineDose).where(
@@ -108,6 +123,12 @@ def record_dose(
     source: str,
     now: datetime,
 ) -> MedicineDose:
+    if status not in STATUSES:
+        raise ValueError(f"status must be one of {sorted(STATUSES)}")
+    if source not in SOURCES:
+        raise ValueError(f"source must be one of {sorted(SOURCES)}")
+    _validate_slot(slot)
+    _validate_medicine(db, profile, medicine_id)
     now = _aware(now)
     day = today_for(profile, now)
     row = _existing(db, medicine_id, day, slot)
@@ -132,6 +153,8 @@ def set_remind_later(
 ) -> MedicineDose:
     if minutes not in ALLOWED_DELAY_MINUTES:
         raise ValueError(f"Delay must be one of {sorted(ALLOWED_DELAY_MINUTES)} minutes")
+    _validate_slot(slot)
+    _validate_medicine(db, profile, medicine_id)
     now = _aware(now)
     day = today_for(profile, now)
     row = _existing(db, medicine_id, day, slot)
