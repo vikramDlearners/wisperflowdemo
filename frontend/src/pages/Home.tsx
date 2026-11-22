@@ -4,8 +4,10 @@ import { Link } from "react-router-dom";
 
 // Public product landing page. Sign-up / log-in lives at /start.
 
+const LANGUAGES = "English, Tamil, Hindi, Telugu, Malayalam or Kannada";
+
 const PROBLEMS = [
-  { icon: "📞", text: "Calling every day just to ask “Did you take your tablets?”" },
+  { icon: "📞", text: "Calling every day just to ask “Did you take your tablets? What did you eat?”" },
   { icon: "🧾", text: "Prescriptions, reports and doctor numbers scattered across chats and paper." },
   { icon: "🤷", text: "Siblings and caretakers unsure who is handling what." },
   { icon: "📱", text: "Apps that are too small, too fiddly and English-only for elderly parents." },
@@ -15,64 +17,108 @@ const STEPS = [
   {
     n: "1",
     title: "Set up the circle",
-    body: "Sign up with your email, choose your role, and fill in your parent's care profile in a short guided wizard. Invite siblings, caretakers or hospital staff.",
+    body: "Sign up with your email, fill in your parent's care profile, add their medicines (or scan the prescription) and invite siblings and caretakers.",
   },
   {
     n: "2",
-    title: "Parent checks in by voice",
-    body: "At medicine time your parent opens a big, simple screen and just speaks, in English, Tamil or Hindi. The reply is read back aloud.",
+    title: "Parent chats by voice",
+    body: `Your parent opens a big, simple chat and just talks, in ${LANGUAGES}. CareCircle greets them, asks how they are, and reads every reply aloud.`,
   },
   {
     n: "3",
-    title: "CareCircle understands",
-    body: "Speech is turned into text and matched to what your parent meant: taken, not yet, remind me later, medicine finished, or I need help.",
+    title: "CareCircle keeps track",
+    body: "Health notes, medicines taken (with the time), meals and upcoming appointments are saved as the conversation goes.",
   },
   {
     n: "4",
-    title: "Family acts together",
-    body: "The update lands on the shared dashboard and activity log. The right people are notified, and follow-ups become tasks with an owner.",
+    title: "Family stays in the loop",
+    body: "AI summarises each conversation, important points become tasks for caretakers and managers, and alerts reach the family when something needs attention.",
+  },
+];
+
+const DAILY_CHAT = [
+  {
+    icon: "🌼",
+    title: "A warm greeting",
+    body: "Good morning, afternoon or evening, by the name your parent likes, then “How are you feeling today?” The answer is shared with the family.",
+  },
+  {
+    icon: "💊",
+    title: "Medicines, the right dose",
+    body: "“You have 2 medicines now. Did you take them?” A plain “I took my medicine” gets “How many?” first, and only the current dose is marked, with the time.",
+  },
+  {
+    icon: "🍛",
+    title: "Meals",
+    body: "Breakfast in the morning, lunch in the afternoon, dinner at night. Missed earlier? It asks about the whole day and saves the answer.",
+  },
+  {
+    icon: "📅",
+    title: "Appointment reminders",
+    body: "Doctor visits today or tomorrow are mentioned once, with the time and the doctor's name.",
+  },
+  {
+    icon: "💛",
+    title: "Gentle care notes",
+    body: "Before goodbye, a soft note from the family: drink enough water, go easy on sweets, stay away from a known allergy.",
+  },
+  {
+    icon: "📷",
+    title: "Ask anything about medicines",
+    body: "“What do I take tonight?” gets today's schedule, with a photo of each medicine so it's easy to pick the right one.",
   },
 ];
 
 const INTENTS = [
-  { say: "“I took it” · “சாப்பிட்டேன்” · “ले लिया”", means: "Dose confirmed", icon: "✅" },
+  { say: "“I took it” · “சாப்பிட்டேன்” · “ले लिया”", means: "Current dose marked as taken, with the time", icon: "✅" },
+  { say: "“I took one” · “Only Metformin”", means: "Asks which one, records only that dose", icon: "🔢" },
   { say: "“Remind me in 15 minutes”", means: "Reminder snoozed for 5–30 min", icon: "⏰" },
-  { say: "“Not yet” · “இன்னும்” · “अभी नहीं”", means: "Marked as not taken yet", icon: "⏳" },
-  { say: "“My tablets are finished”", means: "Medicine unavailable, family alerted", icon: "📦" },
-  { say: "“Help” · “உதவி” · “मदद”", means: "Help request sent to family", icon: "🆘" },
-  { say: "“Cancel” · “Never mind”", means: "Check-in cancelled, nothing recorded", icon: "↩️" },
+  { say: "“Not yet” · “இன்னும் இல்லை” · “अभी नहीं”", means: "Marked as not taken yet, asked again later", icon: "⏳" },
+  { say: "“My tablets have run out”", means: "Family alerted to arrange a refill", icon: "📦" },
+  { say: "“What do I take tonight?”", means: "Today's schedule, with medicine photos", icon: "🗓️" },
+  { say: "“I fell” · “உதவி” · “मदद”", means: "Family alerted at once, Call button shown", icon: "🆘" },
+  { say: "“Idli and coffee”", means: "Saved as today's breakfast", icon: "🍛" },
+  { say: "“Thank you, bye”", means: "A warm goodbye, nothing shared", icon: "👋" },
+];
+
+const EMERGENCY_STEPS = [
+  { n: "1", title: "Tap Help", body: "One big button, always at the top of your parent's chat." },
+  { n: "2", title: "“Is this an emergency?”", body: "Two clear choices: yes, or I just need help." },
+  { n: "3", title: "Family alerted", body: "Every family member gets an urgent in-app alert and an email straight away." },
+  { n: "4", title: "Tap to call", body: "A large call button with the emergency number, ready to dial." },
 ];
 
 const FAMILY_FEATURES = [
-  { icon: "📊", title: "Family dashboard", body: "Today's medicines, open tasks, recent check-ins and alerts for your parent on one screen." },
-  { icon: "🧓", title: "Care profile", body: "Name they like to be greeted by, preferred language and time zone, health conditions, allergies and care instructions." },
-  { icon: "💊", title: "Medicine management", body: "Each medicine with instructions, tablets remaining, refill date and the family member responsible for it." },
-  { icon: "✅", title: "Family tasks", body: "Create, assign and complete tasks with due dates and priority. Assignees are notified automatically." },
-  { icon: "📅", title: "Appointments", soon: true, body: "Keep track of doctor visits and check-ups for your parent." },
-  { icon: "📁", title: "Shared records", soon: true, body: "Prescriptions and medical reports in one place, viewable or uploadable by permission." },
-  { icon: "🎙️", title: "Care & voice activity", body: "Every spoken check-in and every change, logged with who did it and when." },
+  { icon: "📊", title: "Family dashboard", body: "Today's medicines, open tasks, the next appointment and alerts for each parent on one screen." },
+  { icon: "🧠", title: "AI conversation summaries", body: "Google Gemini summarises every finished chat into a few plain sentences, saved for the family." },
+  { icon: "✅", title: "Tasks from conversations", body: "Anything important your parent says becomes a task for the caretakers and managers, who are notified." },
+  { icon: "💊", title: "Medicine management", body: "Instructions, photos, tablets left, refill dates, reminder times and today's status: ✓ Taken at 8:32 AM, Missed, Not taken." },
+  { icon: "🧾", title: "Prescription scan", body: "Snap a prescription and the medicines, doses and timings are read and added for you." },
+  { icon: "📅", title: "Appointments", body: "Doctor visits with time, doctor and place; your parent is reminded the day before and on the day." },
+  { icon: "⏰", title: "Missed-dose alerts", body: "If a timed dose isn't confirmed an hour after it's due, the family is told." },
+  { icon: "📬", title: "Daily summary email", body: "Every evening: how your parent felt, medicines taken or missed, meals and appointments." },
+  { icon: "🔔", title: "Notifications", body: "In-app alerts and email for check-ins, urgent messages, medicines and tasks." },
   { icon: "🕒", title: "Family timeline", soon: true, body: "One running story of everything happening in your parent's care." },
-  { icon: "🔔", title: "Notifications", body: "In-app alerts plus email and SMS. Each member chooses what they want to hear about." },
 ];
 
 const PARENT_SCREENS = [
-  { title: "Home", body: "A warm greeting by name and today's medicines in large, clear text." },
-  { title: "Voice check-in", body: "One big microphone button. Tap, speak, done." },
-  { title: "Confirmation", body: "A clear on-screen and spoken reply, so your parent knows it was recorded." },
-  { title: "Help", body: "A dedicated help screen when something does not feel right." },
+  { title: "Fresh chat every time", body: "Each time it opens: a new greeting and only what's still open today." },
+  { title: "Voice or typing", body: "One big microphone button, or type if that's easier. Replies are read aloud." },
+  { title: "Medicine photos", body: "A picture appears whenever a medicine is mentioned. Tap to see it large." },
+  { title: "Help", body: "Asks if it's an emergency, alerts the family and shows a number to call." },
 ];
 
 const PROFILE_FIELDS = [
-  "Full name & preferred name",
+  "Full name & the name they like to be greeted by",
   "Relationship to you",
   "Date of birth or approximate age",
   "Profile photo",
   "Preferred language & mobile number",
-  "Known health conditions",
-  "Allergies",
+  "Known health conditions & allergies",
+  "Health deficiencies (sugar, BP, calcium…)",
+  "Notes such as daily water or foods to avoid",
   "Primary doctor & contact number",
-  "Preferred hospital",
-  "Care instructions",
+  "Preferred hospital & care instructions",
   "Caregiver name, relationship, phone & email",
 ];
 
@@ -80,51 +126,72 @@ const ROLES = [
   {
     name: "Family manager",
     who: "Usually the child who sets up the circle",
-    can: "Everything: profile, medicines, reports, tasks, members, roles and notifications.",
+    can: "Everything: profiles, medicines, appointments, tasks, members, roles and notifications. Gets tasks from conversations.",
   },
   {
     name: "Caregiver",
     who: "A sibling, nurse or home caretaker",
-    can: "View the dashboard and profile, update medicine stock, upload reports, create and assign tasks, view activity.",
+    can: "View the dashboard and profile, update medicines, manage members and tasks, view activity. Gets tasks from conversations.",
   },
   {
     name: "Viewer",
     who: "Extended family who want to stay informed",
-    can: "Read-only access to the dashboard, profile, medicines, reports, tasks and activity.",
+    can: "Read-only access to the dashboard, profile, medicines, tasks and activity.",
   },
   {
     name: "Parent",
     who: "Your mother or father",
-    can: "A simple voice-first parent mode and their own profile, nothing to manage.",
+    can: "A simple voice-first chat in their own language, a Help button, and their own profile.",
   },
 ];
 
 const SIGNUP_ROLES = ["Parent", "Caretaker", "Hospital staff", "Manager", "Others"];
 
+const LANGUAGE_EXAMPLES = [
+  { name: "English", text: "“I took my sugar tablet.”" },
+  { name: "தமிழ்", text: "“நான் சர்க்கரை மாத்திரை சாப்பிட்டேன்.”" },
+  { name: "हिन्दी", text: "“मैंने शुगर की दवा ले ली।”" },
+  { name: "తెలుగు", text: "“నేను షుగర్ మాత్ర వేసుకున్నాను.”" },
+  { name: "മലയാളം", text: "“ഞാൻ ഷുഗറിന്റെ ഗുളിക കഴിച്ചു.”" },
+  { name: "ಕನ್ನಡ", text: "“ನಾನು ಶುಗರ್ ಮಾತ್ರೆ ತೆಗೆದುಕೊಂಡೆ.”" },
+];
+
 const FAQ = [
   {
     q: "Does my parent need to type or remember a password?",
-    a: "No. Sign-in is passwordless with a 6-digit code sent to email, and once in, your parent only needs to tap and speak.",
+    a: "No. Sign-in is passwordless with a 6-digit code, and once in, your parent only needs to tap and speak.",
   },
   {
     q: "Which languages are supported?",
-    a: "English, Tamil (தமிழ்) and Hindi (हिन्दी), for both understanding what your parent says and reading replies aloud.",
+    a: `${LANGUAGES}, for understanding what your parent says, for every reply and for the buttons on screen. Change the language on the parent's profile and the very next reply switches.`,
+  },
+  {
+    q: "What happens in an emergency?",
+    a: "Your parent taps Help and confirms it's an emergency. Every family member gets an urgent in-app alert and an email at once, and your parent sees a large button to call the emergency number. Words like “I fell” or “help” in the chat alert the family too.",
+  },
+  {
+    q: "What does the family see after a conversation?",
+    a: "A short AI summary of the chat, tasks for the caretakers and managers for anything important, today's medicine status with times, and an evening summary email with health, medicines, meals and appointments.",
+  },
+  {
+    q: "What if a medicine has no fixed time?",
+    a: "It's counted by part of the day: morning, afternoon and night. Saying “I took it” in the evening marks only the night dose.",
   },
   {
     q: "What happens if the internet is slow or down?",
-    a: "Check-ins are understood with built-in offline rules that recognise common phrases in all three languages. An admin switch lets you choose between offline rules and the AI mode powered by Google Gemini.",
+    a: "Answers are understood with built-in offline rules in all six languages, and a simple summary is saved if the AI isn't available. An admin switch chooses between offline rules and the AI mode powered by Google Gemini.",
   },
   {
     q: "Who can see my parent's health information?",
-    a: "Only members you invite to your family circle, and only what their role allows. You can use the built-in roles or create custom roles from 17 fine-grained permissions.",
+    a: "Only members you invite to your family circle, and only what their role allows. Use the built-in roles or create custom roles from fine-grained permissions.",
   },
   {
     q: "How are family members notified?",
-    a: "Through in-app notifications and email. SMS is built in behind an adapter and runs in demo mode in this release.",
+    a: "Through in-app notifications and email today. WhatsApp and SMS alerts are on the way.",
   },
   {
     q: "Can I manage more than one parent?",
-    a: "Yes. A family circle can hold more than one care profile, and every medicine and task is linked to the right profile.",
+    a: "Yes. A family circle can hold several parents, each with their own profile, language, medicines and chat.",
   },
 ];
 
@@ -133,8 +200,8 @@ const STACK = [
   { name: "FastAPI", role: "Secure Python backend API" },
   { name: "PostgreSQL", role: "Reliable data storage with migrations" },
   { name: "ElevenLabs", role: "Speech-to-text and natural text-to-speech" },
-  { name: "Google Gemini", role: "AI understanding of check-ins" },
-  { name: "Offline rules", role: "Keyword engine for EN / TA / HI fallback" },
+  { name: "Google Gemini", role: "Understanding answers, prescriptions and chat summaries" },
+  { name: "Offline rules", role: "Keyword engine in six Indian languages" },
 ];
 
 function FaqItem({ q, a }: { q: string; a: string }) {
@@ -162,9 +229,9 @@ export default function Home() {
           </a>
           <nav className="lp-nav-links" aria-label="Main">
             <a href="#how">How it works</a>
-            <a href="#voice">Voice check-ins</a>
+            <a href="#chat">Daily check-in</a>
+            <a href="#safety">Emergency help</a>
             <a href="#features">Features</a>
-            <a href="#roles">Roles & privacy</a>
             <a href="#faq">FAQ</a>
           </nav>
           <div className="lp-nav-cta">
@@ -188,36 +255,38 @@ export default function Home() {
                 Care for your parents <span className="lp-accent">together</span>, even from afar.
               </h1>
               <p className="lp-lead">
-                CareCircle lets an elderly parent check in on their medicines just by speaking, in
-                English, Tamil or Hindi, while the whole family shares one place for the care
-                profile, medicines, tasks and alerts, with appointments and shared records on the way.
+                Every day CareCircle chats with your parent by voice, in {LANGUAGES}: how they feel,
+                their medicines, their meals and their appointments. The whole family sees what matters,
+                gets tasks for what needs doing, and is alerted the moment help is needed.
               </p>
               <div className="lp-cta-row">
                 <Link to="/start" className="lp-btn">
                   Create your family circle
                 </Link>
-                <a href="#how" className="lp-btn lp-btn-ghost">
-                  See how it works
+                <a href="#chat" className="lp-btn lp-btn-ghost">
+                  See the daily check-in
                 </a>
               </div>
               <ul className="lp-hero-ticks">
-                <li>No passwords: sign in with an email code</li>
-                <li>Works offline for check-ins</li>
-                <li>Role-based family access</li>
+                <li>Six Indian languages</li>
+                <li>One-tap emergency help</li>
+                <li>AI summaries and tasks for the family</li>
               </ul>
             </div>
 
             <div className="lp-phone" aria-label="Example voice check-in">
               <div className="lp-phone-screen">
                 <p className="lp-phone-greet">Good morning, Amma 🌼</p>
-                <p className="lp-phone-due">8:30 AM · Amlodipine 5 mg</p>
+                <p className="lp-phone-due">You have 2 medicines now</p>
                 <span className="lp-mic" aria-hidden="true">
                   🎙️
                 </span>
                 <p className="lp-phone-hint">Tap and speak</p>
                 <div className="lp-bubble lp-bubble-user">“நான் மாத்திரை சாப்பிட்டேன்.”</div>
+                <div className="lp-bubble lp-bubble-app">How many of your 2 medicines did you take? 🔊</div>
+                <div className="lp-bubble lp-bubble-user">“இரண்டும்.”</div>
                 <div className="lp-bubble lp-bubble-app">
-                  ✓ Amlodipine marked as taken. Your family has been updated. 🔊
+                  ✓ Noted: you took both at 8:32 AM. What did you have for breakfast? 🔊
                 </div>
               </div>
             </div>
@@ -264,13 +333,35 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Voice check-ins */}
-        <section id="voice" className="lp-section">
+        {/* Daily check-in chat */}
+        <section id="chat" className="lp-section">
+          <div className="lp-wrap">
+            <h2 className="lp-h2">A daily check-in that feels like a chat</h2>
+            <p className="lp-sub">
+              A short, kind conversation that adapts to the time of day and remembers what's already
+              been answered, so nothing is asked twice.
+            </p>
+            <div className="lp-features">
+              {DAILY_CHAT.map((f) => (
+                <div key={f.title} className="lp-card lp-feature">
+                  <span className="lp-feature-icon" aria-hidden="true">
+                    {f.icon}
+                  </span>
+                  <h3>{f.title}</h3>
+                  <p>{f.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Voice understanding */}
+        <section id="voice" className="lp-section lp-section-tint">
           <div className="lp-wrap">
             <h2 className="lp-h2">Just say it. CareCircle understands.</h2>
             <p className="lp-sub">
-              Your parent doesn't need to learn commands. CareCircle recognises six everyday responses
-              at medicine time, in any of the three languages.
+              Your parent doesn't need to learn commands. Everyday answers are understood in any of the
+              six languages.
             </p>
             <div className="lp-intents">
               {INTENTS.map((i) => (
@@ -288,16 +379,39 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Emergency help */}
+        <section id="safety" className="lp-section">
+          <div className="lp-wrap">
+            <h2 className="lp-h2">Help, one tap away</h2>
+            <p className="lp-sub">
+              When something feels wrong, your parent doesn't have to find a number or explain anything.
+            </p>
+            <ol className="lp-steps">
+              {EMERGENCY_STEPS.map((s) => (
+                <li key={s.n} className="lp-card lp-step">
+                  <span className="lp-step-n">{s.n}</span>
+                  <h3>{s.title}</h3>
+                  <p>{s.body}</p>
+                </li>
+              ))}
+            </ol>
+            <p className="lp-solution">
+              Words like <strong>“I fell”</strong> or <strong>“help”</strong> anywhere in the chat alert the
+              family too, and a red <strong>Call family</strong> button appears on screen.
+            </p>
+          </div>
+        </section>
+
         {/* Two experiences */}
         <section className="lp-section lp-section-tint">
           <div className="lp-wrap">
             <h2 className="lp-h2">Two experiences, one circle</h2>
             <p className="lp-sub">
-              A calm, phone-sized parent mode, and a full desktop dashboard for the family.
+              A calm, phone-sized parent chat, and a full dashboard for the family.
             </p>
             <div className="lp-two">
               <div className="lp-card lp-audience">
-                <p className="lp-eyebrow">Parent mode</p>
+                <p className="lp-eyebrow">Parent chat</p>
                 <h3>Big, simple, spoken</h3>
                 <p className="muted">Large text, large buttons, and nothing to configure.</p>
                 <ul className="lp-screen-list">
@@ -313,10 +427,10 @@ export default function Home() {
                 <h3>Everything at a glance</h3>
                 <p className="muted">For children, caretakers and hospital staff.</p>
                 <ul className="lp-screen-list">
-                  <li><strong>Know without calling</strong>: see whether today's doses were taken.</li>
-                  <li><strong>Never run out</strong>: track tablets remaining and refill dates.</li>
-                  <li><strong>Share the load</strong>: assign tasks with due dates and priority.</li>
-                  <li><strong>Stay informed</strong>: activity log, timeline and alerts.</li>
+                  <li><strong>Know without calling</strong>: each dose taken, with the time, and what they ate.</li>
+                  <li><strong>Read the summary</strong>: a few AI-written sentences after every chat.</li>
+                  <li><strong>Act on it</strong>: important points arrive as tasks for caretakers and managers.</li>
+                  <li><strong>Never run out</strong>: tablets left, refill dates and “ran out” alerts.</li>
                 </ul>
               </div>
             </div>
@@ -355,7 +469,8 @@ export default function Home() {
               <h2 className="lp-h2 lp-left">A complete care profile in minutes</h2>
               <p className="lp-sub lp-left">
                 A step-by-step wizard captures everything a caregiver, doctor or new family member
-                needs to know, saved as you go.
+                needs to know. The chat uses it too: the greeting name, the language, and gentle
+                reminders from the deficiencies and notes you add.
               </p>
               <p className="lp-sub lp-left">At sign-up, everyone picks how they relate to the circle:</p>
               <div className="lp-chips">
@@ -396,12 +511,12 @@ export default function Home() {
             </div>
             <div className="lp-trust">
               <div>
-                <strong>17 permissions</strong>
-                <span>Fine-grained control for custom roles</span>
+                <strong>Custom roles</strong>
+                <span>Fine-grained permissions for each member</span>
               </div>
               <div>
                 <strong>Passwordless</strong>
-                <span>Secure 6-digit email codes</span>
+                <span>Secure 6-digit sign-in codes</span>
               </div>
               <div>
                 <strong>Full audit trail</strong>
@@ -423,8 +538,8 @@ export default function Home() {
               <h2 className="lp-h2 lp-left">Speaks their language, even offline</h2>
               <p className="lp-sub lp-left">
                 Natural speech recognition and lifelike voices from ElevenLabs make check-ins feel
-                like a conversation. Each parent's preferred language and time zone are saved in
-                their profile.
+                like a conversation. Each parent's language and time zone are saved in their profile,
+                and changing the language switches the chat from the very next reply.
               </p>
               <p className="lp-sub lp-left">
                 Choose between <strong>AI mode</strong> (Google Gemini) and <strong>offline rules</strong>,
@@ -432,15 +547,12 @@ export default function Home() {
               </p>
             </div>
             <div className="lp-langs">
-              <div className="lp-card lp-lang">
-                <span className="lp-lang-name">English</span>“I took my sugar tablet.”
-              </div>
-              <div className="lp-card lp-lang">
-                <span className="lp-lang-name">தமிழ்</span>“நான் சர்க்கரை மாத்திரை சாப்பிட்டேன்.”
-              </div>
-              <div className="lp-card lp-lang">
-                <span className="lp-lang-name">हिन्दी</span>“मैंने शुगर की दवा ले ली।”
-              </div>
+              {LANGUAGE_EXAMPLES.map((l) => (
+                <div key={l.name} className="lp-card lp-lang">
+                  <span className="lp-lang-name">{l.name}</span>
+                  {l.text}
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -495,7 +607,7 @@ export default function Home() {
           <span className="lp-logo">
             <span className="lp-logo-mark" aria-hidden="true">◎</span> CareCircle
           </span>
-          <span>Voice-first family care · English · தமிழ் · हिन्दी</span>
+          <span>Voice-first family care · English · தமிழ் · हिन्दी · తెలుగు · മലയാളം · ಕನ್ನಡ</span>
           <span>© {new Date().getFullYear()} CareCircle</span>
         </div>
       </footer>
