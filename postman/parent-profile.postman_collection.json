@@ -1,0 +1,185 @@
+{
+  "info": {
+    "_postman_id": "0f6b3c2e-9d1a-4b7e-8c5f-2a9e7d4b1c35",
+    "name": "CareCircle - Parent Profile",
+    "description": "Per-parent profile endpoints for the profile switcher, backed by backend/app/api/families.py. GET needs dashboard.view; PATCH and DELETE need parent_profile.edit. Auth matches frontend/src/api.ts: 'Authorization: Bearer <session token>'. Bodies follow ProfileIn / ProfileOut in backend/app/schemas.py. Error bodies use FastAPI's {\"detail\": ...} shape.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "familyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "careProfileId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Get parent profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/parents/{{careProfileId}}/profile",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "parents",
+            "{{careProfileId}}",
+            "profile"
+          ]
+        },
+        "description": "Read the onboarding profile of the parent behind this care profile. Returns 200 with ProfileOut. If the parent has no linked account yet, returns an unsaved default profile. Returns 404 when the care profile is not in this family. Needs dashboard.view."
+      },
+      "response": [
+        {
+          "name": "404 - parent not in this family",
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"detail\":\"Parent not found in this family\"}"
+        }
+      ]
+    },
+    {
+      "name": "Update parent profile",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"section\":\"parent\",\"parent_full_name\":\"Dad Renamed\",\"preferred_name\":\"Papa\",\"relationship\":\"father\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/parents/{{careProfileId}}/profile",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "parents",
+            "{{careProfileId}}",
+            "profile"
+          ]
+        },
+        "description": "Save the fields sent for this parent (ProfileIn). Only fields present in the body are changed; section is required and must be one of parent, communication, care, medical, additional. Returns 200 with ProfileOut. Returns 409 when the parent has no linked account yet, and 404 when the care profile is not in this family. Needs parent_profile.edit."
+      },
+      "response": [
+        {
+          "name": "409 - no linked account",
+          "status": "Conflict",
+          "code": 409,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"detail\":\"This parent has no linked account yet, so their profile cannot be saved.\"}"
+        }
+      ]
+    },
+    {
+      "name": "Delete parent profile",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/parents/{{careProfileId}}/profile",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "parents",
+            "{{careProfileId}}",
+            "profile"
+          ]
+        },
+        "description": "Delete only the onboarding profile of the parent behind this care profile. Returns 204 with no body, and still 204 if the parent has no saved profile. The care profile, family membership, medicines, appointments and other data are kept. Returns 409 when the parent has no linked account yet, and 404 when the care profile is not in this family. Needs parent_profile.edit."
+      },
+      "response": [
+        {
+          "name": "409 - no linked account",
+          "status": "Conflict",
+          "code": 409,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"detail\":\"This parent has no linked account yet, so their profile cannot be deleted.\"}"
+        }
+      ]
+    }
+  ]
+}

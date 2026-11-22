@@ -527,6 +527,28 @@ export function saveProfileSection(
   return patch<ParentProfileOut>("/api/auth/me/profile", { section, ...fields });
 }
 
+// A parent's profile as seen from the family workspace (any parent in the family, not just the signed-in user).
+export function getFamilyParentProfile(familyId: string, careProfileId: string): Promise<ParentProfileOut> {
+  return get<ParentProfileOut>(`/api/families/${familyId}/parents/${careProfileId}/profile`);
+}
+
+export function saveFamilyParentProfileSection(
+  familyId: string,
+  careProfileId: string,
+  section: ProfileSection,
+  fields: ParentProfileFields,
+): Promise<ParentProfileOut> {
+  return patch<ParentProfileOut>(`/api/families/${familyId}/parents/${careProfileId}/profile`, {
+    section,
+    ...fields,
+  });
+}
+
+export function deleteFamilyParentProfile(familyId: string, careProfileId: string): Promise<void> {
+  return del(`/api/families/${familyId}/parents/${careProfileId}/profile`);
+}
+
+
 // ---- prescription scans (verified against api/prescription_scans.py) ----
 
 export interface PrescriptionMedicineIn {

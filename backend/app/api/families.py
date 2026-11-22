@@ -187,3 +187,25 @@ def update_parent_profile(
     db.commit()
     db.refresh(profile)
     return _profile_out(profile)
+
+
+@router.delete("/{family_id}/parents/{care_profile_id}/profile", status_code=204)
+def delete_parent_profile(
+    family_id: str, care_profile_id: str, db: Session = DbSession, user: User = CurrentUser,
+) -> Response:
+    # Removes only the onboarding profile row; the care profile, membership and other data are kept.
+    require(db, user.id, family_id, "parent_profile.edit")
+    care_profile = _parent_in_family(db, family_id, care_profile_id)
+    if care_profile.linked_user_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail="This parent has no linked account yet, so their profile cannot be deleted.",
+        )
+    profile = db.scalar(
+        select(ParentOnboardingProfile).where(ParentOnboardingProfile.user_id == care_profile.linked_user_id)
+    )
+    if profile is not None:
+        db.delete(profile)
+    db.commit()
+    return Response(status_code=204)
+

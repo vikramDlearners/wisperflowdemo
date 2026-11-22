@@ -241,6 +241,15 @@
 .pp-btn-ghost:hover:not(:disabled) {
   background: var(--pp-bg);
 }
+.pp-delete-btn {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+.pp-delete-btn:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
 .pp-btn:focus-visible,
 .pp-chip:focus-visible,
 .pp-nav-item:focus-visible,
@@ -256,6 +265,41 @@
   color: var(--pp-teal-dark);
   font-weight: 600;
   margin: 0 0 16px;
+}
+
+/* Profile tabs above "Personal information" (own profile + each parent). */
+.pp-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+.pp-tab {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--pp-line);
+  background: #fff;
+  color: #4a5b57;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pp-tab:hover:not(:disabled) {
+  background: var(--pp-bg);
+}
+.pp-tab.is-active {
+  background: var(--pp-teal);
+  border-color: var(--pp-teal);
+  color: #fff;
+}
+.pp-tab:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.pp-tab:focus-visible {
+  outline: 3px solid #9fd3c9;
+  outline-offset: 2px;
 }
 
 .pp-grid {
