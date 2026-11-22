@@ -15,8 +15,12 @@ from app.services.adapters.intent import ALLOWED_DELAY_MINUTES
 from app.services.reminders import list_reminder_times
 
 ANY_SLOT = "any"
+# Answers the parent or the family can record. "missed" is written only by the missed-dose job (source "system");
+# a later answer from the parent or the family replaces it.
 STATUSES = frozenset({"taken", "not_taken", "skipped"})
 SOURCES = frozenset({"chatbot", "manual"})
+MISSED = "missed"
+SYSTEM_SOURCE = "system"
 _SLOT_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 

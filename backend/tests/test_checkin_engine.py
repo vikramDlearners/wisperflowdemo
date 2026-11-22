@@ -27,6 +27,9 @@ from tests.test_parent_invites import email, family_setup  # noqa: F401
 
 # 08:30 IST on 2026-11-22 == 03:00 UTC
 NOW = datetime(2026, 11, 22, 3, 0, tzinfo=timezone.utc)
+SETUP_AT = datetime(2026, 11, 1, tzinfo=timezone.utc)
+# The profile exists from the start of the test day (00:00 IST), so no "No check-in" summary for the day before.
+PROFILE_AT = datetime(2026, 11, 21, 18, 30, tzinfo=timezone.utc)
 MEDS_LIST = "You have 2 medicine(s) now: Amlodipine, Metformin. Did you take them?"
 
 
@@ -50,17 +53,19 @@ def world(db_session, family_setup):
     parent = db_session.get(User, s["membership"].user_id)
     profile = CareProfile(
         family_id=s["family_id"], display_name="Amma", greeting_name="Amma",
-        preferred_language="en", timezone="Asia/Kolkata", linked_user_id=parent.id,
+        preferred_language="en", timezone="Asia/Kolkata", linked_user_id=parent.id, created_at=PROFILE_AT,
     )
     db_session.add(profile)
     db_session.add(ParentOnboardingProfile(user_id=s["manager"].id, caregiver_phone="+91 98765 43210"))
     db_session.commit()
     meds = []
-    for name in ("Amlodipine", "Metformin"):
-        m = Medicine(care_profile_id=profile.id, display_name=name, active=True)
+    for i, name in enumerate(("Amlodipine", "Metformin")):
+        # Set up well before the test day, so every 08:00 slot counts (missed-dose alerts ignore earlier slots).
+        m = Medicine(care_profile_id=profile.id, display_name=name, active=True,
+                     created_at=SETUP_AT + timedelta(minutes=i))
         db_session.add(m)
         db_session.commit()
-        db_session.add(MedicineReminder(medicine_id=m.id, time_of_day="08:00", active=True))
+        db_session.add(MedicineReminder(medicine_id=m.id, time_of_day="08:00", active=True, created_at=SETUP_AT))
         db_session.commit()
         meds.append(m)
     ctx = resolve_parent(db_session, parent)

@@ -22,7 +22,7 @@ class CareProfile(Base):
     family_id: Mapped[str] = mapped_column(String(36), ForeignKey("families.id"))
     display_name: Mapped[str] = mapped_column(String(255))
     greeting_name: Mapped[str] = mapped_column(String(255))
-    # Allowed values (en, ta, hi) are validated in the schema layer.
+    # Allowed values (en, ta, hi, te, ml, kn) are validated in the schema layer.
     preferred_language: Mapped[str] = mapped_column(String(8), default="en")
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Kolkata")
     linked_user_id: Mapped[str | None] = mapped_column(

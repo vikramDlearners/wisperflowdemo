@@ -26,13 +26,13 @@ class MedicineDose(Base):
     dose_date: Mapped[date] = mapped_column(Date)
     # "HH:MM" or "any".
     slot: Mapped[str] = mapped_column(String(8))
-    # Allowed values: taken, not_taken, skipped.
+    # Allowed values: taken, not_taken, skipped, missed ("missed" only from the missed-dose job).
     status: Mapped[str] = mapped_column(String(16))
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     recorded_by_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=True
     )
-    # Allowed values: chatbot, manual.
+    # Allowed values: chatbot, manual, system (the missed-dose job).
     source: Mapped[str] = mapped_column(String(16))
     remind_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     family_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
