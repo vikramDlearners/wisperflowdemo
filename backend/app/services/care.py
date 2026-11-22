@@ -10,10 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.models.care_profile import CareProfile
 from app.models.medicine import Medicine
+from app.models.parent_onboarding_profile import ParentOnboardingProfile
 from app.models.prescription_scan import PrescriptionScan
 from app.services.activity import log_activity
 from app.services.errors import NotFound
-from app.services.languages import LANGUAGE_CODES
+from app.services.languages import LANGUAGE_CODES, language_code, language_name
 from app.services.permissions import require
 from app.services.prescription_scan import ALLOWED_MIME_TYPES, MAX_IMAGE_BYTES
 
@@ -90,6 +91,12 @@ def update_care_profile(
         _check_timezone(changes["timezone"])
     for field, value in changes.items():
         setattr(profile, field, value.strip() if isinstance(value, str) else value)
+    if "preferred_language" in changes and profile.linked_user_id:
+        onboarding = db.execute(
+            select(ParentOnboardingProfile).where(ParentOnboardingProfile.user_id == profile.linked_user_id)
+        ).scalar_one_or_none()
+        if onboarding is not None:
+            onboarding.preferred_language = language_name(profile.preferred_language)
     log_activity(
         db, family_id, actor_id, "care_profile.updated", "care_profile", profile.id,
         {"fields": sorted(changes)},
@@ -268,3 +275,15 @@ def get_medicine_image(db: Session, actor_id: str, family_id: str, medicine_id: 
     if scan is not None and scan.image_data is not None and scan.image_content_type is not None:
         return scan.image_data, scan.image_content_type
     raise NotFound("Medicine image not found")
+
+
+def sync_chatbot_language(db: Session, parent_user_id: str, language: str | None) -> None:
+    """The parent profile's language ("Hindi") is the chatbot's language: copy it, as a code, to every care
+    profile linked to this parent. The caller commits."""
+    if not language:
+        return
+    code = language_code(language)
+    for profile in db.execute(
+        select(CareProfile).where(CareProfile.linked_user_id == parent_user_id)
+    ).scalars():
+        profile.preferred_language = code

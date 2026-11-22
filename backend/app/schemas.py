@@ -517,6 +517,7 @@ class TurnMessageOut(BaseModel):
 class TurnOut(BaseModel):
     messages: list[TurnMessageOut]
     step: str
+    language: str
     urgent: bool
     call_number: str | None
     help_number: str | None

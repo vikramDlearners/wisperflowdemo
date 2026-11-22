@@ -24,6 +24,7 @@ from app.schemas import (
     ProfileIn,
     ProfileOut,
 )
+from app.services import care as care_svc
 from app.services import families as svc
 from app.services.dashboard import build_family_dashboard
 from app.services.permissions import get_membership, permission_codes_for
@@ -180,6 +181,8 @@ def update_parent_profile(
     # Only touch the fields the client actually sent; the section name is not stored.
     for name in body.model_fields_set - {"section"}:
         setattr(profile, name, getattr(body, name))
+    if "preferred_language" in body.model_fields_set:
+        care_svc.sync_chatbot_language(db, care_profile.linked_user_id, body.preferred_language)
     profile.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(profile)

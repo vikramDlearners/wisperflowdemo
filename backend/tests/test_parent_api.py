@@ -103,7 +103,7 @@ def test_text_turn_returns_messages_and_audio(client, db_session, world, tts):
     r = client.post("/api/parent/checkin/text", json={"text": "my knee hurts"}, headers=headers)
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"messages", "step", "urgent", "call_number", "help_number", "audio", "audio_type"}
+    assert set(body) == {"messages", "step", "language", "urgent", "call_number", "help_number", "audio", "audio_type"}
     assert body["messages"][0] == {
         "sender": "bot",
         "text": "Thank you for telling me. I've shared it with Carer Doe, Manager and Viewer Doe.",
@@ -355,3 +355,16 @@ def test_parent_medicine_image_404_for_another_profile(client, db_session, world
 def test_parent_medicines_need_a_parent(client, db_session, world):
     r = client.get("/api/parent/medicines", headers=_auth(db_session, world["manager"]))
     assert r.status_code in (403, 409)
+
+
+def test_turn_reports_the_current_language(client, db_session, world):
+    headers = _auth(db_session, world["parent"])
+    client.get("/api/parent/checkin", headers=headers)
+    world["profile"].preferred_language = "hi"
+    db_session.commit()
+    r = client.post("/api/parent/checkin/text", json={"text": "I am fine"}, headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["language"] == "hi"
+    # The very next reply is already in the new language.
+    assert body["messages"][0]["text"].startswith("बताने के लिए धन्यवाद")

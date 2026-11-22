@@ -43,6 +43,8 @@ export interface CheckinOut {
 export interface TurnOut {
   messages: { sender: "bot" | "parent"; text: string }[];
   step: string;
+  /** The parent's current language: it can change mid-conversation from the Edit parent page. */
+  language?: string;
   urgent: boolean;
   call_number: string | null;
   help_number: string | null;

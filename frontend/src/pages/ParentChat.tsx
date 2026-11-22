@@ -283,6 +283,7 @@ export default function ParentChat() {
   function applyTurn(turn: TurnOut) {
     seqRef.current++;
     setMessages((prev) => [...prev, ...turn.messages.map((m) => ({ sender: m.sender, text: m.text }))]);
+    if (turn.language) setLanguage(turn.language);
     if (turn.call_number) setCallNumber(turn.call_number);
     setHelpNumber(turn.help_number);
     playAudio(turn.audio, turn.audio_type);

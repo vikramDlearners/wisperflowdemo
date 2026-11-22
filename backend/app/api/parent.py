@@ -78,6 +78,7 @@ def _turn_fields(db: Session, ctx: ParentContext, turn: engine.Turn) -> dict:
     return {
         "messages": [TurnMessageOut(sender="bot", text=t) for t in turn.bot_messages],
         "step": turn.checkin.step,
+        "language": ctx.language,
         # Stays true for the rest of the day once anything urgent was reported.
         "urgent": turn.urgent,
         "call_number": turn.call_number,

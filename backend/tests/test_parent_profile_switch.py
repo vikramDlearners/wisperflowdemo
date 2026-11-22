@@ -117,3 +117,47 @@ def test_patch_on_unlinked_care_profile_is_conflict(client, db_session, switch_s
     assert response.json()["detail"] == (
         "This parent has no linked account yet, so their profile cannot be saved."
     )
+
+
+# ---------- the parent's language drives the chatbot ----------
+
+def test_patch_language_changes_the_chatbot_language(client, db_session, switch_setup):
+    s = switch_setup
+    s["mom"].preferred_language = "ta"
+    db_session.commit()
+    response = client.patch(
+        _url(s["family"].id, s["mom"].id),
+        json={"section": "parent", "parent_full_name": "Mom Full Name", "preferred_name": "Mom",
+              "relationship": "mother", "preferred_language": "Hindi"},
+        headers=_auth(db_session, s["manager"]),
+    )
+    assert response.status_code == 200, response.text
+    db_session.refresh(s["mom"])
+    assert s["mom"].preferred_language == "hi"
+    db_session.refresh(s["dad"])
+    assert s["dad"].preferred_language == "en"  # another parent is untouched
+
+
+def test_patch_without_language_keeps_the_chatbot_language(client, db_session, switch_setup):
+    s = switch_setup
+    s["mom"].preferred_language = "ta"
+    db_session.commit()
+    client.patch(
+        _url(s["family"].id, s["mom"].id),
+        json={"section": "communication", "parent_mobile": "+91 90000 00000"},
+        headers=_auth(db_session, s["manager"]),
+    )
+    db_session.refresh(s["mom"])
+    assert s["mom"].preferred_language == "ta"
+
+
+def test_care_profile_language_change_shows_on_the_parent_profile(client, db_session, switch_setup):
+    s = switch_setup
+    response = client.patch(
+        f"/api/families/{s['family'].id}/care-profiles/{s['mom'].id}",
+        json={"preferred_language": "ta"},
+        headers=_auth(db_session, s["manager"]),
+    )
+    assert response.status_code == 200, response.text
+    view = client.get(_url(s["family"].id, s["mom"].id), headers=_auth(db_session, s["manager"]))
+    assert view.json()["preferred_language"] == "Tamil"
