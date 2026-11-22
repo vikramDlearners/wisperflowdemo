@@ -387,7 +387,18 @@ export const careProfiles = {
 
 // ---- medicines (verified against api/medicines.py) ----
 
+export interface DoseToday {
+  medicine_id: string;
+  slot: string; // "HH:MM" or "any"
+  status: "taken" | "not_taken" | "skipped" | null;
+  recorded_at: string | null;
+}
+
 export const medicines = {
+  dosesToday: (familyId: string, careProfileId: string) =>
+    get<DoseToday[]>(
+      `/api/families/${familyId}/medicines/doses/today?care_profile_id=${encodeURIComponent(careProfileId)}`,
+    ),
   list: (familyId: string) => get<MedicineOut[]>(`/api/families/${familyId}/medicines`),
   create: (familyId: string, body: MedicineCreate) =>
     post<MedicineOut>(`/api/families/${familyId}/medicines`, body),

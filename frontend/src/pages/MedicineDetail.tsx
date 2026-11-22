@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import "../medicines.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
+import { doseLabel, slotName, sortDoses } from "../doses";
 import { formatPrice, useMedicineImage } from "../medicineImage";
 import {
   ApiError,
@@ -10,6 +11,7 @@ import {
   medicines,
   members,
   type CareProfileOut,
+  type DoseToday,
   type MedicineOut,
   type MemberOut,
 } from "../api";
@@ -60,6 +62,8 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
   const [perms, setPerms] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [doses, setDoses] = useState<DoseToday[] | null>(null);
+  const [dosesFailed, setDosesFailed] = useState(false);
 
   const [quantity, setQuantity] = useState("");
   const [savingQty, setSavingQty] = useState(false);
@@ -83,6 +87,16 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
         setPeople(memberList);
         setProfiles(profileList);
         setPerms(access?.permissions ?? null);
+        setDoses(null);
+        setDosesFailed(false);
+        medicines
+          .dosesToday(familyId, m.care_profile_id)
+          .then((all) => {
+            if (!cancelled) setDoses(all.filter((d) => d.medicine_id === m.id));
+          })
+          .catch(() => {
+            if (!cancelled) setDosesFailed(true);
+          });
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(errorText(err, "Could not load this medicine."));
@@ -248,6 +262,28 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
                 </span>
               </div>
             </div>
+
+            {/* Today's doses (display only) */}
+            {(dosesFailed || (doses !== null && doses.length > 0)) && (
+              <section className="pp-card md-today">
+                <h2>Today</h2>
+                {dosesFailed || doses === null ? (
+                  <p className="pp-muted">Couldn't load today's doses.</p>
+                ) : (
+                  <ul className="md-today-list">
+                    {sortDoses(doses).map((d) => {
+                      const label = doseLabel(d);
+                      return (
+                        <li key={d.slot}>
+                          <span className="md-today-slot">{slotName(d.slot)}</span>
+                          <span className={`md-dose is-${label.tone}`}>{label.text}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            )}
 
             <div className="md-d-grid">
               {/* Details */}

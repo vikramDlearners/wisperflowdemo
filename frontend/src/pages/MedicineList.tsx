@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../medicines.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
-import { ApiError, medicines, members, type MedicineOut, type MemberOut } from "../api";
+import { ApiError, medicines, members, type DoseToday, type MedicineOut, type MemberOut } from "../api";
+import { doseLabel, slotName, sortDoses } from "../doses";
 import { formatPrice, useMedicineImage } from "../medicineImage";
 
 interface MedicineListProps {
@@ -50,6 +51,7 @@ function csvCell(value: string): string {
 export default function MedicineList({ familyId, onSelect, onAdd }: MedicineListProps) {
   const [items, setItems] = useState<MedicineOut[] | null>(null);
   const [people, setPeople] = useState<MemberOut[]>([]);
+  const [doses, setDoses] = useState<Record<string, DoseToday[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -66,6 +68,16 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
         if (cancelled) return;
         setItems(list);
         setPeople(memberList);
+        // Today's dose status per care profile; failures just leave the column quiet.
+        const profileIds = [...new Set(list.map((m) => m.care_profile_id))];
+        Promise.all(profileIds.map((id) => medicines.dosesToday(familyId, id).catch(() => [] as DoseToday[])))
+          .then((groups) => {
+            if (cancelled) return;
+            const byMedicine: Record<string, DoseToday[]> = {};
+            for (const d of groups.flat()) (byMedicine[d.medicine_id] ??= []).push(d);
+            setDoses(byMedicine);
+          })
+          .catch(() => undefined);
       })
       .catch((err: unknown) => {
         if (!cancelled)
@@ -257,8 +269,7 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
                               <div className="md-sub">{m.instructions_text ? "Instructions" : "Not set"}</div>
                             </td>
                             <td data-label="Next check-in">
-                              <div>—</div>
-                              <div className="md-sub">Not scheduled</div>
+                              <CheckIn doses={doses[m.id]} />
                             </td>
                             <td data-label="Caregiver">
                               {owner ? (
@@ -331,5 +342,30 @@ function MedThumb({ familyId, medicine, tone }: { familyId: string; medicine: Me
     <span className={`md-med-icon ${tone}`} aria-hidden="true">
       ✚
     </span>
+  );
+}
+
+// Today's dose slots for one medicine: the next unanswered slot (or the first), plus "+N more".
+function CheckIn({ doses }: { doses: DoseToday[] | undefined }) {
+  if (!doses || doses.length === 0) {
+    return (
+      <>
+        <div>—</div>
+        <div className="md-sub">Not scheduled</div>
+      </>
+    );
+  }
+  const sorted = sortDoses(doses);
+  const shown = sorted.find((d) => d.status === null) ?? sorted[0];
+  const label = doseLabel(shown);
+  const more = sorted.length - 1;
+  return (
+    <>
+      <div className={`md-dose is-${label.tone}`}>{label.text}</div>
+      <div className="md-sub">
+        {slotName(shown.slot)}
+        {more > 0 && ` · +${more} more`}
+      </div>
+    </>
   );
 }
