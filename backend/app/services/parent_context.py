@@ -40,7 +40,9 @@ def _context(user: User, profile: CareProfile) -> ParentContext:
 
 def resolve_parent(db: Session, user: User) -> ParentContext:
     profile = db.execute(
-        select(CareProfile).where(CareProfile.linked_user_id == user.id)
+        select(CareProfile)
+        .where(CareProfile.linked_user_id == user.id)
+        .order_by(CareProfile.created_at, CareProfile.id)  # PostgreSQL has no implicit row order
     ).scalars().first()
     if profile is not None:
         require(db, user.id, profile.family_id, PARENT_PERMISSION)
