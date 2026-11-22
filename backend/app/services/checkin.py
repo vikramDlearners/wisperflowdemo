@@ -14,12 +14,14 @@ from sqlalchemy.orm import Session
 
 from app.models.appointment import Appointment
 from app.models.checkin import ChatMessage, HealthCheckin
+from app.models.medicine import Medicine
 from app.models.membership import FamilyMember
 from app.models.parent_onboarding_profile import ParentOnboardingProfile
 from app.services.activity import log_activity
 from app.services.app_settings import get_intent_mode
 from app.services.doses import (
     DueDose,
+    doses_today,
     due_untaken,
     local_now,
     logged_today,
@@ -36,7 +38,12 @@ from app.services.family_alerts import (
 from app.services.parent_context import ParentContext
 from app.services.permissions import role_name_for
 from app.services.replies import reply
-from app.services.understanding import DEFAULT_DELAY_MINUTES, is_urgent, understand_medicines
+from app.services.understanding import (
+    DEFAULT_DELAY_MINUTES,
+    is_medicine_question,
+    is_urgent,
+    understand_medicines,
+)
 
 GREET, HEALTH, MEDICINES, APPOINTMENTS, DONE = "greet", "health", "medicines", "appointments", "done"
 MANAGER_ROLE = "Family manager"
@@ -354,6 +361,75 @@ def is_closing(text: str) -> bool:
     return not rest.strip()
 
 
+# ---------- "which medicine do I take?" ----------
+
+_INSTRUCTIONS_MAX = 60
+
+
+def _with_instructions(name: str, med: Medicine | None) -> str:
+    text = " ".join(((med.instructions_text if med else None) or "").split())
+    if not text:
+        return name
+    if len(text) > _INSTRUCTIONS_MAX:
+        text = text[: _INSTRUCTIONS_MAX - 1].rstrip() + "…"
+    return f"{name} ({text})"
+
+
+def _names(items: list[str]) -> str:
+    return ", ".join(dict.fromkeys(items))  # unique, in order
+
+
+def _schedule_answer(db: Session, ctx: ParentContext, now: datetime) -> list[str]:
+    """Today's medicines, from the database only: taken, due now, later at a time, or any time today."""
+    doses = doses_today(db, ctx.profile, now)
+    if not doses:
+        return [_say(ctx, "sched_none")]
+    meds = {m.id: m for m in db.execute(
+        select(Medicine).where(Medicine.id.in_({d.medicine_id for d in doses}))
+    ).scalars()}
+    now = _aware(now)
+    taken: list[str] = []
+    due_now: list[str] = []
+    later: dict[str, list[str]] = {}
+    anytime: list[str] = []
+    for d in doses:
+        label = _with_instructions(d.name, meds.get(d.medicine_id))
+        if d.status == "taken":
+            taken.append(d.name)
+        elif d.status == "skipped":
+            continue  # ran out today: nothing to take
+        elif d.due_at is None:
+            anytime.append(label)
+        elif d.due_at <= now:
+            due_now.append(label)
+        else:
+            later.setdefault(d.slot, []).append(label)
+    msgs = []
+    if taken:
+        msgs.append(_say(ctx, "sched_taken", names=_names(taken)))
+    if due_now:
+        msgs.append(_say(ctx, "sched_now", names=_names(due_now)))
+    for slot in sorted(later):
+        msgs.append(_say(ctx, "sched_at", time=format_time(slot), names=_names(later[slot])))
+    if anytime:
+        msgs.append(_say(ctx, "sched_anytime", names=_names(anytime)))
+    if not (due_now or later or anytime):
+        msgs.append(_say(ctx, "sched_all_done"))
+    return msgs
+
+
+def _after_question(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: datetime) -> list[str]:
+    """After answering a question, ask again whatever the current step was waiting for."""
+    if checkin.step == HEALTH:
+        return [_say(ctx, "ask_health")]
+    if checkin.step == MEDICINES:
+        remaining = _remaining(db, ctx, now)
+        if remaining:
+            return [_ask_medicines(ctx, checkin, remaining)]
+        return _appointments_and_done(db, ctx, checkin, now)
+    return _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
+
+
 # ---------- public API ----------
 
 def _turn(db: Session, ctx: ParentContext, checkin: HealthCheckin, msgs: list[str]) -> Turn:
@@ -444,6 +520,10 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         return _turn(db, ctx, checkin, [_say(ctx, "not_understood")])
     _store(db, ctx, checkin, "parent", [text])
     checkin.updated_at = now
+
+    if is_medicine_question(text) and not is_urgent(text):
+        # A question about today's medicines: answer it from the database; record and share nothing.
+        return _turn(db, ctx, checkin, _schedule_answer(db, ctx, now) + _after_question(db, ctx, checkin, now))
 
     if checkin.step == HEALTH:
         checkin.health_text = text

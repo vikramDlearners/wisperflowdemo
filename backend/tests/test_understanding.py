@@ -245,3 +245,41 @@ def test_rules_urgent_took_both_with_two_due_is_taken():
 def test_rules_took_both_not_urgent_still_taken():
     r = understand_medicines("I took both", [_dose("a"), _dose("b")], OFFLINE_RULES)
     assert [i.outcome for i in r.items] == ["taken", "taken"]
+
+
+# ---------- medicine schedule questions ----------
+
+from app.services.understanding import is_medicine_question  # noqa: E402
+
+
+@pytest.mark.parametrize("text", [
+    "What medicine do I need to take now or in the night?",
+    "which tablets should I take",
+    "when is my next medicine",
+    "what are my medicines today?",
+    "tell me my tablets for tonight",
+    "do I have any pills at night?",
+    "இன்னைக்கு என்ன மாத்திரை சாப்பிடணும்?",
+    "எந்த மருந்து இரவு எடுக்கணும்",
+    "मुझे कौन सी दवा लेनी है?",
+    "रात को कौनसी गोली खानी है",
+    "ఈ రోజు ఏ మందు వేసుకోవాలి?",
+    "ഇന്ന് ഏത് മരുന്ന് കഴിക്കണം?",
+    "ಇವತ್ತು ಯಾವ ಮಾತ್ರೆ ತೆಗೆದುಕೊಳ್ಳಬೇಕು?",
+])
+def test_medicine_questions_detected(text):
+    assert is_medicine_question(text) is True
+
+
+@pytest.mark.parametrize("text", [
+    "yes I took my medicine",
+    "I took both tablets",
+    "not yet, I will take the tablets after food",
+    "my knee is paining",
+    "I ran out of tablets",
+    "ஆமா மாத்திரை சாப்பிட்டேன்",
+    "हाँ दवा ले ली",
+    "",
+])
+def test_medicine_answers_are_not_questions(text):
+    assert is_medicine_question(text) is False

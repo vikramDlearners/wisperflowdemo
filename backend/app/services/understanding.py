@@ -115,6 +115,36 @@ def is_urgent(text: str) -> bool:
     return any(k in normalised for k in _NON_LATIN_KEYWORDS)
 
 
+# ---------- questions about the medicine schedule ----------
+
+# "What medicine do I take tonight?" is a question, not a health note or a dose answer: it needs a medicine word
+# and a question cue. Answers ("yes I took my tablets") have no question cue.
+_QUESTION_CUES_EN = re.compile(
+    r"\b(?:what|which|when|what's|whats|tell me|list|schedule|do i have|need to take|have to take|should i take"
+    r"|do i take|am i taking|to be taken)\b"
+)
+_QUESTION_CUES_NON_LATIN = (
+    "என்ன", "எந்த", "எப்போ", "எப்ப", "எத்தனை",
+    "कौन", "क्या", "कब", "कितनी",
+    " ఏ ", "ఏమి", "ఏం", "ఏవి", "ఎప్పుడు",
+    "ഏത്", "ഏതു", "എന്ത്", "എപ്പോൾ", "ഏതൊക്കെ",
+    "ಯಾವ", "ಏನು", "ಯಾವಾಗ",
+)
+
+
+def is_medicine_question(text: str) -> bool:
+    """True when the parent asks which medicines to take (now, tonight, today), in any parent language."""
+    normalised = (text or "").strip().lower().replace("’", "'")
+    if not normalised:
+        return False
+    if not (_MEDICINE_WORDS.search(normalised) or any(w in normalised for w in _MEDICINE_WORDS_NON_LATIN)):
+        return False
+    if "?" in normalised or _QUESTION_CUES_EN.search(normalised):
+        return True
+    padded = f" {normalised} "
+    return any(c in padded for c in _QUESTION_CUES_NON_LATIN)
+
+
 @dataclass
 class MedicineAnswer:
     medicine_id: str

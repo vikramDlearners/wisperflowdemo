@@ -577,3 +577,91 @@ def test_alone_variants_translated(language):
 
     for key in ("health_noted_alone", "meds_finished_alone"):
         assert key in TEMPLATES[language], (language, key)
+
+
+# ---------- "which medicine do I take?" questions ----------
+
+def _add_evening_dose(db, world):
+    db.add(MedicineReminder(medicine_id=world["meds"][1].id, time_of_day="20:00", active=True, created_at=SETUP_AT))
+    db.commit()
+
+
+def test_medicine_question_in_health_step_answers_schedule_and_is_not_shared(db_session, world):
+    _add_evening_dose(db_session, world)
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = engine.handle_parent_text(
+        db_session, world["ctx"], "What medicine do I need to take now or in the night?", NOW
+    )
+    assert turn.bot_messages == [
+        "Now: Amlodipine, Metformin.",
+        "At 8:00 PM: Metformin.",
+        "How are you feeling today?",
+    ]
+    assert turn.checkin.step == "health"
+    assert turn.checkin.health_text is None
+    notes = db_session.execute(select(Notification)).scalars().all()
+    assert notes == []
+    assert db_session.execute(select(MedicineDose)).scalars().all() == []
+
+
+def test_medicine_question_in_medicines_step_records_nothing_and_asks_again(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "I am fine", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "which tablets should I take?", NOW)
+    assert turn.bot_messages == ["Now: Amlodipine, Metformin.", MEDS_LIST]
+    assert turn.checkin.step == "medicines"
+    assert db_session.execute(select(MedicineDose)).scalars().all() == []
+
+
+def test_medicine_question_after_done_lists_taken_and_later(db_session, world):
+    _add_evening_dose(db_session, world)
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "I am fine", NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "yes I took both", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "when is my next medicine?", NOW)
+    assert turn.bot_messages == [
+        "Already taken today: Amlodipine, Metformin.",
+        "At 8:00 PM: Metformin.",
+        "Is there anything else you'd like to tell me?",
+    ]
+    assert turn.checkin.step == "done"
+    assert "next medicine" not in (turn.checkin.health_text or "")
+
+
+def test_medicine_question_with_everything_taken(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "I am fine", NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "yes I took both", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "what medicines do I have today?", NOW)
+    assert turn.bot_messages[0] == "Already taken today: Amlodipine, Metformin."
+    assert turn.bot_messages[1] == "You've taken all your medicines for today."
+
+
+def test_medicine_question_with_no_medicines(db_session, world):
+    for m in world["meds"]:
+        m.active = False
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "what tablets do I take?", NOW)
+    assert turn.bot_messages[0] == "You don't have any medicines on your list."
+
+
+def test_medicine_question_shows_instructions(db_session, world):
+    world["meds"][0].instructions_text = "After breakfast"
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "which medicine now?", NOW)
+    assert turn.bot_messages[0] == "Now: Amlodipine (After breakfast), Metformin."
+
+
+def test_urgent_question_is_still_urgent(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I fell, which medicine should I take?", NOW)
+    assert turn.urgent is True
+
+
+@pytest.mark.parametrize("language", ["en", "ta", "hi", "te", "ml", "kn"])
+def test_schedule_replies_translated(language):
+    from app.services.replies import TEMPLATES
+    for key in ("sched_now", "sched_at", "sched_anytime", "sched_taken", "sched_all_done", "sched_none"):
+        assert key in TEMPLATES[language]
