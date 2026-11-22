@@ -139,6 +139,49 @@
       ]
     },
     {
+      "name": "Update parent health deficiencies",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"section\":\"medical\",\"calcium_deficiency\":true,\"calcium_deficiency_notes\":\"Low calcium on last blood test; takes supplements\",\"sugar_problems\":true,\"sugar_problems_notes\":\"Type 2 diabetes, on metformin\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/parents/{{careProfileId}}/profile",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "parents",
+            "{{careProfileId}}",
+            "profile"
+          ]
+        },
+        "description": "Save the health deficiency answers for this parent (section medical). calcium_deficiency and sugar_problems are yes/no booleans (send null to clear); the *_notes fields are optional text up to 500 characters. Returns 200 with ProfileOut, which includes these four fields. Needs parent_profile.edit."
+      }
+    },
+
+    {
       "name": "Delete parent profile",
       "request": {
         "method": "DELETE",

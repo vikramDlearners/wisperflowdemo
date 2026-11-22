@@ -329,6 +329,10 @@ SECTION_FIELDS: dict[str, tuple[str, ...]] = {
         "doctor_contact_number",
         "preferred_hospital",
         "care_instructions",
+        "calcium_deficiency",
+        "calcium_deficiency_notes",
+        "sugar_problems",
+        "sugar_problems_notes",
     ),
     "additional": ("profile_picture_url",),
 }
@@ -350,6 +354,10 @@ class ProfileIn(BaseModel):
     doctor_contact_number: str | None = Field(default=None, max_length=30)
     preferred_hospital: str | None = Field(default=None, max_length=160)
     care_instructions: str | None = None
+    calcium_deficiency: bool | None = None
+    calcium_deficiency_notes: str | None = Field(default=None, max_length=500)
+    sugar_problems: bool | None = None
+    sugar_problems_notes: str | None = Field(default=None, max_length=500)
     caregiver_name: str | None = Field(default=None, max_length=120)
     caregiver_relationship: str | None = Field(default=None, max_length=60)
     caregiver_phone: str | None = Field(default=None, max_length=30)
@@ -408,6 +416,10 @@ class ProfileOut(BaseModel):
     doctor_contact_number: str | None
     preferred_hospital: str | None
     care_instructions: str | None
+    calcium_deficiency: bool | None
+    calcium_deficiency_notes: str | None
+    sugar_problems: bool | None
+    sugar_problems_notes: str | None
     caregiver_name: str | None
     caregiver_relationship: str | None
     caregiver_phone: str | None

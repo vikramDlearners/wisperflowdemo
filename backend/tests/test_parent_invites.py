@@ -147,12 +147,14 @@ def test_accept_invite_rejects_expired_token(client, db_session, family_setup, e
     assert response.status_code == 401
 
 
-def test_accept_invite_creates_care_profile_when_family_has_none(client, db_session, family_setup, email):
+def test_accept_invite_links_member_profile_created_on_add(client, db_session, family_setup, email):
     setup = family_setup
     existing = db_session.execute(
         select(CareProfile).where(CareProfile.family_id == setup["family_id"])
     ).scalars().all()
-    assert existing == []
+    assert len(existing) == 1
+    assert existing[0].linked_member_id == setup["membership"].id
+    assert existing[0].linked_user_id is None
     client.post(
         _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(db_session, setup["manager"])
     )

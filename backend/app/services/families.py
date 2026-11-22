@@ -17,6 +17,46 @@ from app.services.activity import log_activity
 from app.services.adapters.messaging import get_email_provider
 from app.services.auth import _hash_token
 from app.services.errors import NotFound
+
+"""Families, members and the caller's own access summary."""
+
+from datetime import date as Date
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, HTTPException, Response
+from sqlalchemy import delete, or_, select
+from sqlalchemy.orm import Session
+
+from app.api.auth import _profile_out
+from app.api.deps import CurrentUser, DbSession
+from app.models.appointment import Appointment
+from app.models.care_profile import CareProfile
+from app.models.checkin import ChatMessage, HealthCheckin
+from app.models.dose import MedicineDose
+from app.models.medicine import Medicine
+from app.models.membership import FamilyMember
+from app.models.parent_invite import ParentInvite
+from app.models.parent_onboarding_profile import ParentOnboardingProfile
+from app.models.prescription_scan import MedicineReminder, PrescriptionScan
+from app.models.task import Task
+from app.models.user import User
+from app.schemas import (
+    DashboardResponse,
+    FamilyCreate,
+    FamilyOut,
+    MemberCreate,
+    MemberOut,
+    MemberRoleChange,
+    MyAccess,
+    ProfileIn,
+    ProfileOut,
+)
+from app.services import families as svc
+from app.services.dashboard import build_family_dashboard
+from app.services.profile import get_care_profile_onboarding
+from app.services.permissions import get_membership, permission_codes_for
+from app.services.permissions import require  # noqa: F401  (re-exported for readers of this module)
+
 from app.services.permissions import (
     DEFAULT_ROLES,
     PermissionDenied,
@@ -25,6 +65,7 @@ from app.services.permissions import (
     get_membership,
     validate_permission_codes,
 )
+
 
 
 def create_family(db: Session, creator: User, name: str) -> Family:
@@ -184,7 +225,7 @@ def add_member(
     )
     db.add(membership)
     db.flush()
-    if relationship in ("mother", "father"):
+    if relationship in ("mother", "father") or role.name.strip().lower() == "parent":
         db.add(
             CareProfile(
                 family_id=family_id,

@@ -163,50 +163,7 @@ export default function MembersPermissions({ familyId }: MembersPermissionsProps
       {actionError && <p role="alert" className="wizard-error">{actionError}</p>}
       {inviteNotice && <p role="status">{inviteNotice}</p>}
 
-      <h3>Members</h3>
-      {memberList.length === 0 ? (
-        <p>No members yet.</p>
-      ) : (
-        <ul>
-          {memberList.map((m) => (
-            <li key={m.membership_id}>
-              <strong>{m.display_name}</strong>
-              {m.email ? ` (${m.email})` : ""}
-              <label className="wizard-field">
-                Role
-                <select
-                  value={m.role_id}
-                  onChange={(e) => void handleMemberRoleChange(m.membership_id, e.target.value)}
-                >
-                  {roleList.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {m.relationship && (
-                <span className="muted">
-                  {m.relationship.charAt(0).toUpperCase() + m.relationship.slice(1)}
-                </span>
-              )}
-              {(m.relationship === "mother" || m.relationship === "father") && (
-                <span className="muted"> {m.relationship === "mother" ? "Mother profile" : "Father profile"}</span>
-              )}
-              {m.role_name.toLowerCase() === "parent" && (
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={invitingId === m.membership_id}
-                  onClick={() => void handleSendInvite(m.membership_id)}
-                >
-                  {invitingId === m.membership_id ? "Sending…" : "Send login link"}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+
 
       <form className="wizard-form" onSubmit={handleAddMember} aria-label="Add member">
         <label className="wizard-field">

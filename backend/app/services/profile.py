@@ -2,6 +2,12 @@
 
 from datetime import date
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.care_profile import CareProfile
+from app.models.parent_onboarding_profile import ParentOnboardingProfile
+
 
 # Each slot is one countable field. A tuple slot counts as filled when any of its fields is set.
 SECTION_SLOTS: dict[str, tuple] = {
@@ -24,6 +30,35 @@ SECTION_SLOTS: dict[str, tuple] = {
     ),
     "additional": ("profile_picture_url",),
 }
+
+
+def get_care_profile_onboarding(
+    db: Session, care_profile: CareProfile, create: bool = False
+) -> ParentOnboardingProfile | None:
+    """Onboarding row for a care profile.
+
+    Linked profile: the row for its linked user. Unlinked profile: the row with that care_profile_id.
+    With create=True a missing row is added to the session (user_id or care_profile_id set accordingly).
+    """
+    if care_profile.linked_user_id is not None:
+        profile = db.scalar(
+            select(ParentOnboardingProfile).where(
+                ParentOnboardingProfile.user_id == care_profile.linked_user_id
+            )
+        )
+        if profile is None and create:
+            profile = ParentOnboardingProfile(
+                user_id=care_profile.linked_user_id, care_profile_id=care_profile.id
+            )
+            db.add(profile)
+        return profile
+    profile = db.scalar(
+        select(ParentOnboardingProfile).where(ParentOnboardingProfile.care_profile_id == care_profile.id)
+    )
+    if profile is None and create:
+        profile = ParentOnboardingProfile(care_profile_id=care_profile.id)
+        db.add(profile)
+    return profile
 
 
 def _has_value(value: object) -> bool:

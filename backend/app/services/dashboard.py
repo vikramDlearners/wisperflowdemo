@@ -14,10 +14,11 @@ from app.models.appointment import Appointment
 from app.models.care_profile import CareProfile
 from app.models.dose import MedicineDose
 from app.models.medicine import Medicine
+from app.models.membership import FamilyMember
 from app.models.parent_onboarding_profile import ParentOnboardingProfile
 from app.services.doses import ANY_SLOT, no_time_slots, today_for
 from app.services.errors import NotFound
-from app.services.profile import age_from
+from app.services.profile import age_from, get_care_profile_onboarding
 from app.services.reminders import list_reminder_times
 
 LOW_STOCK_DAYS = 7
@@ -26,13 +27,6 @@ TAKEN = "taken"
 MISSED = "missed"
 CANCELLED = "cancelled"
 
-
-def _onboarding_for(db: Session, profile: CareProfile) -> ParentOnboardingProfile | None:
-    if profile.linked_user_id is None:
-        return None
-    return db.execute(
-        select(ParentOnboardingProfile).where(ParentOnboardingProfile.user_id == profile.linked_user_id)
-    ).scalar_one_or_none()
 
 
 def _field(onboarding: ParentOnboardingProfile | None, name: str) -> Any:
@@ -80,17 +74,20 @@ def _day_for(profile: CareProfile, on_date: date | None, now: datetime) -> date:
 
 
 def _parent_card(db: Session, profile: CareProfile, day: date) -> dict[str, Any]:
-    onboarding = _onboarding_for(db, profile)
+    onboarding = get_care_profile_onboarding(db, profile)
     logged = _logged_on(db, profile.id, day)
+    # Fall back to the relationship entered on the Members page when onboarding has none.
+    membership = db.get(FamilyMember, profile.linked_member_id) if profile.linked_member_id else None
+    relationship = _field(onboarding, "relationship") or (membership.relationship if membership else None)
     return {
         "care_profile_id": profile.id,
         "display_name": profile.display_name,
-        "relationship": _field(onboarding, "relationship"),
+        "relationship": relationship,
         "age": age_from(onboarding) if onboarding is not None else None,
         "photo_url": _field(onboarding, "profile_picture_url"),
         "known_health_conditions": _field(onboarding, "known_health_conditions"),
         "primary_caregiver_name": _field(onboarding, "caregiver_name"),
-        "gender": _gender_for(_field(onboarding, "gender"), _field(onboarding, "relationship")),
+        "gender": _gender_for(_field(onboarding, "gender"), relationship),
         "all_good": not any(r.status == MISSED for r in logged.values()),
     }
 

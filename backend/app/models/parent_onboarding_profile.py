@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -17,8 +17,12 @@ class ParentOnboardingProfile(Base):
     __tablename__ = "parent_onboarding_profiles"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), unique=True, nullable=False
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id"), unique=True, nullable=True
+    )
+    # Set for a parent with no linked account yet; points at that parent's care profile.
+    care_profile_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("care_profiles.id"), nullable=True
     )
 
     # Section: parent
@@ -41,6 +45,10 @@ class ParentOnboardingProfile(Base):
     doctor_contact_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
     preferred_hospital: Mapped[str | None] = mapped_column(String(160), nullable=True)
     care_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    calcium_deficiency: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    calcium_deficiency_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sugar_problems: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    sugar_problems_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Section: care
     caregiver_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
