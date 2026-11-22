@@ -9,9 +9,11 @@ import {
   fetchParentMedicinePhoto,
   getCheckin,
   getParentMedicines,
+  sendEmergency,
   sendText,
   sendVoice,
   type ChatMessage,
+  type EmergencyOut,
   type ParentMedicine,
   type ReminderDue,
   type TurnOut,
@@ -57,6 +59,9 @@ function pickMimeType(): string | undefined {
   return undefined;
 }
 
+// Shown if the emergency request fails before the server sends its number (dummy until a real one is set).
+const DUMMY_EMERGENCY_NUMBER = "+91 00000 00000";
+
 function telHref(number: string): string {
   return `tel:${number.replace(/[^\d+]/g, "")}`;
 }
@@ -81,6 +86,9 @@ export default function ParentChat() {
   const [showText, setShowText] = useState(() => !voiceSupported());
   const [text, setText] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  // Help -> "Is this an emergency?" -> alert the family and show the number to call.
+  const [emergency, setEmergency] = useState<"closed" | "ask" | "sending" | "done" | "failed">("closed");
+  const [emergencyInfo, setEmergencyInfo] = useState<EmergencyOut | null>(null);
   // Bumped after every server response so the reminder timer is recomputed.
   const [responseTick, setResponseTick] = useState(0);
 
@@ -199,6 +207,28 @@ export default function ParentChat() {
       created.forEach((u) => URL.revokeObjectURL(u));
     };
   }, []);
+
+  // ---------- emergency ----------
+
+  async function handleEmergencyYes() {
+    setEmergency("sending");
+    try {
+      const info = await sendEmergency();
+      if (!mountedRef.current) return;
+      setEmergencyInfo(info);
+      setEmergency("done");
+      void refresh(); // shows the alert note in the chat and the red Call button
+    } catch (err) {
+      if (!mountedRef.current) return;
+      if (handleAuthError(err)) return;
+      setEmergency("failed");
+    }
+  }
+
+  function handleEmergencyNo() {
+    setEmergency("closed");
+    setHelpOpen(true);
+  }
 
   // ---------- loading the conversation ----------
 
@@ -448,7 +478,7 @@ export default function ParentChat() {
             className="pc-help-btn"
             aria-expanded={helpOpen}
             aria-controls="pc-help-panel"
-            onClick={() => setHelpOpen((o) => !o)}
+            onClick={() => (helpOpen ? setHelpOpen(false) : setEmergency("ask"))}
           >
             {t.help}
           </button>
@@ -512,6 +542,52 @@ export default function ParentChat() {
   return (
     <div className="pc-page" lang={parentLangCode(language)}>
       {header}
+
+      {emergency !== "closed" && (
+        <div className="pc-emergency-backdrop">
+          <div
+            className="pc-emergency"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="pc-emergency-title"
+            lang={parentLangCode(language)}
+          >
+            {emergency === "ask" && (
+              <>
+                <h2 id="pc-emergency-title" className="pc-emergency-title">{t.emergencyQuestion}</h2>
+                <button type="button" className="pc-emergency-yes" onClick={handleEmergencyYes} autoFocus>
+                  {t.emergencyYes}
+                </button>
+                <button type="button" className="pc-emergency-no" onClick={handleEmergencyNo}>
+                  {t.emergencyNo}
+                </button>
+              </>
+            )}
+            {emergency === "sending" && (
+              <h2 id="pc-emergency-title" className="pc-emergency-title" role="status">{t.emergencySending}</h2>
+            )}
+            {(emergency === "done" || emergency === "failed") && (
+              <>
+                <h2 id="pc-emergency-title" className="pc-emergency-title">
+                  {emergency === "done" ? t.emergencyNotified : t.emergencyFailed}
+                </h2>
+                <a
+                  className="pc-call-btn pc-emergency-call"
+                  href={telHref(emergencyInfo?.emergency_number ?? DUMMY_EMERGENCY_NUMBER)}
+                >
+                  <span aria-hidden="true">📞</span> {t.emergencyCall}
+                  <span className="pc-call-number">
+                    {emergencyInfo?.emergency_number ?? DUMMY_EMERGENCY_NUMBER}
+                  </span>
+                </a>
+                <button type="button" className="pc-emergency-no" onClick={() => setEmergency("closed")}>
+                  {t.closePhoto}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {helpOpen && (
         <section id="pc-help-panel" className="pc-help" aria-label={t.help}>

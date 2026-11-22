@@ -511,6 +511,12 @@ class ParentMedicineOut(BaseModel):
     has_image: bool
 
 
+class EmergencyOut(BaseModel):
+    notified: list[str]
+    channels: list[str]
+    emergency_number: str
+
+
 class ParentTextIn(BaseModel):
     text: str = Field(max_length=2000)
 

@@ -132,3 +132,16 @@ export async function fetchParentMedicinePhoto(medicineId: string): Promise<stri
   if (!res.ok) return null;
   return URL.createObjectURL(await res.blob());
 }
+
+
+// Help -> "Yes, it's an emergency": alerts the whole family now.
+//   POST /emergency -> {notified: [names], channels: [...], emergency_number}
+export interface EmergencyOut {
+  notified: string[];
+  channels: string[];
+  emergency_number: string;
+}
+
+export function sendEmergency(): Promise<EmergencyOut> {
+  return send<EmergencyOut>("/api/parent/emergency", { method: "POST" });
+}

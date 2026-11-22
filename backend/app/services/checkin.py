@@ -31,6 +31,7 @@ from app.services.doses import (
     today_for,
 )
 from app.services.family_alerts import (
+    notify_family_emergency,
     notify_family_finished,
     notify_family_update,
     notify_family_urgent,
@@ -711,3 +712,17 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         msgs = [_share_health(db, ctx, checkin, text)]
         msgs += _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
     return _turn(db, ctx, checkin, msgs)
+
+# ---------- emergency button ----------
+
+def raise_emergency(db: Session, ctx: ParentContext, now: datetime) -> list[str]:
+    """Help -> "Yes, it's an emergency": mark today urgent, alert the family, note it in the chat.
+    Returns the names of the family members alerted."""
+    checkin = _get_or_create(db, ctx, now)
+    checkin.urgent = True
+    checkin.updated_at = now
+    users = notify_family_emergency(db, ctx, checkin)
+    log_activity(db, ctx.family_id, ctx.user_id, "checkin.emergency", "health_checkin", checkin.id, {})
+    _store(db, ctx, checkin, "bot", [_say(ctx, "emergency_logged")])
+    db.commit()
+    return [u.display_name or u.email for u in users]

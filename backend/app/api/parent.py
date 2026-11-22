@@ -9,12 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.config import settings
 from app.models.checkin import HealthCheckin
 from app.models.medicine import Medicine
 from app.models.user import User
 from app.schemas import (
     ChatMessageOut,
     CheckinOut,
+    EmergencyOut,
     ParentMedicineOut,
     ParentTextIn,
     ReminderDueOut,
@@ -163,3 +165,15 @@ def get_parent_medicine_image(medicine_id: str, db: Session = DbSession, user: U
     if med.image_data is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "This medicine has no photo")
     return Response(content=med.image_data, media_type=med.image_content_type or "application/octet-stream")
+
+
+# Shown on the parent's pop-up. Only Email (and in-app notes) are sent today; WhatsApp and SMS are not wired yet.
+EMERGENCY_CHANNELS = ["WhatsApp", "Email", "Text message"]
+
+
+@router.post("/emergency", response_model=EmergencyOut)
+def emergency(db: Session = DbSession, user: User = CurrentUser) -> EmergencyOut:
+    """Help -> "Yes, it's an emergency": alert the whole family now and give the number to call."""
+    ctx = resolve_parent(db, user)
+    notified = engine.raise_emergency(db, ctx, _now())
+    return EmergencyOut(notified=notified, channels=EMERGENCY_CHANNELS, emergency_number=settings.emergency_number)

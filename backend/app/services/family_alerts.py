@@ -109,6 +109,25 @@ def notify_family_urgent(db: Session, ctx: ParentContext, checkin: HealthCheckin
     )
 
 
+EMERGENCY_TEXT = "Pressed the emergency button"
+
+
+def notify_family_emergency(db: Session, ctx: ParentContext, checkin: HealthCheckin) -> list[User]:
+    """The parent pressed Help -> "Yes, it's an emergency": alert every other family member now."""
+    users = other_members(db, ctx)
+    for user in users:
+        notify(db, user.id, "checkin.urgent", family_id=ctx.family_id,
+               payload=_payload(ctx, checkin, EMERGENCY_TEXT))
+    name = ctx.profile.display_name
+    _email(
+        users,
+        f"EMERGENCY: {name} pressed the emergency button",
+        f"{name} pressed the emergency button in the CareCircle app just now.\n\n"
+        f"Please call {name} or reach them as soon as you can.",
+    )
+    return users
+
+
 def notify_family_finished(db: Session, ctx: ParentContext, medicine: DueDose) -> None:
     users = other_members(db, ctx)
     payload = {

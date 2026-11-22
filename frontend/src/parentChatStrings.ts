@@ -36,6 +36,13 @@ export interface ParentStrings {
   logOut: string;
   photoOf: string;
   closePhoto: string;
+  emergencyQuestion: string;
+  emergencyYes: string;
+  emergencyNo: string;
+  emergencySending: string;
+  emergencyNotified: string;
+  emergencyCall: string;
+  emergencyFailed: string;
   signingOut: string;
 }
 
@@ -43,6 +50,13 @@ const en: ParentStrings = {
   logOut: "Log out",
   photoOf: "Photo",
   closePhoto: "Close",
+  emergencyQuestion: "Is this an emergency?",
+  emergencyYes: "Yes, it's an emergency",
+  emergencyNo: "No, I just need help",
+  emergencySending: "Telling your family…",
+  emergencyNotified: "We have notified your children, caretakers and relatives on WhatsApp, Email and Text message.",
+  emergencyCall: "Tap to call the emergency number",
+  emergencyFailed: "We couldn't send the alerts. Please call now.",
   signingOut: "Signing out…",
   tapToSpeak: "Tap to speak",
   tapAgainToSend: "Tap again to send",
@@ -78,6 +92,13 @@ const hi: ParentStrings = {
   logOut: "लॉग आउट",
   photoOf: "फ़ोटो",
   closePhoto: "बंद करें",
+  emergencyQuestion: "क्या यह आपातकाल है?",
+  emergencyYes: "हाँ, आपातकाल है",
+  emergencyNo: "नहीं, बस मदद चाहिए",
+  emergencySending: "परिवार को बता रहे हैं…",
+  emergencyNotified: "हमने आपके बच्चों, देखभाल करने वालों और रिश्तेदारों को WhatsApp, ईमेल और टेक्स्ट मैसेज से सूचित कर दिया है।",
+  emergencyCall: "आपातकालीन नंबर पर कॉल करने के लिए दबाएँ",
+  emergencyFailed: "सूचना नहीं भेज पाए। कृपया अभी कॉल करें।",
   signingOut: "लॉग आउट हो रहा है…",
   tapToSpeak: "बोलने के लिए दबाएं",
   tapAgainToSend: "भेजने के लिए फिर दबाएं",
@@ -113,6 +134,13 @@ const ta: ParentStrings = {
   logOut: "வெளியேறு",
   photoOf: "படம்",
   closePhoto: "மூடு",
+  emergencyQuestion: "இது அவசரமா?",
+  emergencyYes: "ஆம், அவசரம்",
+  emergencyNo: "இல்லை, உதவி மட்டும் வேண்டும்",
+  emergencySending: "குடும்பத்தினருக்குத் தெரிவிக்கிறோம்…",
+  emergencyNotified: "உங்கள் பிள்ளைகள், பராமரிப்பாளர்கள் மற்றும் உறவினர்களுக்கு WhatsApp, மின்னஞ்சல் மற்றும் குறுஞ்செய்தி மூலம் தெரிவித்துவிட்டோம்.",
+  emergencyCall: "அவசர எண்ணை அழைக்க இங்கே தட்டவும்",
+  emergencyFailed: "தகவல் அனுப்ப முடியவில்லை. உடனே அழையுங்கள்.",
   signingOut: "வெளியேறுகிறது…",
   tapToSpeak: "பேச தட்டவும்",
   tapAgainToSend: "அனுப்ப மீண்டும் தட்டவும்",
@@ -148,6 +176,13 @@ const te: ParentStrings = {
   logOut: "లాగ్ అవుట్",
   photoOf: "ఫోటో",
   closePhoto: "మూసివేయి",
+  emergencyQuestion: "ఇది అత్యవసరమా?",
+  emergencyYes: "అవును, అత్యవసరం",
+  emergencyNo: "లేదు, కొంచెం సహాయం కావాలి",
+  emergencySending: "మీ కుటుంబానికి తెలియజేస్తున్నాం…",
+  emergencyNotified: "మీ పిల్లలు, సంరక్షకులు మరియు బంధువులకు WhatsApp, ఈమెయిల్ మరియు టెక్స్ట్ మెసేజ్ ద్వారా తెలియజేశాం.",
+  emergencyCall: "అత్యవసర నంబర్‌కు కాల్ చేయడానికి నొక్కండి",
+  emergencyFailed: "సందేశాలు పంపలేకపోయాం. దయచేసి ఇప్పుడే కాల్ చేయండి.",
   signingOut: "లాగ్ అవుట్ అవుతోంది…",
   tapToSpeak: "మాట్లాడటానికి నొక్కండి",
   tapAgainToSend: "పంపడానికి మళ్ళీ నొక్కండి",
@@ -183,6 +218,13 @@ const ml: ParentStrings = {
   logOut: "ലോഗ് ഔട്ട്",
   photoOf: "ഫോട്ടോ",
   closePhoto: "അടയ്ക്കുക",
+  emergencyQuestion: "ഇത് അടിയന്തരമാണോ?",
+  emergencyYes: "അതെ, അടിയന്തരമാണ്",
+  emergencyNo: "ഇല്ല, ഒരു സഹായം മതി",
+  emergencySending: "കുടുംബത്തെ അറിയിക്കുന്നു…",
+  emergencyNotified: "നിങ്ങളുടെ മക്കളെയും പരിചാരകരെയും ബന്ധുക്കളെയും WhatsApp, ഇമെയിൽ, ടെക്സ്റ്റ് മെസേജ് വഴി അറിയിച്ചു.",
+  emergencyCall: "അടിയന്തര നമ്പറിലേക്ക് വിളിക്കാൻ ഇവിടെ തൊടുക",
+  emergencyFailed: "അറിയിപ്പുകൾ അയയ്ക്കാനായില്ല. ദയവായി ഇപ്പോൾ വിളിക്കൂ.",
   signingOut: "ലോഗ് ഔട്ട് ചെയ്യുന്നു…",
   tapToSpeak: "സംസാരിക്കാൻ തൊടുക",
   tapAgainToSend: "അയയ്ക്കാൻ വീണ്ടും തൊടുക",
@@ -218,6 +260,13 @@ const kn: ParentStrings = {
   logOut: "ಲಾಗ್ ಔಟ್",
   photoOf: "ಫೋಟೋ",
   closePhoto: "ಮುಚ್ಚಿ",
+  emergencyQuestion: "ಇದು ತುರ್ತು ಪರಿಸ್ಥಿತಿಯೇ?",
+  emergencyYes: "ಹೌದು, ತುರ್ತು",
+  emergencyNo: "ಇಲ್ಲ, ಸ್ವಲ್ಪ ಸಹಾಯ ಬೇಕು",
+  emergencySending: "ನಿಮ್ಮ ಕುಟುಂಬಕ್ಕೆ ತಿಳಿಸುತ್ತಿದ್ದೇವೆ…",
+  emergencyNotified: "ನಿಮ್ಮ ಮಕ್ಕಳು, ಆರೈಕೆದಾರರು ಮತ್ತು ಸಂಬಂಧಿಕರಿಗೆ WhatsApp, ಇಮೇಲ್ ಮತ್ತು ಟೆಕ್ಸ್ಟ್ ಮೆಸೇಜ್ ಮೂಲಕ ತಿಳಿಸಿದ್ದೇವೆ.",
+  emergencyCall: "ತುರ್ತು ಸಂಖ್ಯೆಗೆ ಕರೆ ಮಾಡಲು ಒತ್ತಿ",
+  emergencyFailed: "ಸಂದೇಶ ಕಳುಹಿಸಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಈಗಲೇ ಕರೆ ಮಾಡಿ.",
   signingOut: "ಲಾಗ್ ಔಟ್ ಆಗುತ್ತಿದೆ…",
   tapToSpeak: "ಮಾತನಾಡಲು ಒತ್ತಿ",
   tapAgainToSend: "ಕಳುಹಿಸಲು ಮತ್ತೆ ಒತ್ತಿ",

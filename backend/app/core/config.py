@@ -37,6 +37,8 @@ class Settings(BaseSettings):
 
     # Background jobs (missed-dose alerts, daily summaries). Tests turn this off.
     scheduler_enabled: bool = True
+    # Shown on the parent's emergency pop-up (tap to call). A dummy number until a real one is set in .env.
+    emergency_number: str = "+91 00000 00000"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
