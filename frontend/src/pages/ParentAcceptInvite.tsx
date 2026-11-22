@@ -21,7 +21,7 @@ export default function ParentAcceptInvite() {
     }
 
     acceptParentInvite(token)
-      .then(() => navigate("/parent/home", { replace: true }))
+      .then(() => navigate("/parent/chat", { replace: true }))
       .catch(() => {
         setError("This sign-in link is invalid or has expired. Ask your family member to send a new one.");
       });

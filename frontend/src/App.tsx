@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import SignIn from "./pages/SignIn";
 import ParentAcceptInvite from "./pages/ParentAcceptInvite";
 import Landing from "./pages/Landing";
@@ -17,10 +17,7 @@ import SharedRecords from "./pages/SharedRecords";
 import FamilyTimeline from "./pages/FamilyTimeline";
 import MembersPermissions from "./pages/MembersPermissions";
 import NotificationSettings from "./pages/NotificationSettings";
-import ParentHome from "./pages/ParentHome";
-import ParentCheckin from "./pages/ParentCheckin";
-import ParentConfirmation from "./pages/ParentConfirmation";
-import ParentHelp from "./pages/ParentHelp";
+import ParentChat from "./pages/ParentChat";
 import ParentOnboarding from "./pages/ParentOnboarding";
 import ParentProfilePage from "./pages/ParentProfilePage";
 
@@ -107,10 +104,12 @@ export default function App() {
         }
       />
 
-      <Route path="/parent/home" element={<ParentHome />} />
-      <Route path="/parent/checkin" element={<ParentCheckin />} />
-      <Route path="/parent/confirmation" element={<ParentConfirmation />} />
-      <Route path="/parent/help" element={<ParentHelp />} />
+      <Route path="/parent/chat" element={<ParentChat />} />
+      {/* The old parent pages are replaced by the chat; their files stay on disk. */}
+      <Route path="/parent/home" element={<Navigate to="/parent/chat" replace />} />
+      <Route path="/parent/checkin" element={<Navigate to="/parent/chat" replace />} />
+      <Route path="/parent/confirmation" element={<Navigate to="/parent/chat" replace />} />
+      <Route path="/parent/help" element={<Navigate to="/parent/chat" replace />} />
       <Route path="/onboarding/parent" element={<ParentOnboarding />} />
       <Route path="/parent-profile" element={<ParentProfilePage />} />
     </Routes>

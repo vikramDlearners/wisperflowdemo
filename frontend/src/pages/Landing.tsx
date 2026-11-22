@@ -14,7 +14,7 @@ import {
 } from "../api";
 
 // Sign up / log in with an emailed 6-digit code, then (new users) pick a role.
-// Steps: login | signup -> code -> role -> /onboarding/parent
+// Steps: login | signup -> code -> role -> /onboarding/parent (parents: /parent/chat)
 
 type Step = "login" | "signup" | "code" | "role";
 
@@ -51,8 +51,8 @@ export default function Landing() {
     if (getSessionToken() == null) return;
     async function restoreSession() {
       try {
-        await auth.me();
-        navigate("/onboarding/parent");
+        const me = await auth.me();
+        navigate(me.role === "parent" ? "/parent/chat" : "/onboarding/parent");
       } catch {
         // Token is invalid or expired (including 401): forget it and stay here.
         setSessionToken(null);
@@ -143,7 +143,8 @@ export default function Landing() {
         setNotice(null);
         setStep("role");
       } else {
-        navigate("/onboarding/parent");
+        // Parents go straight to their check-in chat; everyone else to onboarding.
+        navigate(session.user.role === "parent" ? "/parent/chat" : "/onboarding/parent");
       }
     } catch (err) {
       setError(errorText(err));
@@ -213,7 +214,7 @@ export default function Landing() {
     setError(null);
     try {
       await setRole(selectedRole, selectedRole === "others" ? other : null);
-      navigate("/onboarding/parent");
+      navigate(selectedRole === "parent" ? "/parent/chat" : "/onboarding/parent");
     } catch (err) {
       setError(errorText(err));
     } finally {
