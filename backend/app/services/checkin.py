@@ -5,7 +5,7 @@ step change writes a "checkin.updated" activity row. Medicine names only ever co
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -40,6 +40,7 @@ from app.services.understanding import DEFAULT_DELAY_MINUTES, is_urgent, underst
 GREET, HEALTH, MEDICINES, APPOINTMENTS, DONE = "greet", "health", "medicines", "appointments", "done"
 MANAGER_ROLE = "Family manager"
 UPCOMING_STATUSES = ("scheduled", "rescheduled")
+NOT_TAKEN_REASK = timedelta(minutes=30)
 
 
 @dataclass
@@ -148,9 +149,19 @@ def call_number(db: Session, ctx: ParentContext) -> str | None:
 
 # ---------- medicines ----------
 
+def _aware(dt: datetime | None) -> datetime | None:
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _remaining(db: Session, ctx: ParentContext, now: datetime) -> list[DueDose]:
-    """Due doses not yet answered today. Skipped and plain "not taken" answers count as answered;
-    a not-taken dose whose remind-later time has passed is asked again."""
+    """Due doses still to ask about now.
+
+    Taken and skipped (includes "ran out") doses are answered for the day. A plain "not taken" answer is not
+    asked again until NOT_TAKEN_REASK has passed since it was recorded, so one exchange never loops. A
+    remind-later dose comes back once its reminder time has passed (due_untaken hides it until then).
+    """
     logged = logged_today(db, ctx.profile, now)
     out = []
     for d in due_untaken(db, ctx.profile, now):
@@ -158,8 +169,10 @@ def _remaining(db: Session, ctx: ParentContext, now: datetime) -> list[DueDose]:
             continue
         if d.status == "not_taken":
             row = logged.get((d.medicine_id, d.slot))
-            if row is None or row.remind_at is None:
-                continue
+            if row is not None and row.remind_at is None:
+                recorded = _aware(row.recorded_at)
+                if recorded is not None and _aware(now) - recorded < NOT_TAKEN_REASK:
+                    continue
         out.append(d)
     return out
 
@@ -217,6 +230,7 @@ def _handle_medicines(db: Session, ctx: ParentContext, checkin: HealthCheckin, t
     finished: list[DueDose] = []
     for answer in answers.items:
         doses = by_medicine.get(answer.medicine_id, [])
+        recorded_finished = False
         for dose in doses:
             try:
                 if answer.outcome in ("taken", "not_taken"):
@@ -226,11 +240,13 @@ def _handle_medicines(db: Session, ctx: ParentContext, checkin: HealthCheckin, t
                     remind_minutes = answers.delay_minutes or DEFAULT_DELAY_MINUTES
                     set_remind_later(db, ctx.profile, dose.medicine_id, dose.slot, remind_minutes, now)
                 elif answer.outcome == "finished":
-                    record_dose(db, ctx.profile, dose.medicine_id, dose.slot, "not_taken", ctx.user_id, "chatbot", now)
+                    # Ran out: answered for the day (skipped), never asked again; the family is told once.
+                    record_dose(db, ctx.profile, dose.medicine_id, dose.slot, "skipped", ctx.user_id, "chatbot", now)
+                    recorded_finished = True
             except ValueError:
                 # The medicine was removed or deactivated during the conversation; nothing to record.
                 continue
-        if answer.outcome == "finished" and doses:
+        if recorded_finished:
             finished.append(doses[0])
 
     msgs: list[str] = []
@@ -298,6 +314,15 @@ def _turn(db: Session, ctx: ParentContext, checkin: HealthCheckin, msgs: list[st
     return Turn(checkin=checkin, bot_messages=msgs, call_number=number, urgent=bool(checkin.urgent))
 
 
+def _reopen_or(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: datetime, otherwise: str) -> list[str]:
+    """From "done": newly due or reminder-due doses send the check-in back to the medicines step."""
+    remaining = _remaining(db, ctx, now)
+    if remaining:
+        _set_step(db, ctx, checkin, MEDICINES, now)
+        return [_ask_medicines(ctx, checkin, remaining)]
+    return [otherwise]
+
+
 def start_or_resume(db: Session, ctx: ParentContext, now: datetime) -> Turn:
     checkin = _get_or_create(db, ctx, now)
     msgs = [_greeting(ctx, now)]
@@ -309,7 +334,7 @@ def start_or_resume(db: Session, ctx: ParentContext, now: datetime) -> Turn:
     elif checkin.step == APPOINTMENTS:
         msgs += _appointments_and_done(db, ctx, checkin, now)
     else:
-        msgs.append(_say(ctx, "anything_else"))
+        msgs += _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
     return _turn(db, ctx, checkin, msgs)
 
 
@@ -334,5 +359,6 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         msgs = _appointments_and_done(db, ctx, checkin, now)
     else:
         checkin.health_text = f"{checkin.health_text}\n{text}" if checkin.health_text else text
-        msgs = [_share_health(db, ctx, checkin, text), _say(ctx, "anything_else")]
+        msgs = [_share_health(db, ctx, checkin, text)]
+        msgs += _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
     return _turn(db, ctx, checkin, msgs)

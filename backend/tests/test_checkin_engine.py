@@ -1,6 +1,6 @@
 """Parent check-in engine: greeting, health answer, due medicines, appointments, family alerts."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -108,7 +108,10 @@ def test_health_answer_saved_and_medicines_listed(db_session, world):
     parent_msgs = db_session.execute(select(ChatMessage).where(ChatMessage.sender == "parent")).scalars().all()
     assert [m.text for m in parent_msgs] == ["my knee hurts"]
     actions = db_session.execute(select(ActivityLog).where(ActivityLog.action == "checkin.updated")).scalars().all()
-    assert len(actions) >= 2
+    assert sorted(a.metadata_json["step"] for a in actions) == ["health", "medicines"]
+    assert {(a.object_type, a.object_id, a.actor_id) for a in actions} == {
+        ("health_checkin", turn.checkin.id, world["parent"].id)
+    }
 
 
 def test_urgent_alerts_every_member(db_session, world, email):
@@ -197,6 +200,13 @@ def test_finished_alerts_family(db_session, world, email):
     assert {n.recipient_user_id for n in rows} == world["member_ids"]
     assert len(email.sent) == 3
     assert turn.checkin.step == "done"
+    dose = db_session.execute(select(MedicineDose)).scalar_one()
+    assert dose.status == "skipped"
+    # Later the same day it is never asked again and the family is not alerted twice.
+    later = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(hours=2))
+    assert later.bot_messages == ["Good morning, Amma!", "Is there anything else you'd like to tell me?"]
+    rows = db_session.execute(select(Notification).where(Notification.type == "medicine.finished")).scalars().all()
+    assert len(rows) == 3 and len(email.sent) == 3
 
 
 def test_no_medicines_due_says_none_and_skips_skipped(db_session, world):
@@ -246,3 +256,97 @@ def test_time_12_hour():
     assert engine.format_time("14:30") == "2:30 PM"
     assert engine.format_time("00:05") == "12:05 AM"
     assert engine.format_time("12:00") == "12:00 PM"
+
+
+def _steps(db):
+    return [a.metadata_json["step"] for a in db.execute(
+        select(ActivityLog).where(ActivityLog.action == "checkin.updated")).scalars()]
+
+
+def test_remind_later_dose_asked_again_after_done(db_session, world):
+    world["meds"][1].active = False
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "remind me in 10 minutes", NOW)
+    assert turn.bot_messages[0] == "I'll remind you in 10 minutes."
+    assert turn.checkin.step == "done"
+    # Before the reminder time nothing is due.
+    early = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=5))
+    assert early.bot_messages[-1] == "Is there anything else you'd like to tell me?"
+    turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=11))
+    assert turn.bot_messages == ["Good morning, Amma!", "Did you take Amlodipine?"]
+    assert turn.checkin.step == "medicines"
+    assert _steps(db_session).count("medicines") == 2
+    turn = engine.handle_parent_text(db_session, world["ctx"], "yes", NOW + timedelta(minutes=12))
+    assert turn.checkin.step == "done"
+    assert db_session.execute(select(MedicineDose)).scalar_one().status == "taken"
+
+
+def test_evening_dose_asked_after_morning_done(db_session, world):
+    evening = Medicine(care_profile_id=world["profile"].id, display_name="Atorvastatin", active=True)
+    db_session.add(evening)
+    db_session.commit()
+    db_session.add(MedicineReminder(medicine_id=evening.id, time_of_day="20:00", active=True))
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "yes took both", NOW)
+    assert turn.checkin.step == "done"
+    # 20:30 IST == 15:00 UTC
+    turn = engine.start_or_resume(db_session, world["ctx"], datetime(2026, 11, 22, 15, 0, tzinfo=timezone.utc))
+    assert turn.bot_messages == ["Good evening, Amma!", "Did you take Atorvastatin?"]
+    assert turn.checkin.step == "medicines"
+
+
+def test_evening_dose_asked_in_done_turn_and_text_still_shared(db_session, world):
+    evening = Medicine(care_profile_id=world["profile"].id, display_name="Atorvastatin", active=True)
+    db_session.add(evening)
+    db_session.commit()
+    db_session.add(MedicineReminder(medicine_id=evening.id, time_of_day="20:00", active=True))
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "yes", NOW)
+    evening_now = datetime(2026, 11, 22, 15, 0, tzinfo=timezone.utc)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I feel tired", evening_now)
+    assert turn.bot_messages[-1] == "Did you take Atorvastatin?"
+    assert "I feel tired" in turn.checkin.health_text
+    assert turn.checkin.step == "medicines"
+
+
+def test_not_taken_not_reasked_same_exchange_but_after_30_minutes(db_session, world):
+    world["meds"][1].active = False
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "not yet", NOW)
+    assert turn.bot_messages[0] == "Okay, I've noted it."
+    assert not any("Amlodipine" in m for m in turn.bot_messages)
+    assert turn.checkin.step == "done"
+    turn = engine.handle_parent_text(db_session, world["ctx"], "nothing more", NOW + timedelta(minutes=5))
+    assert turn.bot_messages[-1] == "Is there anything else you'd like to tell me?"
+    turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=29))
+    assert turn.bot_messages[-1] == "Is there anything else you'd like to tell me?"
+    turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=30))
+    assert turn.bot_messages == ["Good morning, Amma!", "Did you take Amlodipine?"]
+    assert turn.checkin.step == "medicines"
+
+
+def test_record_dose_value_error_does_not_crash_or_alert(db_session, world, email, monkeypatch):
+    world["meds"][1].active = False
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
+
+    def boom(*args, **kwargs):
+        raise ValueError("Medicine is not an active medicine of this care profile")
+
+    monkeypatch.setattr(engine, "record_dose", boom)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "it ran out", NOW)
+    assert turn.bot_messages == ["Did you take Amlodipine?"]
+    assert db_session.execute(select(Notification).where(Notification.type == "medicine.finished")).scalars().all() == []
+    assert email.sent == []
+    turn = engine.handle_parent_text(db_session, world["ctx"], "yes", NOW)
+    assert turn.bot_messages == ["Did you take Amlodipine?"]
+    assert db_session.execute(select(MedicineDose)).scalars().all() == []
