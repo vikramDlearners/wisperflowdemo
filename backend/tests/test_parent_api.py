@@ -4,6 +4,7 @@ import base64
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from app.api import parent as parent_api
 from app.models.care_profile import CareProfile
@@ -182,6 +183,11 @@ def test_viewer_is_forbidden(client, db_session, family_setup):
 
 def test_unlinked_parent_with_two_profiles_is_409(client, db_session, family_setup):
     s = family_setup
+    # Without the care profile created for them as a Parent member, two profiles cannot be chosen between.
+    db_session.delete(db_session.execute(
+        select(CareProfile).where(CareProfile.linked_member_id == s["membership"].id)
+    ).scalar_one())
+    db_session.commit()
     parent = db_session.get(User, s["membership"].user_id)
     for name in ("A", "B"):
         db_session.add(CareProfile(family_id=s["family_id"], display_name=name, greeting_name=""))
