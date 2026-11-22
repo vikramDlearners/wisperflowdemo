@@ -18,6 +18,7 @@ from app.models.medicine import Medicine
 from app.models.membership import FamilyMember
 from app.models.parent_onboarding_profile import ParentOnboardingProfile
 from app.services.activity import log_activity
+from app.services.care_notes import care_tips
 from app.services.app_settings import get_intent_mode
 from app.services.doses import (
     DueDose,
@@ -37,6 +38,7 @@ from app.services.family_alerts import (
 )
 from app.services.parent_context import ParentContext
 from app.services.permissions import role_name_for
+from app.services.profile import get_care_profile_onboarding
 from app.services.replies import reply
 from app.services.understanding import (
     ALL,
@@ -415,8 +417,23 @@ def _appointments_and_done(db: Session, ctx: ParentContext, checkin: HealthCheck
         key = "appt_today" if a.scheduled_date == today else "appt_tomorrow"
         msgs.append(_say(ctx, key, time=format_time(a.start_time), reason=a.reason, provider=a.provider))
     _set_step(db, ctx, checkin, DONE, now)
+    note = _care_note(db, ctx, checkin)
+    if note:
+        msgs.append(note)
     msgs.append(_say(ctx, "goodbye", name=ctx.greeting_name))
     return msgs
+
+
+def _care_note(db: Session, ctx: ParentContext, checkin: HealthCheckin) -> str | None:
+    """A soft note from what the family wrote on the parent profile (deficiencies, notes, allergies), said at
+    most once a day, just before goodbye."""
+    tips = care_tips(get_care_profile_onboarding(db, ctx.profile))
+    if not tips:
+        return None
+    intro = _say(ctx, "care_intro", name=ctx.greeting_name)
+    if any(m.sender == "bot" and m.text.startswith(intro) for m in conversation(db, checkin)):
+        return None
+    return " ".join([intro, *(_say(ctx, key, **values) for key, values in tips)])
 
 
 # ---------- health ----------

@@ -323,3 +323,9 @@ def test_count_scope(text, expected):
 ])
 def test_is_dose_report(text, expected):
     assert is_dose_report(text) is expected
+
+
+@pytest.mark.parametrize("text", ["yes", "Yes.", "ஆமா", "ஆம்", "हाँ", "అవును", "അതെ", "ಹೌದು"])
+def test_bare_yes_in_every_language_is_taken(text):
+    answers = understand_medicines(text, [_dose("a")], OFFLINE_RULES)
+    assert [(a.medicine_id, a.outcome) for a in answers.items] == [("a", "taken")]

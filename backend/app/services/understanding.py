@@ -234,6 +234,8 @@ def _rule_outcome(normalised: str) -> str | None:
         return "finished"
     if normalised.strip(".!?, ") in _BARE_NO:
         return "not_taken"
+    if " ".join(re.sub(r"[.,!?।]+", " ", normalised).split()) in _BARE_YES:
+        return "taken"  # a bare "yes" in any parent language answers "Did you take ...?"
     remind = any(k in normalised for intent, ks in _INTENT_KEYWORDS if intent == REMIND_LATER for k in ks)
     if any(p in normalised for p in _NEGATION_PHRASES) and not remind:
         return "not_taken"
