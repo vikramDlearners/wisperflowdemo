@@ -4,6 +4,7 @@ import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
+from zoneinfo import available_timezones
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
@@ -97,11 +98,22 @@ class MyAccess(BaseModel):
     permissions: list[str]
 
 
+_TIMEZONES = frozenset(available_timezones())
+
+
+def _valid_timezone(value: str | None) -> str | None:
+    if value is not None and value not in _TIMEZONES:
+        raise ValueError("timezone must be a valid IANA time zone, e.g. Asia/Kolkata")
+    return value
+
+
 class CareProfileCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
     greeting_name: str = Field(min_length=1, max_length=255)
     preferred_language: str = "en"
     timezone: str = "Asia/Kolkata"
+
+    _timezone = field_validator("timezone")(_valid_timezone)
 
 
 class CareProfileUpdate(BaseModel):
@@ -109,6 +121,8 @@ class CareProfileUpdate(BaseModel):
     greeting_name: str | None = None
     preferred_language: str | None = None
     timezone: str | None = None
+
+    _timezone = field_validator("timezone")(_valid_timezone)
 
 
 class CareProfileOut(BaseModel):

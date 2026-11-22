@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.care_profile import CareProfile
@@ -135,19 +136,35 @@ def record_dose(
     _validate_medicine(db, profile, medicine_id)
     now = _aware(now)
     day = today_for(profile, now)
+
+    def apply(row: MedicineDose) -> None:
+        row.status = status
+        row.recorded_at = now
+        row.recorded_by_user_id = actor_id
+        row.source = source
+        row.remind_at = None
+
     row = _existing(db, medicine_id, day, slot)
     if row is None:
         row = MedicineDose(
             family_id=profile.family_id, care_profile_id=profile.id, medicine_id=medicine_id,
             dose_date=day, slot=slot,
         )
+        apply(row)
         db.add(row)
-    row.status = status
-    row.recorded_at = now
-    row.recorded_by_user_id = actor_id
-    row.source = source
-    row.remind_at = None
-    db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Another request recorded this slot first: answer it by updating that row instead.
+            db.rollback()
+            row = _existing(db, medicine_id, day, slot)
+            if row is None:
+                raise
+            apply(row)
+            db.commit()
+    else:
+        apply(row)
+        db.commit()
     db.refresh(row)
     return row
 

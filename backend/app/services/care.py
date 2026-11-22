@@ -2,6 +2,8 @@
 
 from datetime import date
 from decimal import Decimal
+from functools import cache
+from zoneinfo import available_timezones
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -31,6 +33,21 @@ def _profile_in_family(db: Session, family_id: str, profile_id: str) -> CareProf
     return profile
 
 
+@cache
+def _timezones() -> frozenset[str]:
+    return frozenset(available_timezones())
+
+
+def is_valid_timezone(name: object) -> bool:
+    """True for an IANA time zone name the server knows, e.g. "Asia/Kolkata"."""
+    return isinstance(name, str) and name in _timezones()
+
+
+def _check_timezone(name: object) -> None:
+    if not is_valid_timezone(name):
+        raise ValueError("timezone must be a valid IANA time zone, e.g. Asia/Kolkata")
+
+
 def create_care_profile(
     db: Session,
     actor_id: str,
@@ -43,6 +60,7 @@ def create_care_profile(
     require(db, actor_id, family_id, "parent_profile.edit")
     if preferred_language not in ALLOWED_LANGUAGES:
         raise ValueError("preferred_language must be one of en, ta, hi, te, ml, kn")
+    _check_timezone(timezone)
     profile = CareProfile(
         family_id=family_id,
         display_name=display_name.strip(),
@@ -68,6 +86,8 @@ def update_care_profile(
         raise ValueError(f"Cannot update fields: {sorted(unknown)}")
     if "preferred_language" in changes and changes["preferred_language"] not in ALLOWED_LANGUAGES:
         raise ValueError("preferred_language must be one of en, ta, hi, te, ml, kn")
+    if "timezone" in changes:
+        _check_timezone(changes["timezone"])
     for field, value in changes.items():
         setattr(profile, field, value.strip() if isinstance(value, str) else value)
     log_activity(

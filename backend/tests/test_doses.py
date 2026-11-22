@@ -160,3 +160,23 @@ def test_remind_later_validates_slot(db_session, setup):
     m = _med(db_session, setup["profile"])
     with pytest.raises(ValueError):
         svc.set_remind_later(db_session, setup["profile"], m.id, "9am", 15, NOW)
+
+
+def test_record_dose_racing_insert_updates_the_other_row(db_session, setup, monkeypatch):
+    m = _med(db_session, setup["profile"], times=("08:00",))
+    now = datetime(2026, 11, 22, 3, 0, tzinfo=timezone.utc)
+    # Another request recorded the same slot first; this one did not see it when it looked.
+    svc.record_dose(db_session, setup["profile"], m.id, "08:00", "not_taken", None, "chatbot", now)
+    real = svc._existing
+    calls = []
+
+    def stale_first(db, medicine_id, day, slot):
+        calls.append(1)
+        return None if len(calls) == 1 else real(db, medicine_id, day, slot)
+
+    monkeypatch.setattr(svc, "_existing", stale_first)
+    row = svc.record_dose(db_session, setup["profile"], m.id, "08:00", "taken", setup["manager"].id, "manual",
+                          now + timedelta(minutes=5))
+    assert row.status == "taken" and row.source == "manual"
+    rows = db_session.execute(select(MedicineDose)).scalars().all()
+    assert len(rows) == 1 and rows[0].status == "taken"
