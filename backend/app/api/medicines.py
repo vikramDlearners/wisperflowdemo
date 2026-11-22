@@ -1,5 +1,7 @@
 """Medicines for a family's care profiles. Viewing needs medicines.view; editing needs medicines.edit; quantity needs medicine_quantity.update."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, File, Response, UploadFile
 from sqlalchemy.orm import Session
 
@@ -15,7 +17,9 @@ from app.schemas import (
     ReminderTimesOut,
 )
 from app.services import care as svc
+from app.services import doses as doses_svc
 from app.services import reminders as reminders_svc
+from app.services.permissions import require
 from app.services.prescription_scan import MAX_IMAGE_BYTES
 
 router = APIRouter(prefix="/api/families/{family_id}/medicines", tags=["medicines"])
@@ -44,6 +48,26 @@ def _out(db: Session, family_id: str, medicine: Medicine) -> MedicineOut:
 @router.get("", response_model=list[MedicineOut])
 def list_medicines(family_id: str, db: Session = DbSession, user: User = CurrentUser) -> list[MedicineOut]:
     return [_out(db, family_id, m) for m in svc.list_medicines(db, user.id, family_id)]
+
+
+@router.get("/doses/today")
+def doses_today(
+    family_id: str, care_profile_id: str, db: Session = DbSession, user: User = CurrentUser
+) -> list[dict]:
+    require(db, user.id, family_id, "medicines.view")
+    profile = svc._profile_in_family(db, family_id, care_profile_id)
+    now = datetime.now(timezone.utc)
+    logged = doses_svc.logged_today(db, profile, now)
+    out = []
+    for d in doses_svc.doses_today(db, profile, now):
+        row = logged.get((d.medicine_id, d.slot))
+        out.append({
+            "medicine_id": d.medicine_id,
+            "slot": d.slot,
+            "status": d.status,
+            "recorded_at": row.recorded_at if row else None,
+        })
+    return out
 
 
 @router.post("", response_model=MedicineOut, status_code=201)

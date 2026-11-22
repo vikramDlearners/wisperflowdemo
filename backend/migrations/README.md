@@ -7,6 +7,7 @@ Each `.sql` file in this folder is a complete, copy-paste-ready change to the Po
 | 001_initial_schema.sql | Creates the 12 app tables and alembic_version. Run on an EMPTY database only. |
 | 002_add_user_role.sql | Adds users.role and users.other_role. Run after 001, or on its own if 001 is already applied. |
 | 004_add_parent_invites.sql | Creates the parent_invites table and its unique index on token_hash. Run after 003. |
+| 007_add_medicine_doses.sql | Creates the medicine_doses table (dose log) with a unique key on medicine, date and slot. Run after 006. |
 
 ## How to run
 
