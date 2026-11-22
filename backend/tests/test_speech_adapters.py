@@ -161,3 +161,30 @@ def test_mime_mp4_and_unknown_subtype(captured):
     assert b'filename="audio.mp4"' in captured["request"].data
     ElevenLabsSpeechToText().transcribe(b"A", "en", "audio/ogg")
     assert b'filename="audio.bin"' in captured["request"].data
+
+
+# ---------- TTS model per language ----------
+
+@pytest.mark.parametrize(
+    "language, model",
+    [("te", "eleven_v3"), ("ml", "eleven_v3"), ("kn", "eleven_v3"),
+     ("en", "eleven_multilingual_v2"), ("ta", "eleven_multilingual_v2"), ("hi", "eleven_multilingual_v2")],
+)
+def test_tts_model_defaults_by_language(language, model):
+    assert speech.tts_model_for(language) == model
+
+
+def test_tts_model_setting_is_read_and_tolerant(monkeypatch):
+    monkeypatch.setattr(settings, "elevenlabs_tts_model_by_language", " ta : eleven_v3 , bad-entry, kn:, :x ")
+    monkeypatch.setattr(settings, "elevenlabs_tts_model", "base_model")
+    assert speech.tts_model_for("ta") == "eleven_v3"
+    assert speech.tts_model_for("kn") == "base_model"
+    assert speech.tts_model_for("te") == "base_model"
+    monkeypatch.setattr(settings, "elevenlabs_tts_model_by_language", "")
+    assert speech.tts_model_for("te") == "base_model"
+
+
+def test_synthesize_uses_the_language_model(captured):
+    captured["install"](b"MP3DATA")
+    ElevenLabsTextToSpeech().synthesize("నమస్కారం", "te")
+    assert json.loads(captured["request"].data)["model_id"] == "eleven_v3"
