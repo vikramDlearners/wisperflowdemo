@@ -2,6 +2,7 @@
 
 import re
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
@@ -133,6 +134,8 @@ class MedicineUpdate(BaseModel):
     refill_date: date | None = None
     responsible_user_id: str | None = None
     active: bool | None = None
+    unit_price: Decimal | None = Field(default=None, ge=0)
+    total_medicine_count: int | None = Field(default=None, ge=0)
 
 
 class QuantityUpdate(BaseModel):
@@ -148,6 +151,12 @@ class MedicineOut(BaseModel):
     refill_date: date | None
     responsible_user_id: str | None
     active: bool
+    prescription_scan_id: str | None = None
+    has_image: bool = False
+    image_url: str | None = None
+    unit_price: Decimal | None = None
+    total_medicine_count: int | None = None
+    total_price: Decimal | None = None
 
 
 class TaskCreate(BaseModel):

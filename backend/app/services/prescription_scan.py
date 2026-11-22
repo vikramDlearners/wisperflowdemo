@@ -158,6 +158,8 @@ def create_scan(
         document_type=result["document_type"],
         status="pending_review" if is_prescription else "rejected",
         proposed={"medicines": result["medicines"]} if is_prescription else {"medicines": []},
+        image_data=image_bytes if is_prescription else None,
+        image_content_type=mime_type if is_prescription else None,
     )
     db.add(scan)
     db.flush()
@@ -206,6 +208,7 @@ def confirm_scan(
             instructions_text=instructions,
             active=True,
             responsible_user_id=responsible_user_id,
+            prescription_scan_id=scan.id,
         )
         db.add(medicine)
         db.flush()

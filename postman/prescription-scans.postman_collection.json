@@ -47,6 +47,11 @@
       "type": "string"
     },
     {
+      "key": "medicineId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "token",
       "value": "",
       "type": "string"
@@ -340,6 +345,107 @@
           "body": "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"medicines\",0,\"times\",0],\"msg\":\"Value error, time must be 24-hour HH:MM: 25:00\",\"input\":\"25:00\",\"ctx\":{\"error\":\"time must be 24-hour HH:MM: 25:00\"}}]}"
         }
       ]
+    },
+    {
+      "name": "Upload medicine image",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": ""
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/medicines/{{medicineId}}/image",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "medicines",
+            "{{medicineId}}",
+            "image"
+          ]
+        },
+        "description": "Upload a medicine image as multipart/form-data, field 'file' (File). Accepts JPEG, PNG or WebP. Returns 200 with MedicineOut (has_image and image_url set). Needs medicines.edit."
+      }
+    },
+    {
+      "name": "Get medicine image",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/medicines/{{medicineId}}/image",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "medicines",
+            "{{medicineId}}",
+            "image"
+          ]
+        },
+        "description": "Download the stored medicine image bytes with their content type. Returns 200, 404 when no image is stored, or 403 for non-members. Needs medicines.view."
+      }
+    },
+    {
+      "name": "Update medicine pricing",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"unit_price\":12.50,\"total_medicine_count\":30}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/medicines/{{medicineId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "medicines",
+            "{{medicineId}}"
+          ]
+        },
+        "description": "Set unit_price and total_medicine_count on a medicine (MedicineUpdate). total_price is recalculated as unit_price x total_medicine_count and returned in MedicineOut; setting unit_price to null clears total_price. Negative values are rejected with 422. Needs medicines.edit."
+      }
     },
     {
       "name": "Appointments",

@@ -1,7 +1,8 @@
 import uuid
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -36,3 +37,9 @@ class Medicine(Base):
     )
     image_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     image_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prescription_scan_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("prescription_scans.id"), nullable=True
+    )
+    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    total_medicine_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)

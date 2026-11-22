@@ -13,7 +13,8 @@ from app.services.prescription_scan import MAX_IMAGE_BYTES
 router = APIRouter(prefix="/api/families/{family_id}/medicines", tags=["medicines"])
 
 
-def _out(medicine: Medicine) -> MedicineOut:
+def _out(db: Session, family_id: str, medicine: Medicine) -> MedicineOut:
+    has_image = svc.medicine_has_image(db, medicine)
     return MedicineOut(
         id=medicine.id,
         care_profile_id=medicine.care_profile_id,
@@ -23,12 +24,18 @@ def _out(medicine: Medicine) -> MedicineOut:
         refill_date=medicine.refill_date,
         responsible_user_id=medicine.responsible_user_id,
         active=medicine.active,
+        prescription_scan_id=medicine.prescription_scan_id,
+        has_image=has_image,
+        image_url=f"/api/families/{family_id}/medicines/{medicine.id}/image" if has_image else None,
+        unit_price=medicine.unit_price,
+        total_medicine_count=medicine.total_medicine_count,
+        total_price=medicine.total_price,
     )
 
 
 @router.get("", response_model=list[MedicineOut])
 def list_medicines(family_id: str, db: Session = DbSession, user: User = CurrentUser) -> list[MedicineOut]:
-    return [_out(m) for m in svc.list_medicines(db, user.id, family_id)]
+    return [_out(db, family_id, m) for m in svc.list_medicines(db, user.id, family_id)]
 
 
 @router.post("", response_model=MedicineOut, status_code=201)
@@ -46,14 +53,14 @@ def create_medicine(
         body.refill_date,
         body.responsible_user_id,
     )
-    return _out(medicine)
+    return _out(db, family_id, medicine)
 
 
 @router.get("/{medicine_id}", response_model=MedicineOut)
 def get_medicine(
     family_id: str, medicine_id: str, db: Session = DbSession, user: User = CurrentUser
 ) -> MedicineOut:
-    return _out(svc.get_medicine(db, user.id, family_id, medicine_id))
+    return _out(db, family_id, svc.get_medicine(db, user.id, family_id, medicine_id))
 
 
 @router.patch("/{medicine_id}", response_model=MedicineOut)
@@ -62,7 +69,7 @@ def update_medicine(
     db: Session = DbSession, user: User = CurrentUser,
 ) -> MedicineOut:
     changes = body.model_dump(exclude_unset=True)
-    return _out(svc.update_medicine(db, user.id, family_id, medicine_id, changes))
+    return _out(db, family_id, svc.update_medicine(db, user.id, family_id, medicine_id, changes))
 
 
 @router.patch("/{medicine_id}/quantity", response_model=MedicineOut)
@@ -70,7 +77,7 @@ def update_medicine_quantity(
     family_id: str, medicine_id: str, body: QuantityUpdate,
     db: Session = DbSession, user: User = CurrentUser,
 ) -> MedicineOut:
-    return _out(svc.update_medicine_quantity(db, user.id, family_id, medicine_id, body.quantity))
+    return _out(db, family_id, svc.update_medicine_quantity(db, user.id, family_id, medicine_id, body.quantity))
 
 
 @router.delete("/{medicine_id}", status_code=204)
@@ -94,7 +101,7 @@ def upload_medicine_image(
     medicine = svc.upload_medicine_image(
         db, user.id, family_id, medicine_id, image_bytes, file.content_type or ""
     )
-    return _out(medicine)
+    return _out(db, family_id, medicine)
 
 
 @router.get("/{medicine_id}/image")
