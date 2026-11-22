@@ -272,7 +272,7 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
                 ) : (
                   <ul className="md-today-list">
                     {sortDoses(doses).map((d) => {
-                      const label = doseLabel(d);
+                      const label = doseLabel(d, recipient?.timezone);
                       return (
                         <li key={d.slot}>
                           <span className="md-today-slot">{slotName(d.slot)}</span>

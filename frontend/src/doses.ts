@@ -7,19 +7,38 @@ export interface DoseLabel {
   tone: DoseTone;
 }
 
-const timeFmt = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+export const DEFAULT_TZ = "Asia/Kolkata";
+
+const tz = (timeZone?: string | null) => timeZone || DEFAULT_TZ;
 
 // recorded_at may come without a timezone suffix (SQLite): treat that as UTC.
 function parseRecorded(iso: string): Date {
   return new Date(/(Z|[+-]\d{2}:?\d{2})$/i.test(iso) ? iso : `${iso}Z`);
 }
 
-function slotDate(slot: string, now: Date): Date | null {
+function parseSlot(slot: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(slot);
-  if (!m) return null;
-  const d = new Date(now);
-  d.setHours(Number(m[1]), Number(m[2]), 0, 0);
-  return d;
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+// Minutes since midnight of `now` in the given zone.
+function minutesNow(now: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone,
+  }).formatToParts(now);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  return (get("hour") % 24) * 60 + get("minute");
+}
+
+// "8:00 PM" from minutes-of-day (no zone conversion).
+function clock(mins: number): string {
+  return new Date(2000, 0, 1, Math.floor(mins / 60), mins % 60).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 // Slots in day order, "any" last.
@@ -28,22 +47,30 @@ export function sortDoses(doses: DoseToday[]): DoseToday[] {
   return [...doses].sort((a, b) => key(a).localeCompare(key(b)));
 }
 
-export function doseLabel(d: DoseToday, now: Date = new Date()): DoseLabel {
-  const when = slotDate(d.slot, now);
+export function doseLabel(
+  d: DoseToday,
+  timeZone?: string | null,
+  now: Date = new Date(),
+): DoseLabel {
+  const zone = tz(timeZone);
+  const slot = parseSlot(d.slot);
   if (d.status === "taken") {
     const at = d.recorded_at ? parseRecorded(d.recorded_at) : null;
-    const t = at && !Number.isNaN(at.getTime()) ? ` ${timeFmt(at)}` : "";
+    const t =
+      at && !Number.isNaN(at.getTime())
+        ? ` ${at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: zone })}`
+        : "";
     return { text: `✓ Taken${t}`, tone: "taken" };
   }
   if (d.status === "not_taken") return { text: "Not taken", tone: "missed" };
   if (d.status === "skipped") return { text: "Skipped", tone: "skipped" };
-  if (!when) return { text: "Not answered yet", tone: "due" };
-  if (when.getTime() > now.getTime()) return { text: `Due ${timeFmt(when)}`, tone: "due" };
+  if (slot === null) return { text: "Not answered yet", tone: "due" };
+  if (slot > minutesNow(now, zone)) return { text: `Due ${clock(slot)}`, tone: "due" };
   return { text: "Due now", tone: "due" };
 }
 
 // Human slot name: "8:00 AM" or "Once today".
-export function slotName(slot: string, now: Date = new Date()): string {
-  const when = slotDate(slot, now);
-  return when ? timeFmt(when) : "Once today";
+export function slotName(slot: string): string {
+  const m = parseSlot(slot);
+  return m === null ? "Once today" : clock(m);
 }
