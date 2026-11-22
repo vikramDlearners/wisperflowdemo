@@ -9,6 +9,7 @@ Each `.sql` file in this folder is a complete, copy-paste-ready change to the Po
 | 004_add_parent_invites.sql | Creates the parent_invites table and its unique index on token_hash. Run after 003. |
 | 007_add_medicine_doses.sql | Creates the medicine_doses table (dose log) with a unique key on medicine, date and slot. Run after 006. |
 | 008_add_health_checkins.sql | Creates the health_checkins table (one parent check-in per profile per day) and chat_messages. Run after 007. |
+| 009_chat_message_seq_and_indexes.sql | Adds chat_messages.seq (message order per check-in, existing rows numbered) and indexes on chat_messages(checkin_id) and medicine_doses(care_profile_id, dose_date). Run after 008. |
 
 ## How to run
 

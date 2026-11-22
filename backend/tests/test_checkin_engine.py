@@ -468,3 +468,32 @@ def test_done_step_closing_is_not_shared(db_session, world, closing):
     assert turn.bot_messages == ["Take care, Amma. Talk to you soon!"]
     updates = db_session.execute(select(Notification).where(Notification.type == "checkin.update")).scalars().all()
     assert len(updates) == 3  # only the first health answer
+
+
+# ---------- message order does not depend on the database ----------
+
+def test_messages_get_a_sequence_number_per_checkin(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "my knee hurts", NOW)
+    msgs = engine.conversation(db_session, engine._today(db_session, world["ctx"], NOW))
+    assert [m.seq for m in msgs] == list(range(1, len(msgs) + 1))
+    assert [m.sender for m in msgs][:3] == ["bot", "bot", "parent"]
+
+
+def test_conversation_orders_by_sequence_not_insert_order(db_session, world):
+    turn = engine.start_or_resume(db_session, world["ctx"], NOW)
+    same_time = datetime(2026, 11, 22, 3, 0, tzinfo=timezone.utc)
+    for m in db_session.execute(select(ChatMessage)).scalars():
+        db_session.delete(m)
+    db_session.commit()
+    # Inserted in reverse order with one timestamp: only seq can tell the order.
+    for seq, text in ((3, "third"), (2, "second"), (1, "first")):
+        db_session.add(ChatMessage(checkin_id=turn.checkin.id, sender="bot", text=text, language="en",
+                                   created_at=same_time, seq=seq))
+    db_session.commit()
+    assert [m.text for m in engine.conversation(db_session, turn.checkin)] == ["first", "second", "third"]
+
+
+def test_indexes_for_dose_and_message_lookups():
+    assert "ix_chat_messages_checkin_id" in {i.name for i in ChatMessage.__table__.indexes}
+    assert "ix_medicine_doses_profile_date" in {i.name for i in MedicineDose.__table__.indexes}

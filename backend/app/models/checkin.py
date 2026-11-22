@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -41,6 +41,7 @@ class HealthCheckin(Base):
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
+    __table_args__ = (Index("ix_chat_messages_checkin_id", "checkin_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
     checkin_id: Mapped[str] = mapped_column(String(36), ForeignKey("health_checkins.id"))
@@ -49,3 +50,5 @@ class ChatMessage(Base):
     text: Mapped[str] = mapped_column(Text)
     language: Mapped[str] = mapped_column(String(8))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    # Position in the check-in's conversation (1, 2, 3, ...): the display order on every database.
+    seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

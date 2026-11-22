@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, text as sql_text
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -106,8 +106,15 @@ def _set_step(db: Session, ctx: ParentContext, checkin: HealthCheckin, step: str
 
 
 def _store(db: Session, ctx: ParentContext, checkin: HealthCheckin, sender: str, texts: list[str]) -> None:
-    for text in texts:
-        db.add(ChatMessage(checkin_id=checkin.id, sender=sender, text=text, language=ctx.language))
+    """Stage messages with the next sequence numbers of this check-in's conversation."""
+    if not texts:
+        return
+    db.flush()  # earlier messages of this turn count too
+    last = db.execute(
+        select(func.max(ChatMessage.seq)).where(ChatMessage.checkin_id == checkin.id)
+    ).scalar() or 0
+    for i, text in enumerate(texts, start=1):
+        db.add(ChatMessage(checkin_id=checkin.id, sender=sender, text=text, language=ctx.language, seq=last + i))
 
 
 def _today(db: Session, ctx: ParentContext, now: datetime) -> HealthCheckin | None:
@@ -361,11 +368,12 @@ def _reopen_or(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: dat
 
 
 def conversation(db: Session, checkin: HealthCheckin) -> list[ChatMessage]:
-    """The check-in's stored messages, oldest first."""
-    stmt = select(ChatMessage).where(ChatMessage.checkin_id == checkin.id).order_by(ChatMessage.created_at)
-    if db.get_bind().dialect.name == "sqlite":
-        # Messages stored in one commit can share a timestamp; insertion order breaks the tie.
-        stmt = stmt.order_by(sql_text("chat_messages.rowid"))
+    """The check-in's stored messages, oldest first (by sequence number; timestamp and id only break ties)."""
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.checkin_id == checkin.id)
+        .order_by(ChatMessage.seq, ChatMessage.created_at, ChatMessage.id)
+    )
     return list(db.execute(stmt).scalars())
 
 

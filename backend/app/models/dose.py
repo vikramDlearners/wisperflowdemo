@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -17,7 +17,10 @@ def _utcnow() -> datetime:
 
 class MedicineDose(Base):
     __tablename__ = "medicine_doses"
-    __table_args__ = (UniqueConstraint("medicine_id", "dose_date", "slot", name="uq_medicine_dose_slot"),)
+    __table_args__ = (
+        UniqueConstraint("medicine_id", "dose_date", "slot", name="uq_medicine_dose_slot"),
+        Index("ix_medicine_doses_profile_date", "care_profile_id", "dose_date"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
     family_id: Mapped[str] = mapped_column(String(36), ForeignKey("families.id"))
