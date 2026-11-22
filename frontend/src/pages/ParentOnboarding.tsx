@@ -9,6 +9,7 @@ import {
   type ParentProfileOut,
   type ProfileSection,
 } from "../api";
+import { RELATIONSHIP_OPTIONS } from "../lib/constants";
 
 const TOTAL_STEPS = 5;
 
@@ -23,7 +24,7 @@ const STEP_TITLES = [
   "Additional details",
 ];
 
-const RELATIONSHIP_OPTIONS = ["Mother", "Father", "Grandmother", "Grandfather", "Other"];
+
 const LANGUAGE_OPTIONS = ["English", "Tamil", "Hindi", "Telugu", "Malayalam", "Kannada"];
 
 const SECTION_LABELS: Record<ProfileSection, string> = {

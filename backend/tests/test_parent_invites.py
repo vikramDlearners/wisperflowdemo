@@ -6,12 +6,14 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
+from app.models.care_profile import CareProfile
 from app.models.parent_invite import ParentInvite
 from app.models.role import Role
 from app.models.user import User
 from app.services import families as families_svc
 from app.services.auth import create_auth_session, create_otp, user_from_session_token
 from app.services.adapters import messaging
+from app.services.parent_context import resolve_parent
 
 
 class RecordingEmail:
@@ -141,6 +143,68 @@ def test_accept_invite_rejects_expired_token(client, db_session, family_setup, e
 
     response = client.post("/api/auth/accept-invite", json={"token": token})
     assert response.status_code == 401
+
+
+def test_accept_invite_creates_care_profile_when_family_has_none(client, db_session, family_setup, email):
+    setup = family_setup
+    existing = db_session.execute(
+        select(CareProfile).where(CareProfile.family_id == setup["family_id"])
+    ).scalars().all()
+    assert existing == []
+    client.post(
+        _invite_url(setup["family_id"], setup["membership"].id), headers=_auth(db_session, setup["manager"])
+    )
+    token = _token_from(email)
+
+    response = client.post("/api/auth/accept-invite", json={"token": token})
+    assert response.status_code == 200
+    parent_id = setup["membership"].user_id
+    profile = db_session.execute(
+        select(CareProfile).where(CareProfile.linked_user_id == parent_id)
+    ).scalar_one()
+    assert profile.family_id == setup["family_id"]
+
+    parent = db_session.get(User, parent_id)
+    context = resolve_parent(db_session, parent)
+    assert context.profile.id == profile.id
+
+
+def test_accept_invite_creates_own_profile_when_family_has_other_parent_profile(
+    client, db_session, family_setup, email
+):
+    setup = family_setup
+    family_id = setup["family_id"]
+    other_parent_id = setup["membership"].user_id
+    db_session.add(
+        CareProfile(
+            family_id=family_id,
+            display_name="Parent Doe",
+            greeting_name="Parent Doe",
+            linked_user_id=other_parent_id,
+        )
+    )
+    db_session.commit()
+    parent_role = db_session.execute(
+        select(Role).where(Role.family_id == family_id, Role.name == "Parent")
+    ).scalar_one()
+    second = families_svc.add_member(
+        db_session, setup["manager"].id, family_id, "parent2@example.com", parent_role.id, "Second Parent"
+    )
+    client.post(_invite_url(family_id, second.id), headers=_auth(db_session, setup["manager"]))
+    token = _token_from(email)
+
+    response = client.post("/api/auth/accept-invite", json={"token": token})
+    assert response.status_code == 200
+    accepting_id = second.user_id
+    profile = db_session.execute(
+        select(CareProfile).where(CareProfile.linked_user_id == accepting_id)
+    ).scalar_one()
+    assert profile.family_id == family_id
+    assert profile.linked_user_id != other_parent_id
+
+    accepting = db_session.get(User, accepting_id)
+    context = resolve_parent(db_session, accepting)
+    assert context.profile.id == profile.id
 
 
 def test_otp_for_parent_does_not_cancel_invite(client, db_session, family_setup, email):

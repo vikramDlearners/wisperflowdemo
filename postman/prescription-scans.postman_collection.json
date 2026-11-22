@@ -608,6 +608,31 @@
           }
         }
       ]
+    },
+    {
+      "name": "Notifications summary (7 days)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/notifications/summary",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "notifications",
+            "summary"
+          ]
+        },
+        "description": "Returns 200 with NotificationSummaryOut: summary (string or null), count, days, error (string or null). Authenticated like GET /api/notifications."
+      }
     }
   ]
 }

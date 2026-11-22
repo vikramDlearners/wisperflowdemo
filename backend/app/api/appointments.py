@@ -20,6 +20,7 @@ def _out(appointment: Appointment) -> AppointmentOut:
         start_time=appointment.start_time,
         provider=appointment.provider,
         reason=appointment.reason,
+        location=appointment.location,
         notes=appointment.notes,
         status=appointment.status,
     )
@@ -59,6 +60,7 @@ def create_appointment(
         body.provider,
         body.reason,
         body.notes,
+        location=body.location,
     )
     return _out(appointment)
 

@@ -11,11 +11,13 @@ import {
   type MemberOut,
   type ParentProfileOut,
 } from "../api";
+import { RELATIONSHIP_OPTIONS } from "../lib/constants";
+
 
 // Parent profile page in the shared family workspace layout (sidebar + header).
 // Reads and saves the signed-in user's parent onboarding profile.
 
-const RELATIONSHIP_OPTIONS = ["Mother", "Father", "Grandmother", "Grandfather", "Other"];
+
 const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
   { value: "English", label: "English" },
   { value: "Tamil", label: "Tamil · தமிழ்" },
@@ -71,6 +73,10 @@ export default function ParentProfilePage() {
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   const [inviteErr, setInviteErr] = useState<string | null>(null);
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [copyErr, setCopyErr] = useState<string | null>(null);
 
   // Preview-only settings: there are no backend fields for these yet.
   const [voiceSpeed, setVoiceSpeed] = useState(VOICE_SPEEDS[0]);
@@ -119,10 +125,12 @@ export default function ParentProfilePage() {
     setInviting(true);
     setInviteMsg(null);
     setInviteErr(null);
+    setInviteLink(null);
     try {
-      // The backend replies { email } with the address the sign-in link went to.
+      // The backend replies { email, invite_link } with the address the sign-in link went to and the link itself.
       const res = (await members.invite(familyId, parentMember.membership_id)) as unknown as {
         email?: string;
+        invite_link?: string;
       };
       const mobile = profile?.parent_mobile?.trim();
       const who = profile?.parent_full_name?.trim().split(/\s+/)[0] || "your parent";
@@ -131,10 +139,24 @@ export default function ParentProfilePage() {
           ? `Invite sent to ${who} via mobile (${mobile}).`
           : `Invite sent to ${who} via email (${res.email ?? parentMember.email ?? "their email"}).`,
       );
+      setInviteLink(res.invite_link ?? null);
+      setShowLinkDialog(true);
     } catch (err) {
       setInviteErr(errorText(err));
     } finally {
       setInviting(false);
+    }
+  }
+
+  async function handleCopyLink() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      setCopyErr(null);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyErr("Could not copy the link. Please copy it manually.");
     }
   }
 
@@ -448,6 +470,49 @@ export default function ParentProfilePage() {
                       <p role="alert" className="pp-invite-err">
                         {inviteErr}
                       </p>
+                    )}
+                    {showLinkDialog && (
+                      <div
+                        className="pp-dialog-overlay"
+                        onClick={() => {
+                          setShowLinkDialog(false);
+                          setCopied(false);
+                        }}
+                      >
+                        <div
+                          className="pp-dialog"
+                          role="dialog"
+                          aria-modal="true"
+                          aria-labelledby="pp-dialog-title"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <h3 id="pp-dialog-title">Link sent</h3>
+                          <p>Link sent to SMS, WhatsApp and Email</p>
+                          <button
+                            type="button"
+                            className="pp-btn"
+                            onClick={() => {
+                              setShowLinkDialog(false);
+                              setCopied(false);
+                            }}
+                          >
+                            OK
+                          </button>
+                          <button
+                            type="button"
+                            className="pp-btn"
+                            onClick={handleCopyLink}
+                            disabled={!inviteLink}
+                          >
+                            {copied ? "Copied" : "Copy Link"}
+                          </button>
+                          {copyErr && (
+                            <p role="alert" className="pp-invite-err">
+                              {copyErr}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     )}
                     {!familyId && !loading && (
                       <p className="pp-invite-hint">Create a family first to send {firstName} a link.</p>

@@ -28,6 +28,9 @@ class CareProfile(Base):
     linked_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=True
     )
+    linked_member_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("family_members.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )

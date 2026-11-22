@@ -26,6 +26,7 @@ class Appointment(Base):
     start_time: Mapped[str] = mapped_column(String(8))
     provider: Mapped[str] = mapped_column(String(255))
     reason: Mapped[str] = mapped_column(String(255))
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
     # Allowed values: scheduled, completed, cancelled, rescheduled.
     status: Mapped[str] = mapped_column(String(16), default="scheduled")

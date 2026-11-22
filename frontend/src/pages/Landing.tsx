@@ -20,7 +20,7 @@ import {
 type Step = "login" | "signup" | "code" | "role";
 
 const ROLE_OPTIONS: { value: RoleChoice; label: string; hint: string; icon: string }[] = [
-  { value: "child_of_parent", label: "Son or daughter", hint: "Caring for a parent", icon: "👪" },
+  { value: "manager", label: "Manager", hint: "Caring for a parent", icon: "👪" },
   { value: "parent", label: "Parent", hint: "Receiving care", icon: "🧓" },
   { value: "caretaker", label: "Caretaker", hint: "Home nurse or helper", icon: "🤝" },
   { value: "hospital", label: "Hospital staff", hint: "Doctor or care team", icon: "🩺" },

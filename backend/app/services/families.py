@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.care_profile import CareProfile
 from app.models.family import Family
 from app.models.membership import FamilyMember
 from app.models.parent_invite import ParentInvite
@@ -72,7 +73,11 @@ def list_members(db: Session, actor_id: str, family_id: str) -> list[tuple[Famil
         select(FamilyMember, User, Role)
         .join(User, User.id == FamilyMember.user_id)
         .join(Role, Role.id == FamilyMember.role_id)
-        .where(FamilyMember.family_id == family_id, FamilyMember.status == "active")
+        .where(
+            FamilyMember.family_id == family_id,
+            FamilyMember.status == "active",
+            FamilyMember.status != "removed",
+        )
         .order_by(User.display_name)
     )
     return [tuple(row) for row in db.execute(stmt).all()]
@@ -145,10 +150,20 @@ def add_member(
     email: str,
     role_id: str,
     display_name: str | None = None,
+    relationship: str | None = None,
 ) -> FamilyMember:
-    """Add a person to the family. Creates the user record if the email is new."""
+    """Add a person to the family. Creates the user record if the email is new.
+
+    A mother or father member also gets a linked Mother/Father care profile.
+    """
     require(db, actor_id, family_id, "members.manage")
     role = _role_in_family(db, family_id, role_id)
+    if relationship is not None:
+        relationship = relationship.strip().lower() or None
+        if relationship is not None and relationship not in {
+            "mother", "father", "grandmother", "grandfather", "other",
+        }:
+            raise ValueError("Unknown relationship")
     email = email.strip().lower()
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is None:
@@ -164,8 +179,20 @@ def add_member(
     ).scalar_one_or_none()
     if existing is not None:
         raise ValueError("This person is already a member; one role per member per family")
-    membership = FamilyMember(family_id=family_id, user_id=user.id, role_id=role.id)
+    membership = FamilyMember(
+        family_id=family_id, user_id=user.id, role_id=role.id, relationship=relationship
+    )
     db.add(membership)
+    db.flush()
+    if relationship in ("mother", "father"):
+        db.add(
+            CareProfile(
+                family_id=family_id,
+                display_name=user.display_name,
+                greeting_name=user.display_name,
+                linked_member_id=membership.id,
+            )
+        )
     log_activity(
         db, family_id, actor_id, "member.added", "member", membership.id, {"role": role.name}
     )
@@ -189,6 +216,25 @@ def change_member_role(
     return membership
 
 
+def remove_member(
+    db: Session, family_id: str, membership_id: str, acting_user_id: str
+) -> FamilyMember:
+    """Soft-delete a family member (status='removed'). The family creator and the caller cannot be removed."""
+    require(db, acting_user_id, family_id, "members.manage")
+    membership = db.get(FamilyMember, membership_id)
+    if membership is None or membership.family_id != family_id:
+        raise NotFound("Member not found")
+    family = db.get(Family, family_id)
+    if family is not None and membership.user_id == family.created_by_user_id:
+        raise ValueError("The family creator cannot be removed")
+    if membership.user_id == acting_user_id:
+        raise ValueError("You cannot remove yourself")
+    membership.status = "removed"
+    log_activity(db, family_id, acting_user_id, "member.removed", "member", membership.id)
+    db.commit()
+    return membership
+
+
 def membership_permissions(db: Session, actor_id: str, family_id: str) -> dict:
     """Return the caller's role name and permission codes (used by the UI to hide controls)."""
     membership = get_membership(db, actor_id, family_id)
@@ -196,8 +242,8 @@ def membership_permissions(db: Session, actor_id: str, family_id: str) -> dict:
     return {"role": role.name if role else "", "permissions": sorted(permission_codes_for(db, membership))}
 
 
-def create_parent_invite(db: Session, actor_id: str, family_id: str, membership_id: str) -> str:
-    """Create a one-time sign-in link for a parent member and email it to them. Returns the email address."""
+def create_parent_invite(db: Session, actor_id: str, family_id: str, membership_id: str) -> tuple[str, str]:
+    """Create a one-time sign-in link for a parent member and email it to them. Returns (email address, sign-in link)."""
     require(db, actor_id, family_id, "members.manage")
     membership = db.get(FamilyMember, membership_id)
     if membership is None or membership.family_id != family_id:
@@ -232,7 +278,7 @@ def create_parent_invite(db: Session, actor_id: str, family_id: str, membership_
         "You're invited to CareCircle",
         f"Open this link within {settings.parent_invite_hours} hours to create your sign-in: {link}",
     )
-    return user.email
+    return user.email, link
 
 
 __all__ = [
@@ -247,5 +293,6 @@ __all__ = [
     "update_role_permissions",
     "add_member",
     "change_member_role",
+    "remove_member",
     "membership_permissions",
 ]

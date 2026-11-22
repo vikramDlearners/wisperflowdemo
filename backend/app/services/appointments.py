@@ -61,6 +61,7 @@ def create_appointment(
     provider: str,
     reason: str,
     notes: str = "",
+    location: str | None = None,
 ) -> Appointment:
     require(db, actor_id, family_id, "appointments.create")
     _profile_in_family(db, family_id, care_recipient_id)
@@ -71,6 +72,7 @@ def create_appointment(
         start_time=start_time.strip(),
         provider=provider.strip(),
         reason=reason.strip(),
+        location=_clean(location) or None,
         notes=notes or "",
         status="scheduled",
     )
@@ -97,7 +99,7 @@ def update_appointment(
     appointment = _appointment(db, appointment_id)
     require(db, actor_id, appointment.family_id, "appointments.update")
     for key, value in changes.items():
-        if value is None and key != "notes":
+        if value is None and key not in ("notes", "location"):
             raise ValueError(f"{key} cannot be null")
     if "care_recipient_id" in changes:
         _profile_in_family(db, appointment.family_id, changes["care_recipient_id"])
@@ -105,6 +107,8 @@ def update_appointment(
     for key in ("scheduled_date", "start_time", "provider", "reason", "status"):
         if key in changes:
             setattr(appointment, key, _clean(changes[key]))
+    if "location" in changes:
+        appointment.location = _clean(changes["location"]) or None
     if "notes" in changes:
         appointment.notes = changes["notes"] or ""
     log_activity(

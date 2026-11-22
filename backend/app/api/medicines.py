@@ -32,6 +32,7 @@ def _out(db: Session, family_id: str, medicine: Medicine) -> MedicineOut:
         care_profile_id=medicine.care_profile_id,
         display_name=medicine.display_name,
         instructions_text=medicine.instructions_text,
+        purpose=medicine.purpose,
         quantity_remaining=medicine.quantity_remaining,
         refill_date=medicine.refill_date,
         responsible_user_id=medicine.responsible_user_id,
@@ -84,6 +85,7 @@ def create_medicine(
         body.quantity_remaining,
         body.refill_date,
         body.responsible_user_id,
+        purpose=body.purpose,
     )
     return _out(db, family_id, medicine)
 

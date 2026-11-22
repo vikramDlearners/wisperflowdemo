@@ -1,0 +1,78 @@
+{
+  "info": {
+    "_postman_id": "9d4e6b21-3c7a-4f85-a0e2-1b8f5c2d7e34",
+    "name": "CareCircle - Dashboard",
+    "description": "Collection for the family dashboard endpoint GET /api/families/{family_id}/dashboard. Auth matches the prescription-scans collection: 'Authorization: Bearer <session token>' using the {{token}} variable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "familyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Get family dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/families/{{familyId}}/dashboard?care_profile_id=&date=",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "families",
+            "{{familyId}}",
+            "dashboard"
+          ],
+          "query": [
+            {
+              "key": "care_profile_id",
+              "value": ""
+            },
+            {
+              "key": "date",
+              "value": ""
+            }
+          ]
+        },
+        "description": "Get the family dashboard summary. Optional query params: care_profile_id (filter to one care profile) and date (YYYY-MM-DD). Leave empty to use defaults."
+      }
+    }
+  ]
+}
