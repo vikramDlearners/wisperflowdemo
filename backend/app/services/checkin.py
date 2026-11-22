@@ -37,6 +37,7 @@ from app.services.family_alerts import (
     other_members,
 )
 from app.services.parent_context import ParentContext
+from app.services.meals import meals_due, save_meals
 from app.services.permissions import role_name_for
 from app.services.profile import get_care_profile_onboarding
 from app.services.replies import reply
@@ -54,6 +55,7 @@ from app.services.understanding import (
 )
 
 GREET, HEALTH, MEDICINES, APPOINTMENTS, DONE = "greet", "health", "medicines", "appointments", "done"
+MEALS_STEP = "meals"
 MANAGER_ROLE = "Family manager"
 UPCOMING_STATUSES = ("scheduled", "rescheduled")
 NOT_TAKEN_REASK = timedelta(minutes=30)
@@ -255,7 +257,7 @@ def _continue_medicines(
         _set_step(db, ctx, checkin, DONE, now)
         return [_say(ctx, "anything_else")]
     msgs = [_say(ctx, "meds_none")] if announce_none else []
-    return msgs + _appointments_and_done(db, ctx, checkin, now)
+    return msgs + _meals_or_done(db, ctx, checkin, now)
 
 
 def _names(items: list[str]) -> str:
@@ -279,7 +281,7 @@ def _handle_medicines(
         checkin.pending_medicine_id = None
         if from_done:
             return _continue_medicines(db, ctx, checkin, now, announce_none=False, from_done=True)
-        return _appointments_and_done(db, ctx, checkin, now)
+        return _meals_or_done(db, ctx, checkin, now)
     asked = _unique(remaining)
     if _asking_count(checkin):
         return _handle_count_answer(db, ctx, checkin, text, now, remaining, asked, from_done)
@@ -391,6 +393,33 @@ def _apply_answers(
     return msgs + _continue_medicines(db, ctx, checkin, now, announce_none=False, from_done=from_done)
 
 
+# ---------- meals ----------
+
+def _meal_question(ctx: ParentContext, meals: list[str]) -> str:
+    names = [_say(ctx, f"meal_{m}") for m in meals]
+    joined = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} {_say(ctx, 'word_and')} {names[-1]}"
+    return _say(ctx, "meal_ask", meals=joined)
+
+
+def _meals_or_done(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: datetime) -> list[str]:
+    """Ask about the meals eaten so far today that were not told yet; otherwise finish with appointments."""
+    due = meals_due(db, ctx.profile, now)
+    if due:
+        checkin.pending_medicine_id = None
+        _set_step(db, ctx, checkin, MEALS_STEP, now)
+        return [_meal_question(ctx, due)]
+    return _appointments_and_done(db, ctx, checkin, now)
+
+
+def _handle_meals(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime) -> list[str]:
+    """Save what the parent ate for the meals asked about (whatever they say, "nothing" included)."""
+    due = meals_due(db, ctx.profile, now)
+    if not due:
+        return _appointments_and_done(db, ctx, checkin, now)
+    save_meals(db, ctx.profile, due, text, ctx.user_id, now, checkin.id)
+    return [_say(ctx, "meal_saved")] + _appointments_and_done(db, ctx, checkin, now)
+
+
 # ---------- appointments ----------
 
 def _upcoming_appointments(db: Session, ctx: ParentContext, now: datetime) -> list[Appointment]:
@@ -413,9 +442,12 @@ def _appointments_and_done(db: Session, ctx: ParentContext, checkin: HealthCheck
     _set_step(db, ctx, checkin, APPOINTMENTS, now)
     today = today_for(ctx.profile, now)
     msgs = []
+    already_said = {m.text for m in conversation(db, checkin) if m.sender == "bot"}
     for a in _upcoming_appointments(db, ctx, now):
         key = "appt_today" if a.scheduled_date == today else "appt_tomorrow"
-        msgs.append(_say(ctx, key, time=format_time(a.start_time), reason=a.reason, provider=a.provider))
+        line = _say(ctx, key, time=format_time(a.start_time), reason=a.reason, provider=a.provider)
+        if line not in already_said:  # each appointment is reminded once a day, not on every reopen
+            msgs.append(line)
     _set_step(db, ctx, checkin, DONE, now)
     note = _care_note(db, ctx, checkin)
     if note:
@@ -533,7 +565,9 @@ def _after_question(db: Session, ctx: ParentContext, checkin: HealthCheckin, now
         remaining = _remaining(db, ctx, now)
         if remaining:
             return [_ask_medicines(ctx, checkin, remaining)]
-        return _appointments_and_done(db, ctx, checkin, now)
+        return _meals_or_done(db, ctx, checkin, now)
+    if checkin.step == MEALS_STEP:
+        return _meals_or_done(db, ctx, checkin, now)
     return _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
 
 
@@ -553,6 +587,10 @@ def _reopen_or(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: dat
     if remaining:
         _set_step(db, ctx, checkin, MEDICINES, now)
         return [_ask_medicines(ctx, checkin, remaining)]
+    due = meals_due(db, ctx.profile, now)
+    if due:
+        _set_step(db, ctx, checkin, MEALS_STEP, now)
+        return [_meal_question(ctx, due)]
     return [otherwise]
 
 
@@ -588,6 +626,13 @@ def _resume(
             asked = _bot_texts_since_parent(history)
             if any(not any(d.name in t for t in asked) for d in _unique(remaining)):
                 msgs = [_ask_medicines(ctx, checkin, remaining)]
+    if not msgs and checkin.step in (DONE, MEALS_STEP):
+        due = meals_due(db, ctx.profile, now)
+        if due:
+            question = _meal_question(ctx, due)
+            if question not in _bot_texts_since_parent(history):
+                _set_step(db, ctx, checkin, MEALS_STEP, now)
+                msgs = [question]
     if msgs:
         return _turn(db, ctx, checkin, msgs)
     number = call_number(db, ctx) if checkin.urgent else None
@@ -611,6 +656,8 @@ def start_or_resume(db: Session, ctx: ParentContext, now: datetime) -> Turn:
         msgs.append(_say(ctx, "ask_health"))
     elif checkin.step == MEDICINES:
         msgs += _continue_medicines(db, ctx, checkin, now, announce_none=True)
+    elif checkin.step == MEALS_STEP:
+        msgs += _meals_or_done(db, ctx, checkin, now)
     elif checkin.step == APPOINTMENTS:
         msgs += _appointments_and_done(db, ctx, checkin, now)
     else:
@@ -637,14 +684,18 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         msgs = [_share_health(db, ctx, checkin, text)]
         _set_step(db, ctx, checkin, MEDICINES, now)
         msgs += _continue_medicines(db, ctx, checkin, now, announce_none=True)
-    elif checkin.step in (MEDICINES, APPOINTMENTS):
+    elif checkin.step in (MEDICINES, MEALS_STEP, APPOINTMENTS):
         # Urgent words are acted on in every step; the current step then carries on with the same text.
         msgs = []
-        if is_urgent(text):
+        urgent = is_urgent(text)
+        if urgent:
             checkin.health_text = f"{checkin.health_text}\n{text}" if checkin.health_text else text
             msgs.append(_urgent(db, ctx, checkin, text))
         if checkin.step == MEDICINES:
             msgs += _handle_medicines(db, ctx, checkin, text, now)
+        elif checkin.step == MEALS_STEP:
+            # An urgent message is not a meal answer: ask the meal question again after the alert.
+            msgs += _meals_or_done(db, ctx, checkin, now) if urgent else _handle_meals(db, ctx, checkin, text, now)
         else:
             msgs += _appointments_and_done(db, ctx, checkin, now)
     elif is_dose_report(text) and not is_urgent(text) and _remaining(db, ctx, now, volunteered=True):

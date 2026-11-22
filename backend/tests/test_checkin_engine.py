@@ -39,6 +39,12 @@ def offline(monkeypatch):
     monkeypatch.setattr(settings, "intent_mode", "offline_rules")
 
 
+@pytest.fixture(autouse=True)
+def no_meal_questions(monkeypatch):
+    """These tests are about health, medicines and appointments; the meal question is tested in test_meals.py."""
+    monkeypatch.setattr(engine, "meals_due", lambda *args, **kwargs: [])
+
+
 def _role(db, family_id, name):
     return db.execute(select(Role).where(Role.family_id == family_id, Role.name == name)).scalar_one()
 

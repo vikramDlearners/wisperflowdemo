@@ -12,7 +12,7 @@ from app.models.user import User
 from app.services import doses as doses_svc
 from app.services.adapters.speech import SpeechUnavailable
 
-from tests.test_checkin_engine import offline, world  # noqa: F401
+from tests.test_checkin_engine import offline, world, no_meal_questions  # noqa: F401
 from tests.test_parent_invites import _auth, email, family_setup  # noqa: F401
 
 # 08:30 IST on 2026-11-22

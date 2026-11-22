@@ -23,6 +23,7 @@ from app.models.membership import FamilyMember
 from app.models.prescription_scan import MedicineReminder
 from app.models.user import User
 from app.services.adapters.messaging import get_email_provider
+from app.services.meals import meals_on
 from app.services.doses import (
     ANY_SLOT,
     MISSED,
@@ -215,8 +216,16 @@ def _summary_body(db: Session, checkin: HealthCheckin, profile: CareProfile) -> 
     if checkin.urgent:
         parts.append(f"{name} reported something that needed attention today.")
     parts += ["", "Medicines:", *_dose_lines(db, profile, checkin.checkin_date)]
+    parts += ["", "Meals:", *_meal_lines(db, profile, checkin.checkin_date)]
     parts += ["", "Appointments reminded:", *_appointment_lines(db, profile, checkin.checkin_date)]
     return "\n".join(parts)
+
+
+def _meal_lines(db: Session, profile: CareProfile, day: date) -> list[str]:
+    rows = meals_on(db, profile.id, day)
+    if not rows:
+        return ["Not told today."]
+    return [f"- {' and '.join(m.capitalize() for m in r.meals.split(','))}: {r.text}" for r in rows]
 
 
 def _ensure_day_rows(db: Session, now: datetime) -> None:

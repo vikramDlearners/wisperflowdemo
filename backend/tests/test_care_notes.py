@@ -9,7 +9,7 @@ from app.services import care_notes
 from app.services import checkin as engine
 from app.services.replies import TEMPLATES
 
-from tests.test_checkin_engine import NOW, offline, world  # noqa: F401
+from tests.test_checkin_engine import NOW, offline, world, no_meal_questions  # noqa: F401
 from tests.test_parent_invites import email, family_setup  # noqa: F401
 
 
