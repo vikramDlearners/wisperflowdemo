@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError, intentMode, notifications } from "../api";
 import type { NotificationOut } from "../api";
+import { notificationLine } from "../notificationText";
 
 interface NotificationSettingsProps {
   familyId: string;
@@ -86,7 +87,8 @@ export default function NotificationSettings({ familyId }: NotificationSettingsP
         <ul>
           {items.map((n) => (
             <li key={n.id}>
-              <strong>{n.type}</strong> — {n.status}
+              {notificationLine(n).urgent && <strong className="notification-urgent">Needs attention now: </strong>}
+              <strong>{notificationLine(n).text}</strong> — {n.status}
               <time dateTime={n.created_at}> · {new Date(n.created_at).toLocaleString()}</time>
             </li>
           ))}

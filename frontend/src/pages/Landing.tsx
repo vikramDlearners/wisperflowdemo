@@ -463,6 +463,13 @@ export default function Landing() {
                 ))}
               </fieldset>
 
+              {selectedRole === "parent" && (
+                <p className="au-sub" role="note">
+                  A family member needs to add you with this email or phone number before your daily check-in
+                  chat opens.
+                </p>
+              )}
+
               {selectedRole === "others" && (
                 <label className="au-field">
                   <span>Please describe your role</span>

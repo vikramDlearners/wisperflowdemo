@@ -3,19 +3,18 @@ import { Link, useNavigate } from "react-router-dom";
 import "../parent-chat.css";
 import { ApiError } from "../api";
 import LogoutButton from "../components/LogoutButton";
+import { parentLangCode, parentStrings } from "../parentChatStrings";
 import { getCheckin, sendText, sendVoice, type ChatMessage, type ReminderDue, type TurnOut } from "../parentApi";
 
 // The parent's check-in chat: tap the big mic, speak, and see/hear the reply.
 // Bot bubbles sit on the left, the parent's on the right. Text input is always one tap away.
 
 const MAX_RECORD_MS = 15_000;
-const VOICE_UNAVAILABLE = "Voice isn't available right now. Please type instead.";
-const GENERIC_ERROR = "Something went wrong. Please try again.";
 
 type LoadState =
   | { kind: "loading" }
   | { kind: "ready" }
-  | { kind: "unlinked"; detail: string }
+  | { kind: "unlinked" }
   | { kind: "forbidden" }
   | { kind: "error" };
 
@@ -59,7 +58,9 @@ export default function ParentChat() {
   const navigate = useNavigate();
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [messages, setMessages] = useState<Bubble[]>([]);
-  const [language, setLanguage] = useState("en");
+  // "" until the first load: strings then follow the browser locale.
+  const [language, setLanguage] = useState("");
+  const t = parentStrings(language);
   const [callNumber, setCallNumber] = useState<string | null>(null);
   const [helpNumber, setHelpNumber] = useState<string | null>(null);
   const [reminders, setReminders] = useState<ReminderDue[]>([]);
@@ -106,7 +107,7 @@ export default function ParentChat() {
         return true;
       }
       if (err.status === 409) {
-        setLoad({ kind: "unlinked", detail: err.detail || "Ask your family to link your profile" });
+        setLoad({ kind: "unlinked" });
         return true;
       }
       return false;
@@ -163,7 +164,7 @@ export default function ParentChat() {
       // Ignore a snapshot that a newer turn or refresh has overtaken.
       if (!mountedRef.current || seq !== seqRef.current) return;
       setMessages(data.messages.map((m: ChatMessage) => ({ sender: m.sender, text: m.text })));
-      setLanguage(data.language || "en");
+      setLanguage(data.language || "");
       setCallNumber(data.call_number);
       setHelpNumber(data.help_number);
       setReminders(data.reminders_due);
@@ -268,7 +269,7 @@ export default function ParentChat() {
       setMessages((prev) => prev.slice(0, -1));
       setText(value);
       if (!handleAuthError(err)) {
-        setNotice(err instanceof ApiError && err.status === 400 && err.detail ? err.detail : GENERIC_ERROR);
+        setNotice(err instanceof ApiError && err.status === 400 && err.detail ? err.detail : t.genericError);
       }
     } finally {
       if (mountedRef.current) setPhase("idle");
@@ -277,7 +278,7 @@ export default function ParentChat() {
 
   async function submitVoice(blob: Blob) {
     if (blob.size === 0) {
-      setNotice("I didn't hear anything. Please tap the microphone and try again.");
+      setNotice(t.heardNothing);
       setPhase("idle");
       return;
     }
@@ -291,12 +292,12 @@ export default function ParentChat() {
       if (!mountedRef.current) return;
       if (handleAuthError(err)) return;
       if (err instanceof ApiError && err.status === 503) {
-        setNotice(err.detail || VOICE_UNAVAILABLE);
+        setNotice(err.detail || t.voiceUnavailable);
         openTextInput();
       } else if (err instanceof ApiError && (err.status === 413 || err.status === 400)) {
-        setNotice(err.detail || GENERIC_ERROR);
+        setNotice(err.detail || t.genericError);
       } else {
-        setNotice(GENERIC_ERROR);
+        setNotice(t.genericError);
       }
     } finally {
       if (mountedRef.current) setPhase("idle");
@@ -321,7 +322,7 @@ export default function ParentChat() {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      setNotice("I can't use the microphone. Please allow it, or type your answer below.");
+      setNotice(t.micBlocked);
       openTextInput();
       return;
     }
@@ -336,7 +337,7 @@ export default function ParentChat() {
       rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
     } catch {
       stream.getTracks().forEach((t) => t.stop());
-      setNotice("Voice isn't available on this phone. Please type your answer below.");
+      setNotice(t.voiceNotOnPhone);
       openTextInput();
       return;
     }
@@ -364,7 +365,7 @@ export default function ParentChat() {
       stream.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       recorderRef.current = null;
-      setNotice("Voice isn't available on this phone. Please type your answer below.");
+      setNotice(t.voiceNotOnPhone);
       openTextInput();
       return;
     }
@@ -400,7 +401,7 @@ export default function ParentChat() {
             aria-controls="pc-help-panel"
             onClick={() => setHelpOpen((o) => !o)}
           >
-            Help
+            {t.help}
           </button>
         )}
         <LogoutButton className="pc-logout" />
@@ -410,34 +411,36 @@ export default function ParentChat() {
 
   if (load.kind !== "ready") {
     return (
-      <div className="pc-page">
+      <div className="pc-page" lang={parentLangCode(language)}>
         {header}
         <main className="pc-main pc-main--center">
           {load.kind === "loading" && (
             <p className="pc-status" role="status">
-              Getting ready…
+              {t.gettingReady}
             </p>
           )}
           {load.kind === "unlinked" && (
             <div className="pc-card" role="alert">
-              <h2>Almost there</h2>
-              <p>{load.detail}</p>
+              <h2>{t.almostThere}</h2>
+              <p>{t.notLinked}</p>
+              <p>{t.notLinkedHelp}</p>
+              <LogoutButton />
             </div>
           )}
           {load.kind === "forbidden" && (
             <div className="pc-card" role="alert">
-              <h2>This page is for parents</h2>
+              <h2>{t.parentsOnly}</h2>
               <p>
                 <Link to="/start" className="pc-link">
-                  Go to the start page
+                  {t.goToStart}
                 </Link>
               </p>
             </div>
           )}
           {load.kind === "error" && (
             <div className="pc-card" role="alert">
-              <h2>We couldn't load your chat</h2>
-              <p>{GENERIC_ERROR}</p>
+              <h2>{t.loadFailedTitle}</h2>
+              <p>{t.genericError}</p>
               <button
                 type="button"
                 className="pc-primary-btn"
@@ -446,7 +449,7 @@ export default function ParentChat() {
                   void refresh();
                 }}
               >
-                Try again
+                {t.tryAgain}
               </button>
             </div>
           )}
@@ -455,21 +458,21 @@ export default function ParentChat() {
     );
   }
 
-  const statusText = phase === "recording" ? "Listening…" : phase === "sending" ? "Thinking…" : "";
+  const statusText = phase === "recording" ? t.listening : phase === "sending" ? t.thinking : "";
 
   return (
-    <div className="pc-page">
+    <div className="pc-page" lang={parentLangCode(language)}>
       {header}
 
       {helpOpen && (
-        <section id="pc-help-panel" className="pc-help" aria-label="Help">
+        <section id="pc-help-panel" className="pc-help" aria-label={t.help}>
           {helpNumber ? (
             <a className="pc-call-btn" href={telHref(helpNumber)}>
-              <span aria-hidden="true">📞</span> Call family
+              <span aria-hidden="true">📞</span> {t.callFamily}
               <span className="pc-call-number">{helpNumber}</span>
             </a>
           ) : (
-            <p className="pc-help-text">Ask your family to add a phone number</p>
+            <p className="pc-help-text">{t.askFamilyAddPhone}</p>
           )}
         </section>
       )}
@@ -477,17 +480,17 @@ export default function ParentChat() {
       {callNumber && !helpOpen && (
         <div className="pc-call-wrap">
           <a className="pc-call-btn" href={telHref(callNumber)}>
-            <span aria-hidden="true">📞</span> Call family
+            <span aria-hidden="true">📞</span> {t.callFamily}
             <span className="pc-call-number">{callNumber}</span>
           </a>
         </div>
       )}
 
       <main className="pc-main">
-        <ol className="pc-messages" lang={language} aria-live="polite" aria-label="Conversation">
+        <ol className="pc-messages" lang={parentLangCode(language)} aria-live="polite" aria-label={t.conversation}>
           {messages.map((m, i) => (
             <li key={i} className={`pc-bubble pc-bubble--${m.sender}`}>
-              <span className="pc-sr">{m.sender === "bot" ? "CareCircle says:" : "You said:"}</span>
+              <span className="pc-sr">{m.sender === "bot" ? t.botSays : t.youSaid}</span>
               {m.text}
             </li>
           ))}
@@ -514,7 +517,7 @@ export default function ParentChat() {
             onClick={handleMic}
             disabled={phase === "sending"}
             aria-pressed={phase === "recording"}
-            aria-label={phase === "recording" ? "Stop and send" : "Tap to speak"}
+            aria-label={phase === "recording" ? t.stopAndSend : t.tapToSpeak}
           >
             <svg viewBox="0 0 24 24" width="56" height="56" aria-hidden="true">
               {phase === "recording" ? (
@@ -534,34 +537,34 @@ export default function ParentChat() {
         )}
         {canUseVoice && (
           <p className="pc-mic-hint" aria-hidden="true">
-            {phase === "recording" ? "Tap again to send" : phase === "sending" ? "Please wait" : "Tap to speak"}
+            {phase === "recording" ? t.tapAgainToSend : phase === "sending" ? t.pleaseWait : t.tapToSpeak}
           </p>
         )}
 
         {showText ? (
           <form className="pc-text-form" onSubmit={handleSendText}>
             <label htmlFor="pc-text" className="pc-sr">
-              Type your answer
+              {t.typeYourAnswer}
             </label>
             <input
               id="pc-text"
               ref={inputRef}
               className="pc-text-input"
               type="text"
-              lang={language}
+              lang={parentLangCode(language)}
               value={text}
               maxLength={2000}
               autoComplete="off"
-              placeholder="Type your answer"
+              placeholder={t.typeYourAnswer}
               onChange={(e) => setText(e.target.value)}
             />
             <button type="submit" className="pc-primary-btn" disabled={phase !== "idle" || !text.trim()}>
-              Send
+              {t.send}
             </button>
           </form>
         ) : (
           <button type="button" className="pc-type-btn" onClick={openTextInput}>
-            Type instead
+            {t.typeInstead}
           </button>
         )}
       </footer>

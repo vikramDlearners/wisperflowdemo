@@ -9,7 +9,16 @@ export interface DoseLabel {
 
 export const DEFAULT_TZ = "Asia/Kolkata";
 
-const tz = (timeZone?: string | null) => timeZone || DEFAULT_TZ;
+// An invalid timezone string makes Intl throw a RangeError: fall back to the browser zone.
+const tz = (timeZone?: string | null): string | undefined => {
+  const zone = timeZone || DEFAULT_TZ;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return zone;
+  } catch {
+    return undefined;
+  }
+};
 
 // recorded_at may come without a timezone suffix (SQLite): treat that as UTC.
 function parseRecorded(iso: string): Date {
@@ -22,7 +31,7 @@ function parseSlot(slot: string): number | null {
 }
 
 // Minutes since midnight of `now` in the given zone.
-function minutesNow(now: Date, timeZone: string): number {
+function minutesNow(now: Date, timeZone: string | undefined): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
     minute: "2-digit",
@@ -63,6 +72,8 @@ export function doseLabel(
     return { text: `✓ Taken${t}`, tone: "taken" };
   }
   if (d.status === "not_taken") return { text: "Not taken", tone: "missed" };
+  // Written by the system when the slot passed with no answer (not something the parent said).
+  if (d.status === "missed") return { text: "Missed", tone: "missed" };
   if (d.status === "skipped") return { text: "Skipped", tone: "skipped" };
   if (slot === null) return { text: "Not answered yet", tone: "due" };
   if (slot > minutesNow(now, zone)) return { text: `Due ${clock(slot)}`, tone: "due" };

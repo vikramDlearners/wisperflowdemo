@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { notificationLine } from "../notificationText";
 import {
   ApiError,
   families,
@@ -104,7 +105,8 @@ export default function Dashboard() {
         <ul>
           {data.notifications.map((n) => (
             <li key={n.id}>
-              {n.type} — {n.status}
+              {notificationLine(n).urgent && <strong className="notification-urgent">Needs attention now: </strong>}
+              {notificationLine(n).text} — {n.status}
             </li>
           ))}
         </ul>

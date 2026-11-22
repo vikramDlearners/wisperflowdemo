@@ -390,7 +390,7 @@ export const careProfiles = {
 export interface DoseToday {
   medicine_id: string;
   slot: string; // "HH:MM" or "any"
-  status: "taken" | "not_taken" | "skipped" | null;
+  status: "taken" | "not_taken" | "skipped" | "missed" | null;
   recorded_at: string | null;
 }
 
