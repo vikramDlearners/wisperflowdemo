@@ -34,11 +34,15 @@ export interface ParentStrings {
   youSaid: string;
   notLinkedHelp: string;
   logOut: string;
+  photoOf: string;
+  closePhoto: string;
   signingOut: string;
 }
 
 const en: ParentStrings = {
   logOut: "Log out",
+  photoOf: "Photo",
+  closePhoto: "Close",
   signingOut: "Signing out…",
   tapToSpeak: "Tap to speak",
   tapAgainToSend: "Tap again to send",
@@ -72,6 +76,8 @@ const en: ParentStrings = {
 
 const hi: ParentStrings = {
   logOut: "लॉग आउट",
+  photoOf: "फ़ोटो",
+  closePhoto: "बंद करें",
   signingOut: "लॉग आउट हो रहा है…",
   tapToSpeak: "बोलने के लिए दबाएं",
   tapAgainToSend: "भेजने के लिए फिर दबाएं",
@@ -105,6 +111,8 @@ const hi: ParentStrings = {
 
 const ta: ParentStrings = {
   logOut: "வெளியேறு",
+  photoOf: "படம்",
+  closePhoto: "மூடு",
   signingOut: "வெளியேறுகிறது…",
   tapToSpeak: "பேச தட்டவும்",
   tapAgainToSend: "அனுப்ப மீண்டும் தட்டவும்",
@@ -138,6 +146,8 @@ const ta: ParentStrings = {
 
 const te: ParentStrings = {
   logOut: "లాగ్ అవుట్",
+  photoOf: "ఫోటో",
+  closePhoto: "మూసివేయి",
   signingOut: "లాగ్ అవుట్ అవుతోంది…",
   tapToSpeak: "మాట్లాడటానికి నొక్కండి",
   tapAgainToSend: "పంపడానికి మళ్ళీ నొక్కండి",
@@ -171,6 +181,8 @@ const te: ParentStrings = {
 
 const ml: ParentStrings = {
   logOut: "ലോഗ് ഔട്ട്",
+  photoOf: "ഫോട്ടോ",
+  closePhoto: "അടയ്ക്കുക",
   signingOut: "ലോഗ് ഔട്ട് ചെയ്യുന്നു…",
   tapToSpeak: "സംസാരിക്കാൻ തൊടുക",
   tapAgainToSend: "അയയ്ക്കാൻ വീണ്ടും തൊടുക",
@@ -204,6 +216,8 @@ const ml: ParentStrings = {
 
 const kn: ParentStrings = {
   logOut: "ಲಾಗ್ ಔಟ್",
+  photoOf: "ಫೋಟೋ",
+  closePhoto: "ಮುಚ್ಚಿ",
   signingOut: "ಲಾಗ್ ಔಟ್ ಆಗುತ್ತಿದೆ…",
   tapToSpeak: "ಮಾತನಾಡಲು ಒತ್ತಿ",
   tapAgainToSend: "ಕಳುಹಿಸಲು ಮತ್ತೆ ಒತ್ತಿ",

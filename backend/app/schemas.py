@@ -481,6 +481,12 @@ class CheckinOut(BaseModel):
     audio_type: str | None = None
 
 
+class ParentMedicineOut(BaseModel):
+    id: str
+    name: str
+    has_image: bool
+
+
 class ParentTextIn(BaseModel):
     text: str = Field(max_length=2000)
 

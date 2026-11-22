@@ -297,3 +297,61 @@ def test_reminder_reload_speaks_the_new_question(client, db_session, world, tts,
     body = client.get("/api/parent/checkin", headers=headers).json()
     assert body["audio"] is not None
     assert tts.calls[-1] == ("Did you take Amlodipine?", "en")
+
+
+# ---------- medicine photos for the parent ----------
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+
+
+def test_parent_medicines_list_names_and_photo_flag(client, db_session, world):
+    world["meds"][0].image_data = PNG
+    world["meds"][0].image_content_type = "image/png"
+    db_session.commit()
+    r = client.get("/api/parent/medicines", headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 200
+    assert r.json() == [
+        {"id": world["meds"][0].id, "name": "Amlodipine", "has_image": True},
+        {"id": world["meds"][1].id, "name": "Metformin", "has_image": False},
+    ]
+
+
+def test_parent_medicines_skip_inactive(client, db_session, world):
+    world["meds"][1].active = False
+    db_session.commit()
+    r = client.get("/api/parent/medicines", headers=_auth(db_session, world["parent"]))
+    assert [m["name"] for m in r.json()] == ["Amlodipine"]
+
+
+def test_parent_medicine_image_returns_bytes(client, db_session, world):
+    world["meds"][0].image_data = PNG
+    world["meds"][0].image_content_type = "image/png"
+    db_session.commit()
+    r = client.get(f"/api/parent/medicines/{world['meds'][0].id}/image", headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 200
+    assert r.content == PNG
+    assert r.headers["content-type"] == "image/png"
+
+
+def test_parent_medicine_image_404_without_photo(client, db_session, world):
+    r = client.get(f"/api/parent/medicines/{world['meds'][1].id}/image", headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 404
+
+
+def test_parent_medicine_image_404_for_another_profile(client, db_session, world):
+    other = CareProfile(family_id=world["family_id"], display_name="Appa", greeting_name="Appa", preferred_language="en",
+                        timezone="Asia/Kolkata")
+    db_session.add(other)
+    db_session.commit()
+    from app.models.medicine import Medicine
+    med = Medicine(care_profile_id=other.id, display_name="Secret", active=True,
+                   image_data=PNG, image_content_type="image/png")
+    db_session.add(med)
+    db_session.commit()
+    r = client.get(f"/api/parent/medicines/{med.id}/image", headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 404
+
+
+def test_parent_medicines_need_a_parent(client, db_session, world):
+    r = client.get("/api/parent/medicines", headers=_auth(db_session, world["manager"]))
+    assert r.status_code in (403, 409)

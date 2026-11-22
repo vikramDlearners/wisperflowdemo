@@ -3,8 +3,19 @@ import { Link, useNavigate } from "react-router-dom";
 import "../parent-chat.css";
 import { ApiError } from "../api";
 import LogoutButton from "../components/LogoutButton";
+import ParentMedicinePhotos from "../components/ParentMedicinePhotos";
 import { parentLangCode, parentStrings } from "../parentChatStrings";
-import { getCheckin, sendText, sendVoice, type ChatMessage, type ReminderDue, type TurnOut } from "../parentApi";
+import {
+  fetchParentMedicinePhoto,
+  getCheckin,
+  getParentMedicines,
+  sendText,
+  sendVoice,
+  type ChatMessage,
+  type ParentMedicine,
+  type ReminderDue,
+  type TurnOut,
+} from "../parentApi";
 
 // The parent's check-in chat: tap the big mic, speak, and see/hear the reply.
 // Bot bubbles sit on the left, the parent's on the right. Text input is always one tap away.
@@ -154,6 +165,40 @@ export default function ParentChat() {
     },
     [stopAudio],
   );
+
+  // ---------- medicine photos ----------
+  // Loaded once; a bot message that names a medicine shows its photo underneath.
+
+  const [medicines, setMedicines] = useState<ParentMedicine[]>([]);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const created: string[] = [];
+    (async () => {
+      try {
+        const meds = await getParentMedicines();
+        if (cancelled) return;
+        setMedicines(meds);
+        for (const med of meds.filter((m) => m.has_image)) {
+          const url = await fetchParentMedicinePhoto(med.id);
+          if (!url) continue;
+          if (cancelled) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          created.push(url);
+          setPhotoUrls((prev) => ({ ...prev, [med.id]: url }));
+        }
+      } catch {
+        // Photos are a help, not essential: the chat works without them.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      created.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, []);
 
   // ---------- loading the conversation ----------
 
@@ -495,6 +540,15 @@ export default function ParentChat() {
             <li key={i} className={`pc-bubble pc-bubble--${m.sender}`}>
               <span className="pc-sr">{m.sender === "bot" ? t.botSays : t.youSaid}</span>
               {m.text}
+              {m.sender === "bot" && (
+                <ParentMedicinePhotos
+                  text={m.text}
+                  medicines={medicines}
+                  photoUrls={photoUrls}
+                  photoLabel={t.photoOf}
+                  closeLabel={t.closePhoto}
+                />
+              )}
             </li>
           ))}
         </ol>

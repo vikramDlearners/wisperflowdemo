@@ -4,7 +4,8 @@ import base64
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, DbSession
@@ -14,6 +15,7 @@ from app.models.user import User
 from app.schemas import (
     ChatMessageOut,
     CheckinOut,
+    ParentMedicineOut,
     ParentTextIn,
     ReminderDueOut,
     TurnMessageOut,
@@ -132,3 +134,31 @@ def post_voice(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, VOICE_UNAVAILABLE)
     turn = engine.handle_parent_text(db, ctx, transcript, _now())
     return VoiceTurnOut(**_turn_fields(db, ctx, turn), transcript=transcript)
+
+
+def _parent_medicine(db: Session, ctx: ParentContext, medicine_id: str) -> Medicine:
+    med = db.get(Medicine, medicine_id)
+    if med is None or med.care_profile_id != ctx.profile.id or not med.active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Medicine not found")
+    return med
+
+
+@router.get("/medicines", response_model=list[ParentMedicineOut])
+def list_parent_medicines(db: Session = DbSession, user: User = CurrentUser) -> list[ParentMedicineOut]:
+    """The parent's own active medicines, so the chat can show a photo next to a medicine it names."""
+    ctx = resolve_parent(db, user)
+    meds = db.execute(
+        select(Medicine)
+        .where(Medicine.care_profile_id == ctx.profile.id, Medicine.active.is_(True))
+        .order_by(Medicine.created_at, Medicine.id)
+    ).scalars()
+    return [ParentMedicineOut(id=m.id, name=m.display_name, has_image=m.image_data is not None) for m in meds]
+
+
+@router.get("/medicines/{medicine_id}/image")
+def get_parent_medicine_image(medicine_id: str, db: Session = DbSession, user: User = CurrentUser) -> Response:
+    ctx = resolve_parent(db, user)
+    med = _parent_medicine(db, ctx, medicine_id)
+    if med.image_data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This medicine has no photo")
+    return Response(content=med.image_data, media_type=med.image_content_type or "application/octet-stream")

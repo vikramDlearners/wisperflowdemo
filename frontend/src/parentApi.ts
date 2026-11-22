@@ -106,3 +106,27 @@ export function sendVoice(blob: Blob): Promise<TurnOut> {
   // No Content-Type header: the browser sets the multipart boundary.
   return send<TurnOut>("/api/parent/checkin/voice", { method: "POST", body: form });
 }
+
+
+// The parent's own medicines, for showing a photo next to a medicine the bot names.
+//   GET /medicines                 -> [{id, name, has_image}] (active medicines only)
+//   GET /medicines/{id}/image      -> the photo bytes, 404 when there is none
+
+export interface ParentMedicine {
+  id: string;
+  name: string;
+  has_image: boolean;
+}
+
+export function getParentMedicines(): Promise<ParentMedicine[]> {
+  return send<ParentMedicine[]>("/api/parent/medicines", { method: "GET" });
+}
+
+/** The medicine photo as a blob: URL (the request needs the Bearer token), or null if there is none. */
+export async function fetchParentMedicinePhoto(medicineId: string): Promise<string | null> {
+  const res = await fetch(`${API_BASE_URL}/api/parent/medicines/${encodeURIComponent(medicineId)}/image`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) return null;
+  return URL.createObjectURL(await res.blob());
+}
