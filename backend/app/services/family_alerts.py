@@ -30,6 +30,7 @@ from app.services.doses import (
     DueDose,
     _aware,
     doses_today,
+    no_time_slots,
     local_now,
     logged_today,
     today_for,
@@ -127,8 +128,11 @@ def notify_family_finished(db: Session, ctx: ParentContext, medicine: DueDose) -
 
 # ---------- scheduled jobs ----------
 
+_SLOT_LABELS = {ANY_SLOT: "any time", "morning": "morning", "noon": "afternoon", "night": "night"}
+
+
 def _slot_label(slot: str) -> str:
-    return "any time" if slot == ANY_SLOT else slot
+    return _SLOT_LABELS.get(slot, slot)
 
 
 def _dose_lines(db: Session, profile: CareProfile, day: date) -> list[str]:
@@ -145,7 +149,8 @@ def _dose_lines(db: Session, profile: CareProfile, day: date) -> list[str]:
     names: dict[str, str] = {}
     for med in medicines:
         names[med.id] = med.display_name
-        keys += [(med.id, slot) for slot in list_reminder_times(db, med.id) or [ANY_SLOT]]
+        slots = list_reminder_times(db, med.id) or no_time_slots(med.id, status, ANY_SLOT)
+        keys += [(med.id, slot) for slot in slots]
     for key in status:  # doses logged for a medicine that has since been stopped or re-timed
         if key not in keys:
             keys.append(key)

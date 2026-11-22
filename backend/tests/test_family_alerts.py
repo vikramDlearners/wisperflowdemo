@@ -270,7 +270,7 @@ def test_missed_dose_is_still_asked_and_the_parent_answer_overrides_it(db_sessio
     engine.start_or_resume(db_session, world["ctx"], later)
     engine.handle_parent_text(db_session, world["ctx"], "fine", later)
     turn = engine.handle_parent_text(db_session, world["ctx"], "yes took both", later)
-    assert "Okay, I've noted it." in turn.bot_messages
+    assert "Okay, I've noted that you took Amlodipine, Metformin at 10:00 AM." in turn.bot_messages
     rows = db_session.execute(select(MedicineDose)).scalars().all()
     assert {(r.status, r.source) for r in rows} == {("taken", "chatbot")}
     # Already alerted once: no second alert.

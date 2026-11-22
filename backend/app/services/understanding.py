@@ -279,3 +279,72 @@ def understand_medicines(text: str, due: list[DueDose], mode: str) -> MedicineAn
             logger.warning("Gemini medicine understanding failed, using offline rules: %s: %s",
                            type(exc).__name__, exc)
     return _from_rules(text, due)
+
+# ---------- how many medicines did the parent take? ----------
+
+ALL, NONE = "all", "none"
+_ALL_WORDS = (
+    "both", "all", "every", "each", "them all", "all of them", "took them",
+    "எல்லா", "இரண்டும்", "ரெண்டும்", "எல்லாமே",
+    "दोनों", "सब", "सभी", "सारी", "सारे",
+    "రెండూ", "అన్నీ", "అన్ని",
+    "രണ്ടും", "എല്ലാം",
+    "ಎರಡೂ", "ಎಲ್ಲಾ", "ಎಲ್ಲವೂ",
+)
+_NONE_WORDS = ("none", "nothing", "zero", "not any", "no medicine", "ஒன்றும்", "ஒன்னும்", "कोई नहीं", "एक भी नहीं",
+               "ఏదీ", "ఒక్కటీ", "ഒന്നും", "ಯಾವುದೂ", "ಒಂದೂ")
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "only one": 1, "just one": 1,
+    "ஒன்று": 1, "ஒண்ணு": 1, "இரண்டு": 2, "ரெண்டு": 2, "மூன்று": 3, "மூணு": 3,
+    "एक": 1, "दो": 2, "तीन": 3, "चार": 4,
+    "ఒకటి": 1, "ఒక్కటి": 1, "రెండు": 2, "మూడు": 3,
+    "ഒന്ന്": 1, "ഒരെണ്ണം": 1, "രണ്ട്": 2, "മൂന്ന്": 3,
+    "ಒಂದು": 1, "ಎರಡು": 2, "ಮೂರು": 3,
+}
+_LATIN_WORD = re.compile(r"[a-z]+(?:'[a-z]+)?")
+# A bare "yes" answers "Did you take them?" for the whole list.
+_BARE_YES = frozenset({
+    "yes", "yeah", "yep", "yes i did", "i did", "done", "yes done", "haan", "ha",
+    "ஆமா", "ஆம்", "ஆமாம்", "हाँ", "हां", "जी हाँ", "जी", "అవును", "ఔను", "അതെ", "ಹೌದು",
+})
+
+
+def _has_word(normalised: str, word: str) -> bool:
+    if word.isascii():
+        return re.search(rf"(?<![a-z]){re.escape(word)}(?![a-z])", normalised) is not None
+    return word in normalised
+
+
+def count_scope(text: str, due: list[DueDose]):
+    """How much of the due list a "took" reply covers: ALL, NONE, a number, or the medicine ids it names.
+    None when the reply does not say ("I took my medicine")."""
+    normalised = (text or "").strip().lower().replace("’", "'")
+    if not normalised:
+        return None
+    if re.sub(r"[.,!?।]+", " ", normalised).split() and " ".join(
+        re.sub(r"[.,!?।]+", " ", normalised).split()
+    ) in _BARE_YES:
+        return ALL
+    named = [d.medicine_id for d in due if d.name and d.name.lower() in normalised]
+    if named:
+        return list(dict.fromkeys(named))
+    if any(_has_word(normalised, w) for w in _NONE_WORDS):
+        return NONE
+    if any(_has_word(normalised, w) for w in _ALL_WORDS):
+        return ALL
+    digits = re.findall(r"\b\d+\b", normalised)
+    if digits:
+        return int(digits[0])
+    for word, number in sorted(_NUMBER_WORDS.items(), key=lambda kv: -len(kv[0])):
+        if _has_word(normalised, word):
+            return number
+    return None
+
+
+def is_dose_report(text: str) -> bool:
+    """"I took my evening tablets": a medicine word and a taken answer, and not a question."""
+    normalised = (text or "").strip().lower().replace("’", "'")
+    if not normalised or is_medicine_question(text):
+        return False
+    mentions = _MEDICINE_WORDS.search(normalised) or any(w in normalised for w in _MEDICINE_WORDS_NON_LATIN)
+    return bool(mentions) and _rule_outcome(normalised) == "taken"

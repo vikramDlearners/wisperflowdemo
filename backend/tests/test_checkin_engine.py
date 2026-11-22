@@ -164,7 +164,7 @@ def test_full_flow_medicines_then_appointment_then_goodbye(db_session, world):
     turn = engine.handle_parent_text(db_session, world["ctx"], "yes took both", NOW)
     doses = db_session.execute(select(MedicineDose)).scalars().all()
     assert len(doses) == 2 and {d.status for d in doses} == {"taken"}
-    assert turn.bot_messages[0] == "Okay, I've noted it."
+    assert turn.bot_messages[0] == "Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM."
     assert any(m.startswith("Tomorrow at 10:00 AM you have Doctor follow-up with Dr. Rao") for m in turn.bot_messages)
     assert not any("Cancelled visit" in m for m in turn.bot_messages)
     assert turn.checkin.step == "done"
@@ -406,7 +406,7 @@ def test_urgent_during_medicines_still_records_the_answer(db_session, world):
     engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "I took both but I feel dizzy", NOW)
     assert turn.bot_messages[0] == URGENT_EN
-    assert "Okay, I've noted it." in turn.bot_messages
+    assert "Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM." in turn.bot_messages
     assert {d.status for d in db_session.execute(select(MedicineDose)).scalars()} == {"taken"}
     assert turn.checkin.step == "done"
     assert len(_urgent_notes(db_session)) == 3
@@ -665,3 +665,111 @@ def test_schedule_replies_translated(language):
     from app.services.replies import TEMPLATES
     for key in ("sched_now", "sched_at", "sched_anytime", "sched_taken", "sched_all_done", "sched_none"):
         assert key in TEMPLATES[language]
+
+
+# ---------- "I took my medicine": how many, which dose, and when ----------
+
+HOW_MANY_Q = ("How many of your 2 medicines did you take: Amlodipine, Metformin? "
+              "You can say all of them, or tell me which ones.")
+# 19:45 IST == 14:15 UTC
+EVENING_NOW = datetime(2026, 11, 22, 14, 15, tzinfo=timezone.utc)
+
+
+def _to_medicines_step(db, world, when=NOW):
+    engine.start_or_resume(db, world["ctx"], when)
+    engine.handle_parent_text(db, world["ctx"], "I am fine", when)
+
+
+def _doses(db):
+    return {(d.medicine_id, d.slot): d.status for d in db.execute(select(MedicineDose)).scalars()}
+
+
+def test_took_medicine_asks_how_many_and_records_nothing_yet(db_session, world):
+    _to_medicines_step(db_session, world)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I took my medicine", NOW)
+    assert turn.bot_messages == [HOW_MANY_Q]
+    assert _doses(db_session) == {}
+
+
+def test_how_many_all_records_both_with_the_time(db_session, world):
+    _to_medicines_step(db_session, world)
+    engine.handle_parent_text(db_session, world["ctx"], "I took my medicine", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "both", NOW)
+    assert turn.bot_messages[0] == "Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM."
+    a, m = world["meds"]
+    assert _doses(db_session) == {(a.id, "08:00"): "taken", (m.id, "08:00"): "taken"}
+
+
+def test_how_many_one_then_which(db_session, world):
+    _to_medicines_step(db_session, world)
+    engine.handle_parent_text(db_session, world["ctx"], "I took my medicine", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "only one", NOW)
+    assert turn.bot_messages == ["Which ones did you take: Amlodipine, Metformin?"]
+    turn = engine.handle_parent_text(db_session, world["ctx"], "Metformin", NOW)
+    assert turn.bot_messages == ["Okay, I've noted that you took Metformin at 8:30 AM.", "Did you take Amlodipine?"]
+    a, m = world["meds"]
+    assert _doses(db_session) == {(m.id, "08:00"): "taken"}
+
+
+def test_naming_one_medicine_records_only_that_one(db_session, world):
+    _to_medicines_step(db_session, world)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I took the Amlodipine", NOW)
+    assert turn.bot_messages == ["Okay, I've noted that you took Amlodipine at 8:30 AM.", "Did you take Metformin?"]
+
+
+def test_how_many_none_is_not_taken(db_session, world):
+    _to_medicines_step(db_session, world)
+    engine.handle_parent_text(db_session, world["ctx"], "I took my medicine", NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "none", NOW)
+    assert set(_doses(db_session).values()) == {"not_taken"}
+
+
+def test_how_many_unclear_asks_again(db_session, world):
+    _to_medicines_step(db_session, world)
+    engine.handle_parent_text(db_session, world["ctx"], "I took my medicine", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "hmm", NOW)
+    assert turn.bot_messages == ["Sorry, I didn't catch that. Could you say it again?", HOW_MANY_Q]
+
+
+def test_bare_yes_to_the_list_means_all(db_session, world):
+    _to_medicines_step(db_session, world)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "yes", NOW)
+    assert turn.bot_messages[0] == "Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM."
+
+
+def test_evening_report_marks_only_the_night_dose_for_medicines_without_times(db_session, world):
+    for r in db_session.execute(select(MedicineReminder)).scalars():
+        r.active = False
+    db_session.commit()
+    a, m = world["meds"]
+    # Morning: both taken (morning dose).
+    _to_medicines_step(db_session, world)
+    engine.handle_parent_text(db_session, world["ctx"], "yes took both", NOW)
+    assert _doses(db_session) == {(a.id, "morning"): "taken", (m.id, "morning"): "taken"}
+    # Evening, after the check-in finished: "I took my medicine" asks how many, then records the night dose.
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I took my evening tablets", EVENING_NOW)
+    assert turn.bot_messages == [HOW_MANY_Q]
+    turn = engine.handle_parent_text(db_session, world["ctx"], "all", EVENING_NOW)
+    assert turn.bot_messages == [
+        "Okay, I've noted that you took Amlodipine, Metformin at 7:45 PM.",
+        "Is there anything else you'd like to tell me?",
+    ]
+    assert turn.checkin.step == "done"
+    assert _doses(db_session) == {
+        (a.id, "morning"): "taken", (m.id, "morning"): "taken",
+        (a.id, "night"): "taken", (m.id, "night"): "taken",
+    }
+    assert "evening tablets" not in (turn.checkin.health_text or "")
+
+
+def test_timed_evening_report_leaves_the_missed_morning_dose_alone(db_session, world):
+    a, m = world["meds"]
+    for med in world["meds"]:
+        db_session.add(MedicineReminder(medicine_id=med.id, time_of_day="20:00", active=True,
+                                        created_at=SETUP_AT))
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], EVENING_NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "I am fine", EVENING_NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "I took both", EVENING_NOW)
+    # 19:45: the 20:00 doses are current (within an hour); the unanswered 08:00 doses stay unanswered.
+    assert _doses(db_session) == {(a.id, "20:00"): "taken", (m.id, "20:00"): "taken"}

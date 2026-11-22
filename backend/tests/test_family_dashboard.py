@@ -238,3 +238,16 @@ def test_care_profile_from_other_family_is_not_found(client, db_session, dashboa
     s = dashboard_setup
     response = _get(client, db_session, s["manager"], s["family"].id, care_profile_id=s["rival"].id)
     assert response.status_code == 404
+
+
+def test_medicine_without_times_shows_each_part_of_the_day_taken(client, db_session, dashboard_setup):
+    s = dashboard_setup
+    now = datetime.now(timezone.utc)
+    for slot in ("morning", "night"):
+        doses_svc.record_dose(db_session, s["appa"], s["vitamin"].id, slot, "taken", s["manager"].id, "chatbot", now)
+    body = _get(client, db_session, s["manager"], s["family"].id).json()
+    vitamin = [(i["slot"], i["status"]) for i in body["today_schedule"] if i["medicine_name"] == "Vitamin D"]
+    assert vitamin == [("morning", "taken"), ("night", "taken")]
+    # Amlodipine 08:00 and 20:00, Metformin 08:00, Vitamin D morning and night.
+    assert body["medicines_today"] == {"taken": 2, "total": 5}
+    assert body["daily_medicine_count"] == 3

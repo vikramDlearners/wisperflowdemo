@@ -16,6 +16,9 @@ import {
 
 const TIME_RE = /^(\d{1,2}):(\d{2})/;
 
+// Medicines without reminder times are recorded per part of the day.
+const SLOT_PART_NAMES: Record<string, string> = { morning: "Morning", noon: "Afternoon", night: "Night" };
+
 function formatTime(hhmm: string): string {
   const m = TIME_RE.exec(hhmm);
   if (!m) return hhmm;
@@ -303,7 +306,9 @@ export default function Dashboard() {
                     return (
                       <tr key={`${item.medicine_id}-${item.slot}-${i}`}>
                         <td className="db-schedule-time">
-                          {item.slot === "any" ? "Any time" : formatTime(item.slot)}
+                          {item.slot === "any" || item.slot in SLOT_PART_NAMES
+                            ? (SLOT_PART_NAMES[item.slot] ?? "Any time")
+                            : formatTime(item.slot)}
                         </td>
                         <td className="db-schedule-name">{item.medicine_name}</td>
                         <td>

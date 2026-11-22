@@ -283,3 +283,43 @@ def test_medicine_questions_detected(text):
 ])
 def test_medicine_answers_are_not_questions(text):
     assert is_medicine_question(text) is False
+
+
+# ---------- how many did you take? ----------
+
+from app.services.understanding import ALL, NONE, count_scope, is_dose_report  # noqa: E402
+
+_DUE = [DueDose("a", "Amlodipine", "08:00", None, None), DueDose("m", "Metformin 500 mg", "08:00", None, None)]
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("I took my medicine", None),
+    ("I took my tablets", None),
+    ("yes", ALL),
+    ("both", ALL),
+    ("I took all of them", ALL),
+    ("took them", ALL),
+    ("none", NONE),
+    ("only one", 1),
+    ("2", 2),
+    ("two", 2),
+    ("I took Metformin 500 mg", ["m"]),
+    ("amlodipine and metformin 500 mg", ["a", "m"]),
+    ("ரெண்டும் சாப்பிட்டேன்", ALL),
+    ("दोनों ले ली", ALL),
+    ("एक ली", 1),
+    ("ಎರಡೂ", ALL),
+])
+def test_count_scope(text, expected):
+    assert count_scope(text, _DUE) == expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("I took my evening tablets", True),
+    ("took my medicine", True),
+    ("which medicine do I take?", False),
+    ("I feel tired", False),
+    ("I didn't take my medicine", False),
+])
+def test_is_dose_report(text, expected):
+    assert is_dose_report(text) is expected

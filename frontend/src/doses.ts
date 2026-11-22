@@ -50,9 +50,17 @@ function clock(mins: number): string {
   });
 }
 
+// A medicine without reminder times is recorded per part of the day.
+const DAY_PARTS: Record<string, { name: string; order: string }> = {
+  morning: { name: "Morning", order: "06:00" },
+  noon: { name: "Afternoon", order: "12:00" },
+  night: { name: "Night", order: "17:00" },
+};
+
 // Slots in day order, "any" last.
 export function sortDoses(doses: DoseToday[]): DoseToday[] {
-  const key = (d: DoseToday) => (d.slot === "any" ? "99:99" : d.slot.padStart(5, "0"));
+  const key = (d: DoseToday) =>
+    d.slot === "any" ? "99:99" : (DAY_PARTS[d.slot]?.order ?? d.slot.padStart(5, "0"));
   return [...doses].sort((a, b) => key(a).localeCompare(key(b)));
 }
 
@@ -80,8 +88,9 @@ export function doseLabel(
   return { text: "Due now", tone: "due" };
 }
 
-// Human slot name: "8:00 AM" or "Once today".
+// Human slot name: "8:00 AM", "Morning" / "Afternoon" / "Night", or "Once today".
 export function slotName(slot: string): string {
+  if (DAY_PARTS[slot]) return DAY_PARTS[slot].name;
   const m = parseSlot(slot);
   return m === null ? "Once today" : clock(m);
 }

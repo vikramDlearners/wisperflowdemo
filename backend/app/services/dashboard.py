@@ -15,7 +15,7 @@ from app.models.care_profile import CareProfile
 from app.models.dose import MedicineDose
 from app.models.medicine import Medicine
 from app.models.parent_onboarding_profile import ParentOnboardingProfile
-from app.services.doses import ANY_SLOT, today_for
+from app.services.doses import ANY_SLOT, no_time_slots, today_for
 from app.services.errors import NotFound
 from app.services.profile import age_from
 from app.services.reminders import list_reminder_times
@@ -61,13 +61,18 @@ def _logged_on(db: Session, profile_id: str, day: date) -> dict[tuple[str, str],
     return {(r.medicine_id, r.slot): r for r in rows}
 
 
-def _active_medicines(db: Session, profile_id: str) -> list[tuple[Medicine, list[str]]]:
+def _active_medicines(
+    db: Session, profile_id: str, logged: dict | None = None
+) -> list[tuple[Medicine, list[str]]]:
     meds = db.execute(
         select(Medicine)
         .where(Medicine.care_profile_id == profile_id, Medicine.active.is_(True))
         .order_by(Medicine.created_at, Medicine.id)
     ).scalars().all()
-    return [(med, list_reminder_times(db, med.id) or [ANY_SLOT]) for med in meds]
+    # A medicine without reminder times shows the day parts answered that day (morning, noon, night),
+    # or one "any" slot when none is.
+    return [(med, list_reminder_times(db, med.id) or no_time_slots(med.id, logged or {}, ANY_SLOT))
+            for med in meds]
 
 
 def _day_for(profile: CareProfile, on_date: date | None, now: datetime) -> date:
@@ -154,7 +159,7 @@ def build_family_dashboard(
     stock: list[dict[str, Any]] = []
     taken = total = 0
     medicine_count = 0  # "N Medicine(s) daily" counts medicines; total counts today's dose slots
-    for med, slots in _active_medicines(db, selected.id):
+    for med, slots in _active_medicines(db, selected.id, logged):
         medicine_count += 1
         total += len(slots)
         for slot in slots:

@@ -21,8 +21,8 @@ from app.services.activity import log_activity
 from app.services.app_settings import get_intent_mode
 from app.services.doses import (
     DueDose,
+    current_doses,
     doses_today,
-    due_untaken,
     local_now,
     logged_today,
     record_dose,
@@ -39,7 +39,13 @@ from app.services.parent_context import ParentContext
 from app.services.permissions import role_name_for
 from app.services.replies import reply
 from app.services.understanding import (
+    ALL,
     DEFAULT_DELAY_MINUTES,
+    NONE,
+    MedicineAnswer,
+    MedicineAnswers,
+    count_scope,
+    is_dose_report,
     is_medicine_question,
     is_urgent,
     understand_medicines,
@@ -49,6 +55,17 @@ GREET, HEALTH, MEDICINES, APPOINTMENTS, DONE = "greet", "health", "medicines", "
 MANAGER_ROLE = "Family manager"
 UPCOMING_STATUSES = ("scheduled", "rescheduled")
 NOT_TAKEN_REASK = timedelta(minutes=30)
+# pending_medicine_id while waiting for "how many did you take?" / "which ones?" (never a medicine id).
+# A trailing AFTER_DONE marks a dose the parent reported after the check-in had finished.
+HOW_MANY, WHICH, AFTER_DONE = "?how-many", "?which", "!"
+
+
+def _asking_count(checkin: HealthCheckin) -> bool:
+    return (checkin.pending_medicine_id or "").startswith("?")
+
+
+def _count_state(question: str, from_done: bool) -> str:
+    return question + (AFTER_DONE if from_done else "")
 
 # Pure closings after "done" ("ok", "thank you", "bye"): not health news, so never appended or shared.
 # Longest first, so "thank you" is removed before "thank".
@@ -184,19 +201,17 @@ def _aware(dt: datetime | None) -> datetime | None:
     return dt
 
 
-def _remaining(db: Session, ctx: ParentContext, now: datetime) -> list[DueDose]:
-    """Due doses still to ask about now.
+def _remaining(db: Session, ctx: ParentContext, now: datetime, volunteered: bool = False) -> list[DueDose]:
+    """The current dose of each medicine still to ask about (doses.current_doses: one per medicine).
 
-    Taken and skipped (includes "ran out") doses are answered for the day. A plain "not taken" answer is not
-    asked again until NOT_TAKEN_REASK has passed since it was recorded, so one exchange never loops. A
-    remind-later dose comes back once its reminder time has passed (due_untaken hides it until then).
+    Taken and skipped (includes "ran out") doses are answered. A plain "not taken" answer is not asked again
+    until NOT_TAKEN_REASK has passed since it was recorded, so one exchange never loops. A remind-later dose
+    comes back once its reminder time has passed.
     """
     logged = logged_today(db, ctx.profile, now)
     out = []
-    for d in due_untaken(db, ctx.profile, now):
-        if d.status == "skipped":
-            continue
-        if d.status == "not_taken":
+    for d in current_doses(db, ctx.profile, now, volunteered=volunteered):
+        if d.status == "not_taken" and not volunteered:
             row = logged.get((d.medicine_id, d.slot))
             if row is not None and row.remind_at is None:
                 recorded = _aware(row.recorded_at)
@@ -226,20 +241,46 @@ def _ask_medicines(ctx: ParentContext, checkin: HealthCheckin, remaining: list[D
 
 
 def _continue_medicines(
-    db: Session, ctx: ParentContext, checkin: HealthCheckin, now: datetime, announce_none: bool
+    db: Session, ctx: ParentContext, checkin: HealthCheckin, now: datetime, announce_none: bool,
+    from_done: bool = False,
 ) -> list[str]:
     remaining = _remaining(db, ctx, now)
     if remaining:
         return [_ask_medicines(ctx, checkin, remaining)]
+    if from_done:
+        # A dose the parent reported after the check-in finished: no need to repeat appointments and goodbye.
+        checkin.pending_medicine_id = None
+        _set_step(db, ctx, checkin, DONE, now)
+        return [_say(ctx, "anything_else")]
     msgs = [_say(ctx, "meds_none")] if announce_none else []
     return msgs + _appointments_and_done(db, ctx, checkin, now)
 
 
-def _handle_medicines(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime) -> list[str]:
-    remaining = _remaining(db, ctx, now)
+def _names(items: list[str]) -> str:
+    return ", ".join(dict.fromkeys(items))  # unique, in order
+
+
+def _local_clock(ctx: ParentContext, now: datetime) -> str:
+    return format_time(local_now(ctx.profile, now).strftime("%H:%M"))
+
+
+def _handle_medicines(
+    db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime,
+    remaining: list[DueDose] | None = None, from_done: bool = False,
+) -> list[str]:
+    if _asking_count(checkin):
+        # Answering "how many?" / "which ones?": the doses on offer are the current ones the parent reported.
+        from_done = from_done or checkin.pending_medicine_id.endswith(AFTER_DONE)
+        remaining = _remaining(db, ctx, now, volunteered=True) if remaining is None else remaining
+    remaining = _remaining(db, ctx, now) if remaining is None else remaining
     if not remaining:
+        checkin.pending_medicine_id = None
+        if from_done:
+            return _continue_medicines(db, ctx, checkin, now, announce_none=False, from_done=True)
         return _appointments_and_done(db, ctx, checkin, now)
     asked = _unique(remaining)
+    if _asking_count(checkin):
+        return _handle_count_answer(db, ctx, checkin, text, now, remaining, asked, from_done)
     narrowed = False
     if checkin.pending_medicine_id and any(d.medicine_id == checkin.pending_medicine_id for d in asked):
         asked = [d for d in asked if d.medicine_id == checkin.pending_medicine_id]
@@ -251,10 +292,58 @@ def _handle_medicines(db: Session, ctx: ParentContext, checkin: HealthCheckin, t
         msgs = [_say(ctx, "not_understood")] if narrowed else []
         return msgs + [_say(ctx, "meds_one", name=first.name)]
 
+    if len(asked) > 1 and all(a.outcome == "taken" for a in answers.items):
+        scope = count_scope(text, asked)
+        if scope is None:
+            # "I took my medicine" with several due: ask how many before marking anything.
+            checkin.pending_medicine_id = _count_state(HOW_MANY, from_done)
+            return [_say(ctx, "meds_how_many", count=len(asked), names=_names([d.name for d in asked]))]
+        if isinstance(scope, int) and 0 < scope < len(asked):
+            checkin.pending_medicine_id = _count_state(WHICH, from_done)
+            return [_say(ctx, "meds_which", names=_names([d.name for d in asked]))]
+        if isinstance(scope, list):
+            answers = MedicineAnswers(items=[MedicineAnswer(m, "taken") for m in scope])
+    return _apply_answers(db, ctx, checkin, answers, remaining, now, from_done)
+
+
+def _handle_count_answer(
+    db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime,
+    remaining: list[DueDose], asked: list[DueDose], from_done: bool,
+) -> list[str]:
+    """The reply to "how many did you take?" or "which ones?"."""
+    scope = count_scope(text, asked)
+    ids = [d.medicine_id for d in asked]
+    if scope == ALL or (isinstance(scope, int) and scope >= len(asked)):
+        answers = MedicineAnswers(items=[MedicineAnswer(m, "taken") for m in ids])
+    elif scope == NONE or scope == 0:
+        answers = MedicineAnswers(items=[MedicineAnswer(m, "not_taken") for m in ids])
+    elif isinstance(scope, list):
+        answers = MedicineAnswers(items=[MedicineAnswer(m, "taken") for m in scope])
+    elif isinstance(scope, int):
+        checkin.pending_medicine_id = _count_state(WHICH, from_done)
+        return [_say(ctx, "meds_which", names=_names([d.name for d in asked]))]
+    else:
+        plain = understand_medicines(text, asked, get_intent_mode(db))
+        if not plain.unclear and plain.items and all(a.outcome == "not_taken" for a in plain.items):
+            answers = plain
+        else:
+            key = "meds_which" if checkin.pending_medicine_id.startswith(WHICH) else "meds_how_many"
+            return [_say(ctx, "not_understood"),
+                    _say(ctx, key, count=len(asked), names=_names([d.name for d in asked]))]
+    checkin.pending_medicine_id = None
+    return _apply_answers(db, ctx, checkin, answers, remaining, now, from_done)
+
+
+def _apply_answers(
+    db: Session, ctx: ParentContext, checkin: HealthCheckin, answers: MedicineAnswers,
+    remaining: list[DueDose], now: datetime, from_done: bool,
+) -> list[str]:
+    checkin.pending_medicine_id = None
     by_medicine: dict[str, list[DueDose]] = {}
     for d in remaining:
         by_medicine.setdefault(d.medicine_id, []).append(d)
-    logged = False
+    taken: list[str] = []
+    not_taken = False
     remind_minutes: int | None = None
     finished: list[DueDose] = []
     for answer in answers.items:
@@ -264,7 +353,10 @@ def _handle_medicines(db: Session, ctx: ParentContext, checkin: HealthCheckin, t
             try:
                 if answer.outcome in ("taken", "not_taken"):
                     record_dose(db, ctx.profile, dose.medicine_id, dose.slot, answer.outcome, ctx.user_id, "chatbot", now)
-                    logged = True
+                    if answer.outcome == "taken":
+                        taken.append(dose.name)
+                    else:
+                        not_taken = True
                 elif answer.outcome == "remind_later":
                     remind_minutes = answers.delay_minutes or DEFAULT_DELAY_MINUTES
                     set_remind_later(db, ctx.profile, dose.medicine_id, dose.slot, remind_minutes, now)
@@ -279,7 +371,9 @@ def _handle_medicines(db: Session, ctx: ParentContext, checkin: HealthCheckin, t
             finished.append(doses[0])
 
     msgs: list[str] = []
-    if logged:
+    if taken:
+        msgs.append(_say(ctx, "meds_logged_at", names=_names(taken), time=_local_clock(ctx, now)))
+    if not_taken:
         msgs.append(_say(ctx, "meds_logged"))
     if remind_minutes is not None:
         msgs.append(_say(ctx, "meds_remind", minutes=remind_minutes))
@@ -292,7 +386,7 @@ def _handle_medicines(db: Session, ctx: ParentContext, checkin: HealthCheckin, t
                 msgs.append(_say(ctx, "meds_finished", family=family, name=dose.name))
             else:
                 msgs.append(_say(ctx, "meds_finished_alone", name=dose.name))
-    return msgs + _continue_medicines(db, ctx, checkin, now, announce_none=False)
+    return msgs + _continue_medicines(db, ctx, checkin, now, announce_none=False, from_done=from_done)
 
 
 # ---------- appointments ----------
@@ -373,10 +467,6 @@ def _with_instructions(name: str, med: Medicine | None) -> str:
     if len(text) > _INSTRUCTIONS_MAX:
         text = text[: _INSTRUCTIONS_MAX - 1].rstrip() + "…"
     return f"{name} ({text})"
-
-
-def _names(items: list[str]) -> str:
-    return ", ".join(dict.fromkeys(items))  # unique, in order
 
 
 def _schedule_answer(db: Session, ctx: ParentContext, now: datetime) -> list[str]:
@@ -540,6 +630,12 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
             msgs += _handle_medicines(db, ctx, checkin, text, now)
         else:
             msgs += _appointments_and_done(db, ctx, checkin, now)
+    elif is_dose_report(text) and not is_urgent(text) and _remaining(db, ctx, now, volunteered=True):
+        # "I took my evening tablets" after the check-in finished: record the current dose (asking how many
+        # first if several are due), not a health note.
+        _set_step(db, ctx, checkin, MEDICINES, now)
+        msgs = _handle_medicines(db, ctx, checkin, text, now,
+                                 remaining=_remaining(db, ctx, now, volunteered=True), from_done=True)
     elif is_closing(text) and not is_urgent(text):
         msgs = _reopen_or(db, ctx, checkin, now, _say(ctx, "goodbye", name=ctx.greeting_name))
     else:

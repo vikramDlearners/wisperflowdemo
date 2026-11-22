@@ -50,11 +50,64 @@ def test_due_untaken_only_past_slots(db_session, setup):
     assert len(svc.doses_today(db_session, setup["profile"], NOW)) == 2
 
 
-def test_no_reminders_any_slot_and_taken(db_session, setup):
+def test_no_reminders_uses_the_day_part_and_taken(db_session, setup):
     m = _med(db_session, setup["profile"])
     assert [d.slot for d in svc.due_untaken(db_session, setup["profile"], NOW)] == ["any"]
-    svc.record_dose(db_session, setup["profile"], m.id, "any", "taken", setup["manager"].id, "chatbot", NOW)
+    svc.record_dose(db_session, setup["profile"], m.id, "morning", "taken", setup["manager"].id, "chatbot", NOW)
     assert svc.due_untaken(db_session, setup["profile"], NOW) == []
+
+
+# 19:30 IST == 14:00 UTC; 13:00 IST == 07:30 UTC
+EVENING = datetime(2026, 11, 22, 14, 0, tzinfo=timezone.utc)
+AFTERNOON = datetime(2026, 11, 22, 7, 30, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("when,part", [(NOW, "morning"), (AFTERNOON, "noon"), (EVENING, "night")])
+def test_day_part_by_local_hour(setup, when, part):
+    assert svc.day_part(svc.local_now(setup["profile"], when)) == part
+
+
+def test_evening_answer_marks_only_the_night_dose(db_session, setup):
+    m = _med(db_session, setup["profile"])
+    [dose] = svc.current_doses(db_session, setup["profile"], EVENING, volunteered=True)
+    assert dose.slot == "night"
+    svc.record_dose(db_session, setup["profile"], m.id, dose.slot, "taken", setup["manager"].id, "chatbot", EVENING)
+    shown = svc.doses_today(db_session, setup["profile"], EVENING)
+    assert [(d.slot, d.status) for d in shown] == [("night", "taken")]
+
+
+def test_morning_and_night_doses_are_separate(db_session, setup):
+    m = _med(db_session, setup["profile"])
+    svc.record_dose(db_session, setup["profile"], m.id, "morning", "taken", setup["manager"].id, "chatbot", NOW)
+    # Not asked again by the bot after a dose today, but the parent can still report the night one.
+    assert svc.current_doses(db_session, setup["profile"], EVENING) == []
+    [dose] = svc.current_doses(db_session, setup["profile"], EVENING, volunteered=True)
+    assert dose.slot == "night"
+    svc.record_dose(db_session, setup["profile"], m.id, "night", "taken", setup["manager"].id, "chatbot", EVENING)
+    shown = svc.doses_today(db_session, setup["profile"], EVENING)
+    assert [(d.slot, d.status) for d in shown] == [("morning", "taken"), ("night", "taken")]
+
+
+def test_timed_current_dose_is_the_latest_due_only(db_session, setup):
+    _med(db_session, setup["profile"], times=("08:00", "20:00"))
+    # 19:30: the 20:00 dose is within the early window; the unanswered 08:00 dose is not offered.
+    assert [d.slot for d in svc.current_doses(db_session, setup["profile"], EVENING)] == ["20:00"]
+    # 09:00: only the 08:00 dose.
+    assert [d.slot for d in svc.current_doses(db_session, setup["profile"], NOW)] == ["08:00"]
+
+
+def test_timed_taken_current_dose_is_not_offered_again(db_session, setup):
+    m = _med(db_session, setup["profile"], times=("08:00", "20:00"))
+    svc.record_dose(db_session, setup["profile"], m.id, "20:00", "taken", setup["manager"].id, "chatbot", EVENING)
+    assert svc.current_doses(db_session, setup["profile"], EVENING, volunteered=True) == []
+
+
+def test_day_part_slots_are_valid(db_session, setup):
+    m = _med(db_session, setup["profile"])
+    for slot in ("morning", "noon", "night", "any"):
+        svc.record_dose(db_session, setup["profile"], m.id, slot, "taken", setup["manager"].id, "chatbot", NOW)
+    with pytest.raises(ValueError):
+        svc.record_dose(db_session, setup["profile"], m.id, "evening", "taken", setup["manager"].id, "chatbot", NOW)
 
 
 def test_inactive_medicine_not_due(db_session, setup):

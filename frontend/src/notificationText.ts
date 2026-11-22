@@ -14,8 +14,11 @@ function str(payload: Record<string, unknown> | null, key: string): string | nul
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+const PART_NAMES: Record<string, string> = { morning: "morning", noon: "afternoon", night: "night" };
+
 function slotText(slot: string | null): string {
-  return slot && slot !== "any" ? ` (due ${slot})` : "";
+  if (!slot || slot === "any") return "";
+  return PART_NAMES[slot] ? ` (${PART_NAMES[slot]})` : ` (due ${slot})`;
 }
 
 export function notificationLine(n: Pick<NotificationOut, "type" | "payload">): NotificationLine {
