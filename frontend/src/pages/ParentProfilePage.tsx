@@ -41,11 +41,8 @@ interface FormState {
   parent_mobile: string;
   preferred_language: string;
   caregiver_name: string;
-  // "yes", "no", or "" when not answered.
-  calcium_deficiency: string;
-  calcium_deficiency_notes: string;
-  sugar_problems: string;
-  sugar_problems_notes: string;
+  deficiencies: string;
+  notes: string;
 }
 
 function toForm(p: ParentProfileOut): FormState {
@@ -56,16 +53,9 @@ function toForm(p: ParentProfileOut): FormState {
     parent_mobile: p.parent_mobile ?? "",
     preferred_language: p.preferred_language ?? "",
     caregiver_name: p.caregiver_name ?? "",
-    calcium_deficiency: yesNo(p.calcium_deficiency),
-    calcium_deficiency_notes: p.calcium_deficiency_notes ?? "",
-    sugar_problems: yesNo(p.sugar_problems),
-    sugar_problems_notes: p.sugar_problems_notes ?? "",
+    deficiencies: p.deficiencies ?? "",
+    notes: p.notes ?? "",
   };
-}
-
-// Maps a stored yes/no flag to the form's "yes" / "no" / "" (not answered).
-function yesNo(v: boolean | null | undefined): string {
-  return v == null ? "" : v ? "yes" : "no";
 }
 
 const orNull = (v: string) => (v.trim() ? v.trim() : null);
@@ -304,10 +294,8 @@ export default function ParentProfilePage() {
         parent_mobile: orNull(form.parent_mobile),
       });
       await save("medical", {
-        calcium_deficiency: form.calcium_deficiency === "" ? null : form.calcium_deficiency === "yes",
-        calcium_deficiency_notes: orNull(form.calcium_deficiency_notes),
-        sugar_problems: form.sugar_problems === "" ? null : form.sugar_problems === "yes",
-        sugar_problems_notes: orNull(form.sugar_problems_notes),
+        deficiencies: orNull(form.deficiencies),
+        notes: orNull(form.notes),
       });
       const updated = await save("care", {
         caregiver_name: orNull(form.caregiver_name),
@@ -344,30 +332,6 @@ export default function ParentProfilePage() {
     RELATIONSHIP_OPTIONS.find((o) => o.toLowerCase() === form?.relationship) ?? form?.relationship;
   const languageLabel =
     LANGUAGE_OPTIONS.find((o) => o.value === form?.preferred_language)?.label ?? form?.preferred_language;
-  // A yes/no choice: radio buttons in edit mode, "Yes" / "No" text in view mode.
-  const choiceRow = (label: string, key: "calcium_deficiency" | "sugar_problems") => {
-    const current = form?.[key] ?? "";
-    if (!editing) return row(label, null, current === "yes" ? "Yes" : current === "no" ? "No" : "");
-    return (
-      <div className="pp-field" role="radiogroup" aria-label={label}>
-        <span>{label}</span>
-        <span className="pp-choice">
-          {(["yes", "no"] as const).map((opt) => (
-            <label key={opt}>
-              <input
-                type="radio"
-                name={key}
-                value={opt}
-                checked={current === opt}
-                onChange={() => set(key)(opt)}
-              />
-              {opt === "yes" ? "Yes" : "No"}
-            </label>
-          ))}
-        </span>
-      </div>
-    );
-  };
 
   return (
     <WorkspaceLayout familyId={familyId} current="parent-profile" title="Parent profile">
@@ -591,25 +555,25 @@ export default function ParentProfilePage() {
 
                 <h2 className="pp-subhead">Health deficiencies</h2>
                 <div className="pp-fields">
-                  {choiceRow("Calcium deficiency", "calcium_deficiency")}
                   {row(
-                    "Calcium notes",
+                    "Deficiencies",
                     <textarea
                       maxLength={500}
-                      value={form.calcium_deficiency_notes}
-                      onChange={(e) => set("calcium_deficiency_notes")(e.target.value)}
+                      placeholder="e.g. calcium, sugar problems, other deficiencies"
+                      value={form.deficiencies}
+                      onChange={(e) => set("deficiencies")(e.target.value)}
                     />,
-                    form.calcium_deficiency_notes,
+                    form.deficiencies,
                   )}
-                  {choiceRow("Sugar problems (diabetes / blood sugar)", "sugar_problems")}
                   {row(
-                    "Sugar notes",
+                    "Notes",
                     <textarea
                       maxLength={500}
-                      value={form.sugar_problems_notes}
-                      onChange={(e) => set("sugar_problems_notes")(e.target.value)}
+                      placeholder="Any other notes about health"
+                      value={form.notes}
+                      onChange={(e) => set("notes")(e.target.value)}
                     />,
-                    form.sugar_problems_notes,
+                    form.notes,
                   )}
                 </div>
               </section>

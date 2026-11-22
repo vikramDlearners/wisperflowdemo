@@ -156,7 +156,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\"section\":\"medical\",\"calcium_deficiency\":true,\"calcium_deficiency_notes\":\"Low calcium on last blood test; takes supplements\",\"sugar_problems\":true,\"sugar_problems_notes\":\"Type 2 diabetes, on metformin\"}",
+          "raw": "{\"section\":\"medical\",\"deficiencies\":\"Calcium deficiency (low calcium on last blood test; takes supplements); sugar problems (type 2 diabetes, on metformin)\",\"notes\":\"Prefers a morning appointment; check blood sugar before visits\"}",
           "options": {
             "raw": {
               "language": "json"
@@ -177,7 +177,7 @@
             "profile"
           ]
         },
-        "description": "Save the health deficiency answers for this parent (section medical). calcium_deficiency and sugar_problems are yes/no booleans (send null to clear); the *_notes fields are optional text up to 500 characters. Returns 200 with ProfileOut, which includes these four fields. Needs parent_profile.edit."
+        "description": "Save the health deficiencies and notes for this parent (section medical). deficiencies and notes are optional free-text fields up to 500 characters each (send null or an empty string to clear). Returns 200 with ProfileOut, which includes deficiencies and notes. Needs parent_profile.edit."
       }
     },
 
