@@ -346,7 +346,7 @@ def test_not_taken_not_reasked_same_exchange_but_after_30_minutes(db_session, wo
     assert turn.bot_messages[0] == "Okay, I've noted it."
     assert not any("Amlodipine" in m for m in turn.bot_messages)
     assert turn.checkin.step == "done"
-    turn = engine.handle_parent_text(db_session, world["ctx"], "nothing more", NOW + timedelta(minutes=5))
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I slept well", NOW + timedelta(minutes=5))
     assert turn.bot_messages[-1] == "Is there anything else you'd like to tell me?"
     turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=29))
     assert turn.bot_messages == []
@@ -372,3 +372,94 @@ def test_record_dose_value_error_does_not_crash_or_alert(db_session, world, emai
     turn = engine.handle_parent_text(db_session, world["ctx"], "yes", NOW)
     assert turn.bot_messages == ["Did you take Amlodipine?"]
     assert db_session.execute(select(MedicineDose)).scalars().all() == []
+
+
+# ---------- urgent words in any step ----------
+
+URGENT_EN = "I've alerted Carer Doe, Manager and Viewer Doe right now. You can also call them using the button below."
+
+
+def _urgent_notes(db):
+    return db.execute(select(Notification).where(Notification.type == "checkin.urgent")).scalars().all()
+
+
+def test_urgent_during_medicines_alerts_and_still_asks_the_medicine(db_session, world, email):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "my knee hurts", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "help, I fell", NOW)
+    assert turn.urgent is True and turn.checkin.urgent is True
+    assert turn.call_number == "+91 98765 43210"
+    assert turn.bot_messages[0] == URGENT_EN
+    assert turn.bot_messages[-1] == "Did you take Amlodipine?"
+    assert turn.checkin.step == "medicines"
+    assert len(_urgent_notes(db_session)) == 3  # one alert per member, not two
+    assert {s for _, s, _ in email.sent} == {"Needs attention now: Amma"} and len(email.sent) == 3
+
+
+def test_urgent_during_medicines_still_records_the_answer(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I took both but I feel dizzy", NOW)
+    assert turn.bot_messages[0] == URGENT_EN
+    assert "Okay, I've noted it." in turn.bot_messages
+    assert {d.status for d in db_session.execute(select(MedicineDose)).scalars()} == {"taken"}
+    assert turn.checkin.step == "done"
+    assert len(_urgent_notes(db_session)) == 3
+
+
+def test_urgent_in_health_step_alerts_once(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "help, I fell", NOW)
+    assert len(_urgent_notes(db_session)) == 3
+
+
+# ---------- urgent reply never promises what is not there ----------
+
+def test_urgent_reply_without_a_phone_number_mentions_no_button(db_session, world):
+    row = db_session.execute(select(ParentOnboardingProfile)).scalar_one()
+    row.caregiver_phone = None
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I fell", NOW)
+    assert turn.call_number is None
+    assert turn.bot_messages[0] == reply("health_urgent_no_phone", "en", family="Carer Doe, Manager and Viewer Doe")
+    assert "button" not in turn.bot_messages[0]
+    assert "Carer Doe" in turn.bot_messages[0]
+
+
+def test_urgent_reply_with_no_family_to_alert_does_not_claim_an_alert(db_session, world):
+    from app.models.membership import FamilyMember
+
+    for m in db_session.execute(select(FamilyMember)).scalars():
+        if m.user_id != world["parent"].id:
+            m.status = "removed"
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I fell", NOW)
+    assert turn.call_number is None
+    assert turn.bot_messages[0] == reply("health_urgent_alone", "en")
+    assert "alerted" not in turn.bot_messages[0]
+    assert _urgent_notes(db_session) == []
+
+
+@pytest.mark.parametrize("language", ["en", "ta", "hi", "te", "ml", "kn"])
+def test_urgent_variants_translated(language):
+    from app.services.replies import TEMPLATES
+
+    for key in ("health_urgent", "health_urgent_no_phone", "health_urgent_alone", "health_urgent_call_only"):
+        assert key in TEMPLATES[language], (language, key)
+
+
+# ---------- closings after "done" are not health news ----------
+
+@pytest.mark.parametrize("closing", ["ok", "Okay, bye!", "thank you", "Thanks", "நன்றி", "धन्यवाद", "ठीक है", "no"])
+def test_done_step_closing_is_not_shared(db_session, world, closing):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "my knee hurts", NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "yes", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], closing, NOW)
+    assert turn.checkin.step == "done"
+    assert turn.checkin.health_text == "my knee hurts"
+    assert turn.bot_messages == ["Take care, Amma. Talk to you soon!"]
+    updates = db_session.execute(select(Notification).where(Notification.type == "checkin.update")).scalars().all()
+    assert len(updates) == 3  # only the first health answer

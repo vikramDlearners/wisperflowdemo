@@ -4,6 +4,7 @@ One check-in per care profile per local day. Every bot and parent message is sto
 step change writes a "checkin.updated" activity row. Medicine names only ever come from the due-dose list.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -41,6 +42,20 @@ GREET, HEALTH, MEDICINES, APPOINTMENTS, DONE = "greet", "health", "medicines", "
 MANAGER_ROLE = "Family manager"
 UPCOMING_STATUSES = ("scheduled", "rescheduled")
 NOT_TAKEN_REASK = timedelta(minutes=30)
+
+# Pure closings after "done" ("ok", "thank you", "bye"): not health news, so never appended or shared.
+# Longest first, so "thank you" is removed before "thank".
+_CLOSINGS = tuple(sorted({
+    "ok", "okay", "okey", "k", "fine", "alright", "all right", "good", "bye", "bye bye", "goodbye", "good bye",
+    "see you", "good night", "thank you", "thank you so much", "thank you very much", "thanks", "thanks a lot",
+    "thank u", "no", "nope", "nothing", "nothing else", "nothing more", "that's all", "that is all", "yes",
+    "நன்றி", "ரொம்ப நன்றி", "மிக்க நன்றி", "சரி", "போதும்", "ஒன்றுமில்லை", "ஒன்னுமில்லை", "இல்லை", "வணக்கம்", "பை",
+    "धन्यवाद", "शुक्रिया", "ठीक है", "ठीक", "बस", "अलविदा", "नहीं", "कुछ नहीं", "हाँ", "हां", "नमस्ते", "बाय",
+    "ధన్యవాదాలు", "ధన్యవాదం", "సరే", "ఏమీ లేదు", "లేదు", "బై",
+    "നന്ദി", "ശരി", "ഒന്നുമില്ല", "ഇല്ല", "ബൈ",
+    "ಧನ್ಯವಾದ", "ಧನ್ಯವಾದಗಳು", "ಸರಿ", "ಏನೂ ಇಲ್ಲ", "ಇಲ್ಲ", "ಬೈ",
+}, key=len, reverse=True))
+_PUNCTUATION = re.compile(r"[.,!?;:।\"]+")
 
 
 @dataclass
@@ -294,14 +309,36 @@ def _appointments_and_done(db: Session, ctx: ParentContext, checkin: HealthCheck
 
 # ---------- health ----------
 
+def _urgent(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str) -> str:
+    """Mark the check-in urgent, alert the family once, and say only what is true: who was alerted and
+    whether a Call button exists (call_number) at all."""
+    checkin.urgent = True
+    notify_family_urgent(db, ctx, checkin, text)
+    has_family = bool(other_members(db, ctx))
+    has_phone = call_number(db, ctx) is not None
+    if has_family:
+        key = "health_urgent" if has_phone else "health_urgent_no_phone"
+        return _say(ctx, key, family=_family_names(db, ctx))
+    return _say(ctx, "health_urgent_call_only" if has_phone else "health_urgent_alone")
+
+
 def _share_health(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str) -> str:
-    family = _family_names(db, ctx)
     if is_urgent(text):
-        checkin.urgent = True
-        notify_family_urgent(db, ctx, checkin, text)
-        return _say(ctx, "health_urgent", family=family)
+        return _urgent(db, ctx, checkin, text)
     notify_family_update(db, ctx, checkin)
-    return _say(ctx, "health_noted", family=family)
+    return _say(ctx, "health_noted", family=_family_names(db, ctx))
+
+
+def is_closing(text: str) -> bool:
+    """True for pure closings ("ok", "thank you, bye", "நன்றி") that carry no health news."""
+    words = _PUNCTUATION.sub(" ", (text or "").lower().replace("’", "'")).split()
+    if not words:
+        return False
+    rest = f" {' '.join(words)} "
+    for phrase in _CLOSINGS:
+        while f" {phrase} " in rest:  # also adjacent repeats ("ok ok")
+            rest = rest.replace(f" {phrase} ", " ")
+    return not rest.strip()
 
 
 # ---------- public API ----------
@@ -399,10 +436,18 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         msgs = [_share_health(db, ctx, checkin, text)]
         _set_step(db, ctx, checkin, MEDICINES, now)
         msgs += _continue_medicines(db, ctx, checkin, now, announce_none=True)
-    elif checkin.step == MEDICINES:
-        msgs = _handle_medicines(db, ctx, checkin, text, now)
-    elif checkin.step == APPOINTMENTS:
-        msgs = _appointments_and_done(db, ctx, checkin, now)
+    elif checkin.step in (MEDICINES, APPOINTMENTS):
+        # Urgent words are acted on in every step; the current step then carries on with the same text.
+        msgs = []
+        if is_urgent(text):
+            checkin.health_text = f"{checkin.health_text}\n{text}" if checkin.health_text else text
+            msgs.append(_urgent(db, ctx, checkin, text))
+        if checkin.step == MEDICINES:
+            msgs += _handle_medicines(db, ctx, checkin, text, now)
+        else:
+            msgs += _appointments_and_done(db, ctx, checkin, now)
+    elif is_closing(text) and not is_urgent(text):
+        msgs = _reopen_or(db, ctx, checkin, now, _say(ctx, "goodbye", name=ctx.greeting_name))
     else:
         checkin.health_text = f"{checkin.health_text}\n{text}" if checkin.health_text else text
         msgs = [_share_health(db, ctx, checkin, text)]
