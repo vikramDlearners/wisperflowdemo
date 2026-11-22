@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     gemini_api_key: Optional[str] = None
     gemini_model: str = "gemini-2.5-flash"
     elevenlabs_api_key: Optional[str] = None
+    elevenlabs_stt_model: str = "scribe_v1"
+    elevenlabs_tts_model: str = "eleven_multilingual_v2"
+    elevenlabs_voice_id: Optional[str] = None
 
     intent_mode: str = "offline_rules"
 
