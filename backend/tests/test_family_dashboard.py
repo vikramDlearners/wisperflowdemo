@@ -17,7 +17,7 @@ from app.services.auth import create_auth_session
 EXPECTED_KEYS = {
     "parents",
     "selected_care_profile_id",
-    "date",
+    "on_date",
     "daily_medicine_count",
     "medicines_today",
     "today_schedule",
@@ -125,13 +125,13 @@ def test_response_shape(client, db_session, dashboard_setup):
     parent = body["parents"][0]
     assert set(parent) == {
         "care_profile_id", "display_name", "relationship", "age", "photo_url",
-        "known_health_conditions", "primary_caregiver_name", "all_good",
+        "known_health_conditions", "primary_caregiver_name", "all_good", "gender",
     }
     assert body["selected_care_profile_id"] == s["appa"].id
     assert body["daily_medicine_count"] == 3
     assert set(body["medicines_today"]) == {"taken", "total"}
     assert set(body["emergency"]) == {"active", "last_check_at"}
-    assert body["date"] == doses_svc.today_for(s["appa"], datetime.now(timezone.utc)).isoformat()
+    assert body["on_date"] == doses_svc.today_for(s["appa"], datetime.now(timezone.utc)).isoformat()
 
 
 def test_medicine_stock_days_left_and_low_flag(client, db_session, dashboard_setup):
@@ -167,7 +167,8 @@ def test_medicines_today_taken_and_total(client, db_session, dashboard_setup):
     assert body["medicines_today"] == {"taken": 1, "total": 4}
     taken = [i for i in body["today_schedule"] if i["status"] == "taken"]
     assert [(i["medicine_name"], i["slot"]) for i in taken] == [("Amlodipine", "08:00")]
-    assert {i["status"] for i in body["today_schedule"]} == {"taken", "pending"}
+    # A slot with no answer yet has status null; the dashboard page shows it as "Pending".
+    assert {i["status"] for i in body["today_schedule"]} == {"taken", None}
 
 
 def test_next_appointment_is_earliest_upcoming_scheduled(client, db_session, dashboard_setup):

@@ -102,10 +102,12 @@ def test_invite_rejects_non_parent_member(client, db_session, family_setup, emai
 
 
 def test_invite_requires_members_manage(client, db_session, family_setup, email):
+    # Parents now have every permission (codebenders f65f33d), so use the Viewer member: no members.manage.
     setup = family_setup
+    viewer_id = setup["caregiver_membership"].user_id
     response = client.post(
         _invite_url(setup["family_id"], setup["membership"].id),
-        headers={"Authorization": f"Bearer {create_auth_session(db_session, setup['membership'].user_id)}"},
+        headers={"Authorization": f"Bearer {create_auth_session(db_session, viewer_id)}"},
     )
     assert response.status_code == 403
     assert email.sent == []

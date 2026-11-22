@@ -153,7 +153,9 @@ def build_family_dashboard(
     schedule: list[dict[str, Any]] = []
     stock: list[dict[str, Any]] = []
     taken = total = 0
+    medicine_count = 0  # "N Medicine(s) daily" counts medicines; total counts today's dose slots
     for med, slots in _active_medicines(db, selected.id):
+        medicine_count += 1
         total += len(slots)
         for slot in slots:
             row = logged.get((med.id, slot))
@@ -205,7 +207,7 @@ def build_family_dashboard(
         "parents": parents,
         "selected_care_profile_id": selected.id,
         "on_date": day,
-        "daily_medicine_count": total,
+        "daily_medicine_count": medicine_count,
         "medicines_today": {"taken": taken, "total": total},
         "today_schedule": schedule,
         "medicine_stock": stock,
