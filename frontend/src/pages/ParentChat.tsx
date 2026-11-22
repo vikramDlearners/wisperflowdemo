@@ -61,6 +61,7 @@ export default function ParentChat() {
   const [messages, setMessages] = useState<Bubble[]>([]);
   const [language, setLanguage] = useState("en");
   const [callNumber, setCallNumber] = useState<string | null>(null);
+  const [helpNumber, setHelpNumber] = useState<string | null>(null);
   const [reminders, setReminders] = useState<ReminderDue[]>([]);
   const [phase, setPhase] = useState<Phase>("idle");
   const [notice, setNotice] = useState<string | null>(null);
@@ -80,6 +81,10 @@ export default function ParentChat() {
   const audioRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null);
   const firedRef = useRef<Set<string>>(new Set());
   const busyRef = useRef(false);
+  // Set synchronously on the first tap so a double tap can't start two recordings.
+  const startingRef = useRef(false);
+  // Bumped by every refresh and every turn; a refresh whose number is stale is ignored.
+  const seqRef = useRef(0);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -152,22 +157,27 @@ export default function ParentChat() {
   // ---------- loading the conversation ----------
 
   const refresh = useCallback(async () => {
+    const seq = ++seqRef.current;
     try {
       const data = await getCheckin();
-      if (!mountedRef.current) return;
+      // Ignore a snapshot that a newer turn or refresh has overtaken.
+      if (!mountedRef.current || seq !== seqRef.current) return;
       setMessages(data.messages.map((m: ChatMessage) => ({ sender: m.sender, text: m.text })));
       setLanguage(data.language || "en");
       setCallNumber(data.call_number);
+      setHelpNumber(data.help_number);
       setReminders(data.reminders_due);
       setLoad({ kind: "ready" });
+      // Speaks the greeting / newly asked question (null on a plain reload).
+      playAudio(data.audio, data.audio_type);
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || seq !== seqRef.current) return;
       if (handleAuthError(err)) return;
       setLoad((prev) => (prev.kind === "ready" ? prev : { kind: "error" }));
     } finally {
       if (mountedRef.current) setResponseTick((t) => t + 1);
     }
-  }, [handleAuthError]);
+  }, [handleAuthError, playAudio]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -225,8 +235,10 @@ export default function ParentChat() {
   // ---------- a turn (text or voice) ----------
 
   function applyTurn(turn: TurnOut) {
+    seqRef.current++;
     setMessages((prev) => [...prev, ...turn.messages.map((m) => ({ sender: m.sender, text: m.text }))]);
     if (turn.call_number) setCallNumber(turn.call_number);
+    setHelpNumber(turn.help_number);
     playAudio(turn.audio, turn.audio_type);
     setResponseTick((t) => t + 1);
   }
@@ -242,6 +254,7 @@ export default function ParentChat() {
     if (!value || phase !== "idle") return;
     stopAudio();
     setNotice(null);
+    seqRef.current++;
     setPhase("sending");
     setText("");
     setMessages((prev) => [...prev, { sender: "parent", text: value }]);
@@ -312,7 +325,8 @@ export default function ParentChat() {
       openTextInput();
       return;
     }
-    if (!mountedRef.current) {
+    // Left the page, or a recorder already exists: never keep a second mic stream open.
+    if (!mountedRef.current || recorderRef.current) {
       stream.getTracks().forEach((t) => t.stop());
       return;
     }
@@ -340,6 +354,7 @@ export default function ParentChat() {
       const blob = new Blob(chunksRef.current, { type });
       chunksRef.current = [];
       if (!mountedRef.current) return;
+      seqRef.current++;
       setPhase("sending");
       void submitVoice(blob);
     };
@@ -358,8 +373,17 @@ export default function ParentChat() {
   }
 
   function handleMic() {
-    if (phase === "recording") stopRecording();
-    else if (phase === "idle") void startRecording();
+    if (phase === "recording") {
+      stopRecording();
+      return;
+    }
+    if (phase !== "idle" || startingRef.current) return;
+    startingRef.current = true;
+    busyRef.current = true;
+    void startRecording().finally(() => {
+      startingRef.current = false;
+      busyRef.current = recorderRef.current !== null;
+    });
   }
 
   // ---------- render ----------
@@ -439,10 +463,10 @@ export default function ParentChat() {
 
       {helpOpen && (
         <section id="pc-help-panel" className="pc-help" aria-label="Help">
-          {callNumber ? (
-            <a className="pc-call-btn" href={telHref(callNumber)}>
+          {helpNumber ? (
+            <a className="pc-call-btn" href={telHref(helpNumber)}>
               <span aria-hidden="true">📞</span> Call family
-              <span className="pc-call-number">{callNumber}</span>
+              <span className="pc-call-number">{helpNumber}</span>
             </a>
           ) : (
             <p className="pc-help-text">Ask your family to add a phone number</p>

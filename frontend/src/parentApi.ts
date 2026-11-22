@@ -9,7 +9,8 @@ import { API_BASE_URL, ApiError, getSessionToken } from "./api";
 //                        413 too large, 400 empty, 503 when speech-to-text fails.
 //
 // Errors: 401 signed out, 403 not a parent, 409 parent not linked to a profile.
-// `audio` is base64 (audio_type, usually audio/mpeg) or null when speech is unavailable.
+// `audio` is base64 (audio_type, usually audio/mpeg) or null when speech is unavailable / nothing new.
+// `call_number` is urgent-only; `help_number` is always the family's phone (or null if none).
 
 export interface ChatMessage {
   sender: "bot" | "parent";
@@ -28,9 +29,15 @@ export interface CheckinOut {
   checkin_id: string;
   step: string;
   messages: ChatMessage[];
+  /** Set only once something urgent was reported today (drives the red Call button). */
   call_number: string | null;
+  /** The family's phone for the Help button, urgent or not. */
+  help_number: string | null;
   language: string;
   reminders_due: ReminderDue[];
+  /** Speech for the bot messages this request added (greeting / re-asked question), else null. */
+  audio: string | null;
+  audio_type: string | null;
 }
 
 export interface TurnOut {
@@ -38,6 +45,7 @@ export interface TurnOut {
   step: string;
   urgent: boolean;
   call_number: string | null;
+  help_number: string | null;
   audio: string | null;
   audio_type: string | null;
   transcript?: string;

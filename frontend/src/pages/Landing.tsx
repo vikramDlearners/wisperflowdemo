@@ -4,6 +4,7 @@ import "../auth.css";
 import {
   ApiError,
   auth,
+  families,
   getSessionToken,
   login,
   setRole,
@@ -25,6 +26,18 @@ const ROLE_OPTIONS: { value: RoleChoice; label: string; hint: string; icon: stri
   { value: "hospital", label: "Hospital staff", hint: "Doctor or care team", icon: "🩺" },
   { value: "others", label: "Someone else", hint: "Tell us your role", icon: "✳" },
 ];
+
+// A parent added by their family has no account role yet; their family role says "Parent".
+async function isFamilyParent(): Promise<boolean> {
+  try {
+    const list = await families.list();
+    if (list.length === 0) return false;
+    const access = await families.me(list[0].id);
+    return access.role === "Parent";
+  } catch {
+    return false;
+  }
+}
 
 const CODE_LENGTH = 6;
 const RESEND_SECONDS = 30;
@@ -52,7 +65,8 @@ export default function Landing() {
     async function restoreSession() {
       try {
         const me = await auth.me();
-        navigate(me.role === "parent" ? "/parent/chat" : "/onboarding/parent");
+        const parent = me.role === "parent" || (me.role == null && (await isFamilyParent()));
+        navigate(parent ? "/parent/chat" : "/onboarding/parent");
       } catch {
         // Token is invalid or expired (including 401): forget it and stay here.
         setSessionToken(null);
@@ -140,6 +154,10 @@ export default function Landing() {
       // verifyOtp stores session_token the same way auth.verify does.
       const session = await verifyOtp(email.trim(), fullCode);
       if (session.user.role == null) {
+        if (await isFamilyParent()) {
+          navigate("/parent/chat");
+          return;
+        }
         setNotice(null);
         setStep("role");
       } else {

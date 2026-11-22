@@ -65,17 +65,21 @@ def _speak(texts: list[str], language: str) -> tuple[str | None, str | None]:
     except SpeechUnavailable:
         logger.info("Text-to-speech unavailable; replying with text only")
         return None, None
+    except Exception:  # noqa: BLE001 - speech is optional; never fail the reply over it
+        logger.exception("Text-to-speech failed; replying with text only")
+        return None, None
     return base64.b64encode(audio).decode("ascii"), mime
 
 
-def _turn_fields(turn: engine.Turn, language: str) -> dict:
-    audio, audio_type = _speak(turn.bot_messages, language)
+def _turn_fields(db: Session, ctx: ParentContext, turn: engine.Turn) -> dict:
+    audio, audio_type = _speak(turn.bot_messages, ctx.language)
     return {
         "messages": [TurnMessageOut(sender="bot", text=t) for t in turn.bot_messages],
         "step": turn.checkin.step,
         # Stays true for the rest of the day once anything urgent was reported.
         "urgent": turn.urgent,
         "call_number": turn.call_number,
+        "help_number": engine.call_number(db, ctx),
         "audio": audio,
         "audio_type": audio_type,
     }
@@ -86,13 +90,18 @@ def get_checkin(db: Session = DbSession, user: User = CurrentUser) -> CheckinOut
     ctx = resolve_parent(db, user)
     now = _now()
     turn = engine.start_or_resume(db, ctx, now)
+    # Only what this request stored is spoken (a reload that adds nothing stays silent).
+    audio, audio_type = _speak(turn.bot_messages, ctx.language)
     return CheckinOut(
         checkin_id=turn.checkin.id,
         step=turn.checkin.step,
         messages=_messages(db, turn.checkin),
         call_number=turn.call_number,
+        help_number=engine.call_number(db, ctx),
         language=ctx.language,
         reminders_due=_reminders_due(db, ctx, now),
+        audio=audio,
+        audio_type=audio_type,
     )
 
 
@@ -100,7 +109,7 @@ def get_checkin(db: Session = DbSession, user: User = CurrentUser) -> CheckinOut
 def post_text(body: ParentTextIn, db: Session = DbSession, user: User = CurrentUser) -> TurnOut:
     ctx = resolve_parent(db, user)
     turn = engine.handle_parent_text(db, ctx, body.text, _now())
-    return TurnOut(**_turn_fields(turn, ctx.language))
+    return TurnOut(**_turn_fields(db, ctx, turn))
 
 
 @router.post("/checkin/voice", response_model=VoiceTurnOut)
@@ -122,4 +131,4 @@ def post_voice(
     if not transcript:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, VOICE_UNAVAILABLE)
     turn = engine.handle_parent_text(db, ctx, transcript, _now())
-    return VoiceTurnOut(**_turn_fields(turn, ctx.language), transcript=transcript)
+    return VoiceTurnOut(**_turn_fields(db, ctx, turn), transcript=transcript)

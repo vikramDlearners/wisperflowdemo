@@ -458,8 +458,13 @@ class CheckinOut(BaseModel):
     step: str
     messages: list[ChatMessageOut]
     call_number: str | None
+    # The family's phone for the Help button, whether or not anything urgent was reported.
+    help_number: str | None
     language: str
     reminders_due: list[ReminderDueOut]
+    # Speech for the bot messages this request stored (greeting / re-asked question), else null.
+    audio: str | None = None
+    audio_type: str | None = None
 
 
 class ParentTextIn(BaseModel):
@@ -476,6 +481,7 @@ class TurnOut(BaseModel):
     step: str
     urgent: bool
     call_number: str | None
+    help_number: str | None
     audio: str | None
     audio_type: str | None
 

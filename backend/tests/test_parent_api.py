@@ -48,6 +48,12 @@ def fixed_now(monkeypatch):
     monkeypatch.setattr(parent_api, "_now", lambda: NOW)
 
 
+@pytest.fixture(autouse=True)
+def no_real_tts(monkeypatch):
+    # GET now speaks too: never reach the real TTS service from tests (the `tts` fixture overrides this).
+    monkeypatch.setattr(parent_api, "get_text_to_speech", lambda: FakeTTS(fail=True))
+
+
 @pytest.fixture()
 def tts(monkeypatch):
     fake = FakeTTS()
@@ -65,7 +71,10 @@ def test_get_checkin_starts_today(client, db_session, world):
     r = client.get("/api/parent/checkin", headers=_auth(db_session, world["parent"]))
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"checkin_id", "step", "messages", "call_number", "language", "reminders_due"}
+    assert set(body) == {
+        "checkin_id", "step", "messages", "call_number", "help_number", "language", "reminders_due",
+        "audio", "audio_type",
+    }
     assert body["step"] == "health"
     assert body["language"] == "en"
     assert [(m["sender"], m["text"]) for m in body["messages"]] == [
@@ -94,7 +103,7 @@ def test_text_turn_returns_messages_and_audio(client, db_session, world, tts):
     r = client.post("/api/parent/checkin/text", json={"text": "my knee hurts"}, headers=headers)
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"messages", "step", "urgent", "call_number", "audio", "audio_type"}
+    assert set(body) == {"messages", "step", "urgent", "call_number", "help_number", "audio", "audio_type"}
     assert body["messages"][0] == {
         "sender": "bot",
         "text": "Thank you for telling me. I've shared it with Carer Doe, Manager and Viewer Doe.",
@@ -103,7 +112,8 @@ def test_text_turn_returns_messages_and_audio(client, db_session, world, tts):
     assert body["urgent"] is False and body["call_number"] is None
     assert base64.b64decode(body["audio"]) == b"MP3DATA"
     assert body["audio_type"] == "audio/mpeg"
-    assert tts.calls == [(" ".join(m["text"] for m in body["messages"]), "en")]
+    # calls[0] is the greeting spoken by the GET; the turn's reply is spoken last.
+    assert tts.calls[-1] == (" ".join(m["text"] for m in body["messages"]), "en")
 
 
 def test_text_turn_audio_null_when_tts_fails(client, db_session, world, monkeypatch):
@@ -218,3 +228,72 @@ def test_reload_after_reminder_time_asks_once(client, db_session, world, tts, mo
     body = client.get("/api/parent/checkin", headers=headers).json()
     assert _texts(body).count(ask) == 2
     assert _texts(body).count("Good morning, Amma!") == 1
+
+
+PHONE = "+91 98765 43210"
+
+
+def test_help_number_on_get_without_anything_urgent(client, db_session, world):
+    body = client.get("/api/parent/checkin", headers=_auth(db_session, world["parent"])).json()
+    assert body["call_number"] is None
+    assert body["help_number"] == PHONE
+
+
+def test_help_number_on_text_turn_without_anything_urgent(client, db_session, world, tts):
+    r = client.post("/api/parent/checkin/text", json={"text": "I am fine"},
+                    headers=_auth(db_session, world["parent"]))
+    body = r.json()
+    assert body["urgent"] is False and body["call_number"] is None
+    assert body["help_number"] == PHONE
+
+
+def test_help_number_on_voice_turn(client, db_session, world, tts, monkeypatch):
+    _stt(monkeypatch, text="I am fine")
+    r = client.post("/api/parent/checkin/voice", files={"file": ("v.webm", b"abc", "audio/webm")},
+                    headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 200
+    assert r.json()["help_number"] == PHONE
+
+
+def test_first_get_speaks_the_greeting_and_reload_is_silent(client, db_session, world, tts):
+    headers = _auth(db_session, world["parent"])
+    body = client.get("/api/parent/checkin", headers=headers).json()
+    assert base64.b64decode(body["audio"]) == b"MP3DATA"
+    assert body["audio_type"] == "audio/mpeg"
+    assert tts.calls == [("Good morning, Amma! How are you feeling today?", "en")]
+
+    body = client.get("/api/parent/checkin", headers=headers).json()
+    assert body["audio"] is None and body["audio_type"] is None
+    assert len(tts.calls) == 1
+
+
+def test_get_audio_null_when_tts_fails(client, db_session, world):
+    # no_real_tts makes synthesize raise SpeechUnavailable.
+    r = client.get("/api/parent/checkin", headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 200
+    assert r.json()["audio"] is None and r.json()["audio_type"] is None
+    assert r.json()["messages"]
+
+
+def test_get_audio_null_when_tts_crashes(client, db_session, world, monkeypatch):
+    class Broken:
+        def synthesize(self, text, language):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(parent_api, "get_text_to_speech", lambda: Broken())
+    r = client.get("/api/parent/checkin", headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 200
+    assert r.json()["audio"] is None
+
+
+def test_reminder_reload_speaks_the_new_question(client, db_session, world, tts, monkeypatch):
+    world["meds"][1].active = False
+    db_session.commit()
+    headers = _auth(db_session, world["parent"])
+    client.get("/api/parent/checkin", headers=headers)
+    client.post("/api/parent/checkin/text", json={"text": "fine"}, headers=headers)
+    client.post("/api/parent/checkin/text", json={"text": "remind me in 10 minutes"}, headers=headers)
+    monkeypatch.setattr(parent_api, "_now", lambda: NOW + timedelta(minutes=11))
+    body = client.get("/api/parent/checkin", headers=headers).json()
+    assert body["audio"] is not None
+    assert tts.calls[-1] == ("Did you take Amlodipine?", "en")
