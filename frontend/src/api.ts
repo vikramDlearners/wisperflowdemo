@@ -239,6 +239,19 @@ export interface ActivityOut {
   created_at: string;
 }
 
+// Mirrors backend ConversationSummaryOut (GET /api/families/{family_id}/conversation-summaries).
+export interface ConversationSummaryOut {
+  id: string;
+  checkin_id: string | null;
+  care_profile_id: string | null;
+  from_seq: number | null;
+  to_seq: number | null;
+  summary: string;
+  important: unknown[] | null;
+  source: string;
+  created_at: string;
+}
+
 export interface IntentModeOut {
   intent_mode: string;
 }
@@ -367,6 +380,8 @@ export const families = {
   create: (body: FamilyCreate) => post<FamilyOut>("/api/families", body),
   get: (familyId: string) => get<FamilyOut>(`/api/families/${familyId}`),
   me: (familyId: string) => get<MyAccess>(`/api/families/${familyId}/me`),
+  conversationSummaries: (familyId: string) =>
+    get<ConversationSummaryOut[]>(`/api/families/${familyId}/conversation-summaries`),
 };
 
 // ---- members (verified against api/families.py) ----
@@ -406,12 +421,19 @@ export interface DoseToday {
   recorded_at: string | null;
 }
 
+export interface MedicineLastTakenOut {
+  medicine_id: string;
+  last_taken_at: string | null;
+}
+
 export const medicines = {
   dosesToday: (familyId: string, careProfileId: string) =>
     get<DoseToday[]>(
       `/api/families/${familyId}/medicines/doses/today?care_profile_id=${encodeURIComponent(careProfileId)}`,
     ),
   list: (familyId: string) => get<MedicineOut[]>(`/api/families/${familyId}/medicines`),
+  lastTaken: (familyId: string) =>
+    get<MedicineLastTakenOut[]>(`/api/families/${familyId}/medicines/last-taken`),
   create: (familyId: string, body: MedicineCreate) =>
     post<MedicineOut>(`/api/families/${familyId}/medicines`, body),
   get: (familyId: string, medicineId: string) =>
@@ -444,6 +466,8 @@ export const tasks = {
     post<TaskOut>(`/api/families/${familyId}/tasks/${taskId}/assign`, body),
   complete: (familyId: string, taskId: string) =>
     post<TaskOut>(`/api/families/${familyId}/tasks/${taskId}/complete`),
+  notify: (familyId: string, taskId: string) =>
+    post<TaskOut>(`/api/families/${familyId}/tasks/${taskId}/notify`),
   updateStatus: (familyId: string, taskId: string, body: TaskStatusUpdate) =>
     patch<TaskOut>(`/api/families/${familyId}/tasks/${taskId}/status`, body),
 };

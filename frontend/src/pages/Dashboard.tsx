@@ -9,6 +9,8 @@ import {
   type DashboardParentOut,
   type DashboardResponse,
   type DashboardStockItemOut,
+  tasks,
+  type TaskOut,
 } from "../api";
 
 // Family dashboard: GET /api/families/{familyId}/dashboard, optionally scoped
@@ -88,6 +90,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+  const [familyTasks, setFamilyTasks] = useState<TaskOut[]>([]);
+  const [tasksError, setTasksError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -120,6 +124,22 @@ export default function Dashboard() {
       active = false;
     };
   }, [familyId, selectedId]);
+
+  useEffect(() => {
+    let active = true;
+    setTasksError(null);
+    tasks
+      .list(familyId)
+      .then((res) => {
+        if (active) setFamilyTasks(res);
+      })
+      .catch((err) => {
+        if (active) setTasksError(errorText(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, [familyId]);
 
   const greeting = `Good Evening, ${userName ?? "there"}`;
 
@@ -324,16 +344,20 @@ export default function Dashboard() {
             </table>
           </section>
 
-          <section className="db-card db-tint-lavender" aria-label="Recent activity">
-            <h2 className="db-card-title">Recent Activity</h2>
-            {data.recent_activity.length === 0 ? (
-              <p className="pp-muted">No recent activity.</p>
+          <section className="db-card db-tint-lavender" aria-label="Tasks">
+            <h2 className="db-card-title">Tasks</h2>
+            {tasksError ? (
+              <p className="pp-muted">{tasksError}</p>
+            ) : familyTasks.length === 0 ? (
+              <p className="pp-muted">No tasks for this family.</p>
             ) : (
               <ul className="db-list">
-                {data.recent_activity.map((a) => (
-                  <li key={a.id} className="db-row">
-                    <span className="db-row-main">{a.text}</span>
-                    <span className="pp-muted db-stamp">{formatStamp(a.created_at)}</span>
+                {familyTasks.map((t) => (
+                  <li key={t.id} className="db-row">
+                    <span className="db-row-main">{t.title}</span>
+                    <span className="pp-muted db-stamp">
+                      {t.due_at ? formatStamp(t.due_at) : t.status}
+                    </span>
                   </li>
                 ))}
               </ul>

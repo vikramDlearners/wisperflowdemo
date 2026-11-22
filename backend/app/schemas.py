@@ -182,6 +182,12 @@ class MedicineOut(BaseModel):
     total_price: Decimal | None = None
 
 
+class MedicineLastTakenOut(BaseModel):
+    medicine_id: str
+    last_taken_at: datetime | None
+
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
@@ -233,6 +239,18 @@ class ActivityOut(BaseModel):
     object_type: str
     object_id: str | None
     metadata: dict | None
+    created_at: datetime
+
+
+class ConversationSummaryOut(BaseModel):
+    id: str
+    checkin_id: str
+    care_profile_id: str
+    from_seq: int
+    to_seq: int
+    summary: str
+    important: list | None
+    source: str
     created_at: datetime
 
 

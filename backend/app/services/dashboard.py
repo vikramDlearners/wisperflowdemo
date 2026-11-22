@@ -92,18 +92,29 @@ def _parent_card(db: Session, profile: CareProfile, day: date) -> dict[str, Any]
     }
 
 
+# User-initiated actions shown in Recent Activity. Anything not listed here (checkin.*, family.*,
+# settings.*, medicine.quantity_updated, medicine.reminders_set, ...) is hidden.
+ACTIVITY_LABELS: dict[str, str] = {
+    "appointment.created": "Appointment created",
+    "appointment.updated": "Appointment updated",
+    "appointment.deleted": "Appointment deleted",
+    "medicine.created": "Medicine added",
+    "medicine.deleted": "Medicine removed",
+    "medicine.image_uploaded": "Medicine photo uploaded",
+    "care_profile.created": "Parent profile added",
+    "care_profile.deleted": "Parent profile removed",
+    "task.notified": "Task notification sent",
+}
+
+
 def _activity_text(row: ActivityLog) -> str:
-    text = row.action.replace(".", " ").replace("_", " ").capitalize()
-    if isinstance(row.metadata_json, dict) and row.metadata_json:
-        details = ", ".join(f"{k}: {v}" for k, v in row.metadata_json.items())
-        text = f"{text} ({details})"
-    return text
+    return ACTIVITY_LABELS.get(row.action, "")
 
 
 def _recent_activity(db: Session, family_id: str) -> list[dict[str, Any]]:
     rows = db.execute(
         select(ActivityLog)
-        .where(ActivityLog.family_id == family_id)
+        .where(ActivityLog.family_id == family_id, ActivityLog.action.in_(list(ACTIVITY_LABELS)))
         .order_by(ActivityLog.created_at.desc())
         .limit(RECENT_ACTIVITY_LIMIT)
     ).scalars().all()

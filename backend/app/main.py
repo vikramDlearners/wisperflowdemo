@@ -11,6 +11,7 @@ from app.api import (
     appointments,
     auth,
     care_profiles,
+    conversation_summaries,
     families,
     medicines,
     notifications,
@@ -97,6 +98,7 @@ for _router in (
     appointments.router,
     notifications.router,
     activity.router,
+    conversation_summaries.router,
     settings.router,
     parent.router,
 ):

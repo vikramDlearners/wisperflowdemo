@@ -92,7 +92,6 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
     { key: "tasks", icon: "☷", label: "Tasks", to: fam("/tasks") },
     { key: "appointments", icon: "▦", label: "Appointments", to: fam("/appointments") },
     { key: "records", icon: "▧", label: "Records", to: fam("/records") },
-    { key: "timeline", icon: "↗", label: "Family timeline", to: fam("/timeline") },
   ];
   const settings: NavItem[] = [
     { key: "members", icon: "♙", label: "Family members", to: fam("/members") },

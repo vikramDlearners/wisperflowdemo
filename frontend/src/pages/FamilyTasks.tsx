@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError, members, tasks } from "../api";
 import type { MemberOut, TaskOut } from "../api";
+import WorkspaceLayout from "../components/WorkspaceLayout";
 import "../tasks.css";
+
 
 interface FamilyTasksProps {
   familyId: string;
@@ -67,6 +69,7 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState<boolean>(false);
+  const [notifyState, setNotifyState] = useState<Record<string, "pending" | "sent">>({});
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -107,6 +110,23 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
       setActionError(messageOf(err));
     }
   };
+
+  const notifyThem = (taskId: string) =>
+    runAction(async () => {
+      setNotifyState((prev) => ({ ...prev, [taskId]: "pending" }));
+      try {
+        const updated = await tasks.notify(familyId, taskId);
+        setNotifyState((prev) => ({ ...prev, [taskId]: "sent" }));
+        return updated;
+      } catch (err: unknown) {
+        setNotifyState((prev) => {
+          const next = { ...prev };
+          delete next[taskId];
+          return next;
+        });
+        throw err;
+      }
+    });
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -244,7 +264,21 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
           >
             Complete
           </button>
+
+          <button
+            type="button"
+            className="tasks-btn tasks-btn--small"
+            disabled={notifyState[task.id] === "pending"}
+            onClick={() => void notifyThem(task.id)}
+          >
+            Notify them
+          </button>
         </div>
+        {notifyState[task.id] === "sent" && (
+          <p role="status">
+            Notification sent in email, whatsapp and text message. It also appears in the Overview tab.
+          </p>
+        )}
       </li>
     );
   };
@@ -253,7 +287,9 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
   if (error) return <p role="alert">Could not load tasks: {error}</p>;
 
   return (
+    <WorkspaceLayout familyId={familyId} current="tasks" title="Family tasks">
     <section className="tasks-page" aria-labelledby="family-tasks-heading">
+
       <header className="tasks-header">
         <div>
           <p className="tasks-eyebrow">CARE CIRCLE · FAMILY WORKSPACE</p>
@@ -357,5 +393,6 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
         </div>
       )}
     </section>
+    </WorkspaceLayout>
   );
 }
