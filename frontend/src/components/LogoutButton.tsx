@@ -9,9 +9,12 @@ import { auth } from "../api";
 
 interface LogoutButtonProps {
   className?: string;
+  /** Optional translated labels; default to English. */
+  label?: string;
+  busyLabel?: string;
 }
 
-export default function LogoutButton({ className = "" }: LogoutButtonProps) {
+export default function LogoutButton({ className = "", label = "Log out", busyLabel = "Signing out…" }: LogoutButtonProps) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
 
@@ -43,7 +46,7 @@ export default function LogoutButton({ className = "" }: LogoutButtonProps) {
           strokeLinejoin="round"
         />
       </svg>
-      {busy ? "Signing out…" : "Log out"}
+      {busy ? busyLabel : label}
     </button>
   );
 }

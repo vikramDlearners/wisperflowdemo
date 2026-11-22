@@ -269,7 +269,8 @@ export default function ParentChat() {
       setMessages((prev) => prev.slice(0, -1));
       setText(value);
       if (!handleAuthError(err)) {
-        setNotice(err instanceof ApiError && err.status === 400 && err.detail ? err.detail : t.genericError);
+        if (err instanceof ApiError) console.warn("Check-in text failed:", err.status, err.detail);
+        setNotice(t.genericError);
       }
     } finally {
       if (mountedRef.current) setPhase("idle");
@@ -292,10 +293,12 @@ export default function ParentChat() {
       if (!mountedRef.current) return;
       if (handleAuthError(err)) return;
       if (err instanceof ApiError && err.status === 503) {
-        setNotice(err.detail || t.voiceUnavailable);
+        console.warn("Voice unavailable:", err.detail);
+        setNotice(t.voiceUnavailable);
         openTextInput();
       } else if (err instanceof ApiError && (err.status === 413 || err.status === 400)) {
-        setNotice(err.detail || t.genericError);
+        console.warn("Voice turn rejected:", err.status, err.detail);
+        setNotice(t.genericError);
       } else {
         setNotice(t.genericError);
       }
@@ -404,7 +407,7 @@ export default function ParentChat() {
             {t.help}
           </button>
         )}
-        <LogoutButton className="pc-logout" />
+        <LogoutButton className="pc-logout" label={t.logOut} busyLabel={t.signingOut} />
       </div>
     </header>
   );
@@ -424,7 +427,7 @@ export default function ParentChat() {
               <h2>{t.almostThere}</h2>
               <p>{t.notLinked}</p>
               <p>{t.notLinkedHelp}</p>
-              <LogoutButton />
+              <LogoutButton label={t.logOut} busyLabel={t.signingOut} />
             </div>
           )}
           {load.kind === "forbidden" && (

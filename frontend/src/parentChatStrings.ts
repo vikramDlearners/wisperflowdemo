@@ -33,9 +33,13 @@ export interface ParentStrings {
   botSays: string;
   youSaid: string;
   notLinkedHelp: string;
+  logOut: string;
+  signingOut: string;
 }
 
 const en: ParentStrings = {
+  logOut: "Log out",
+  signingOut: "Signing out…",
   tapToSpeak: "Tap to speak",
   tapAgainToSend: "Tap again to send",
   pleaseWait: "Please wait",
@@ -67,6 +71,8 @@ const en: ParentStrings = {
 };
 
 const hi: ParentStrings = {
+  logOut: "लॉग आउट",
+  signingOut: "लॉग आउट हो रहा है…",
   tapToSpeak: "बोलने के लिए दबाएं",
   tapAgainToSend: "भेजने के लिए फिर दबाएं",
   pleaseWait: "कृपया रुकें",
@@ -98,6 +104,8 @@ const hi: ParentStrings = {
 };
 
 const ta: ParentStrings = {
+  logOut: "வெளியேறு",
+  signingOut: "வெளியேறுகிறது…",
   tapToSpeak: "பேச தட்டவும்",
   tapAgainToSend: "அனுப்ப மீண்டும் தட்டவும்",
   pleaseWait: "காத்திருக்கவும்",
@@ -129,6 +137,8 @@ const ta: ParentStrings = {
 };
 
 const te: ParentStrings = {
+  logOut: "లాగ్ అవుట్",
+  signingOut: "లాగ్ అవుట్ అవుతోంది…",
   tapToSpeak: "మాట్లాడటానికి నొక్కండి",
   tapAgainToSend: "పంపడానికి మళ్ళీ నొక్కండి",
   pleaseWait: "దయచేసి వేచి ఉండండి",
@@ -160,6 +170,8 @@ const te: ParentStrings = {
 };
 
 const ml: ParentStrings = {
+  logOut: "ലോഗ് ഔട്ട്",
+  signingOut: "ലോഗ് ഔട്ട് ചെയ്യുന്നു…",
   tapToSpeak: "സംസാരിക്കാൻ തൊടുക",
   tapAgainToSend: "അയയ്ക്കാൻ വീണ്ടും തൊടുക",
   pleaseWait: "ദയവായി കാത്തിരിക്കൂ",
@@ -191,6 +203,8 @@ const ml: ParentStrings = {
 };
 
 const kn: ParentStrings = {
+  logOut: "ಲಾಗ್ ಔಟ್",
+  signingOut: "ಲಾಗ್ ಔಟ್ ಆಗುತ್ತಿದೆ…",
   tapToSpeak: "ಮಾತನಾಡಲು ಒತ್ತಿ",
   tapAgainToSend: "ಕಳುಹಿಸಲು ಮತ್ತೆ ಒತ್ತಿ",
   pleaseWait: "ದಯವಿಟ್ಟು ಕಾಯಿರಿ",
