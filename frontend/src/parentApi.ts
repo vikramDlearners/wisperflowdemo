@@ -81,8 +81,9 @@ async function send<T>(path: string, init: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function getCheckin(): Promise<CheckinOut> {
-  return send<CheckinOut>("/api/parent/checkin", { method: "GET" });
+/** newSession: the chat page just opened, so start a new conversation on screen (fresh greeting). */
+export function getCheckin(newSession = false): Promise<CheckinOut> {
+  return send<CheckinOut>(`/api/parent/checkin${newSession ? "?new_session=true" : ""}`, { method: "GET" });
 }
 
 export function sendText(text: string): Promise<TurnOut> {

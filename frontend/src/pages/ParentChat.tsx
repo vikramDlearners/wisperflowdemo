@@ -232,10 +232,10 @@ export default function ParentChat() {
 
   // ---------- loading the conversation ----------
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (newSession = false) => {
     const seq = ++seqRef.current;
     try {
-      const data = await getCheckin();
+      const data = await getCheckin(newSession);
       // Ignore a snapshot that a newer turn or refresh has overtaken.
       if (!mountedRef.current || seq !== seqRef.current) return;
       setMessages(data.messages.map((m: ChatMessage) => ({ sender: m.sender, text: m.text })));
@@ -257,7 +257,8 @@ export default function ParentChat() {
 
   useEffect(() => {
     mountedRef.current = true;
-    void refresh();
+    // Every opening (or reload) of the chat starts a new conversation on screen.
+    void refresh(true);
     return () => {
       mountedRef.current = false;
     };
@@ -525,7 +526,7 @@ export default function ParentChat() {
                 className="pc-primary-btn"
                 onClick={() => {
                   setLoad({ kind: "loading" });
-                  void refresh();
+                  void refresh(true);
                 }}
               >
                 {t.tryAgain}

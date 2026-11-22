@@ -42,9 +42,10 @@ def _now() -> datetime:
 
 
 def _messages(db: Session, checkin: HealthCheckin) -> list[ChatMessageOut]:
+    # Only the conversation on screen now: each opening of the chat starts a new one.
     return [
         ChatMessageOut(sender=m.sender, text=m.text, created_at=_aware(m.created_at))
-        for m in engine.conversation(db, checkin)
+        for m in engine.session_messages(db, checkin)
     ]
 
 
@@ -91,10 +92,12 @@ def _turn_fields(db: Session, ctx: ParentContext, turn: engine.Turn) -> dict:
 
 
 @router.get("/checkin", response_model=CheckinOut)
-def get_checkin(db: Session = DbSession, user: User = CurrentUser) -> CheckinOut:
+def get_checkin(new_session: bool = False, db: Session = DbSession, user: User = CurrentUser) -> CheckinOut:
+    """Today's conversation. new_session=true (the chat page just opened) starts a new conversation on screen:
+    a fresh greeting and today's open question; earlier messages stay stored but are not returned."""
     ctx = resolve_parent(db, user)
     now = _now()
-    turn = engine.start_or_resume(db, ctx, now)
+    turn = engine.start_new_session(db, ctx, now) if new_session else engine.start_or_resume(db, ctx, now)
     # Only what this request stored is spoken (a reload that adds nothing stays silent).
     audio, audio_type = _speak(turn.bot_messages, ctx.language)
     return CheckinOut(

@@ -640,6 +640,61 @@ def _resume(
     return Turn(checkin=checkin, bot_messages=[], call_number=number, urgent=bool(checkin.urgent))
 
 
+# A second "open" this soon after a new conversation started, with nothing said yet, is the same opening
+# (a double page load), not another conversation.
+SAME_OPENING = timedelta(seconds=15)
+
+
+def _next_seq(db: Session, checkin: HealthCheckin) -> int:
+    db.flush()
+    last = db.execute(select(func.max(ChatMessage.seq)).where(ChatMessage.checkin_id == checkin.id)).scalar()
+    return (last or 0) + 1
+
+
+def session_messages(db: Session, checkin: HealthCheckin) -> list[ChatMessage]:
+    """The messages of the conversation on screen now (from the latest opening of the chat)."""
+    history = conversation(db, checkin)
+    if checkin.session_seq is None:
+        return history
+    return [m for m in history if m.seq >= checkin.session_seq]
+
+
+def _just_opened(db: Session, checkin: HealthCheckin, now: datetime) -> bool:
+    shown = session_messages(db, checkin)
+    if checkin.session_seq is None or not shown or any(m.sender == "parent" for m in shown):
+        return False
+    started = _aware(checkin.updated_at)  # set when this conversation was opened (nothing said since)
+    return started is not None and _aware(now) - started < SAME_OPENING
+
+
+def _opening_questions(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: datetime) -> list[str]:
+    """What to ask after a greeting: whatever today's check-in is still waiting for."""
+    if checkin.step in (GREET, HEALTH):
+        _set_step(db, ctx, checkin, HEALTH, now)
+        return [_say(ctx, "ask_health")]
+    if checkin.step == MEDICINES:
+        return _continue_medicines(db, ctx, checkin, now, announce_none=True)
+    if checkin.step == MEALS_STEP:
+        return _meals_or_done(db, ctx, checkin, now)
+    if checkin.step == APPOINTMENTS:
+        return _appointments_and_done(db, ctx, checkin, now)
+    return _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
+
+
+def start_new_session(db: Session, ctx: ParentContext, now: datetime) -> Turn:
+    """The parent opened the chat: start a new conversation on screen with a greeting and today's open question.
+    Answers already saved today are kept, so nothing answered is asked again."""
+    checkin = _get_or_create(db, ctx, now)
+    if _just_opened(db, checkin, now):
+        number = call_number(db, ctx) if checkin.urgent else None
+        return Turn(checkin=checkin, bot_messages=[], call_number=number, urgent=bool(checkin.urgent))
+    checkin.pending_medicine_id = None  # questions from an earlier opening are asked afresh below
+    checkin.session_seq = _next_seq(db, checkin)
+    checkin.updated_at = now
+    msgs = [_greeting(ctx, now)] + _opening_questions(db, ctx, checkin, now)
+    return _turn(db, ctx, checkin, msgs)
+
+
 def start_or_resume(db: Session, ctx: ParentContext, now: datetime) -> Turn:
     """Open today's check-in. Greets only while the conversation has no stored messages.
 
@@ -651,6 +706,7 @@ def start_or_resume(db: Session, ctx: ParentContext, now: datetime) -> Turn:
     history = conversation(db, checkin)
     if history:
         return _resume(db, ctx, checkin, history, now)
+    checkin.session_seq = _next_seq(db, checkin)
     msgs = [_greeting(ctx, now)]
     if checkin.step in (GREET, HEALTH):
         _set_step(db, ctx, checkin, HEALTH, now)

@@ -37,6 +37,9 @@ class HealthCheckin(Base):
     summary_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # The medicine the bot last asked about by name ("Did you take X?"), so the next answer applies to it.
     pending_medicine_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # Sequence number of the first message of the conversation on screen now: each time the parent opens
+    # the chat a new one starts (earlier messages stay stored but are not shown).
+    session_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ChatMessage(Base):
