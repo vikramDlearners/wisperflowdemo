@@ -5,6 +5,7 @@ offline rule-based intent parser, so callers never see an exception.
 """
 
 import json
+import logging
 import re
 import urllib.error
 import urllib.request
@@ -13,6 +14,7 @@ from typing import Any
 
 from app.core.config import settings
 from app.services.adapters.intent import (
+    _KEYWORDS as _INTENT_KEYWORDS,
     ALLOWED_DELAY_MINUTES,
     CONFIRM_TAKEN,
     MEDICINE_UNAVAILABLE,
@@ -23,6 +25,8 @@ from app.services.adapters.intent import (
 )
 from app.services.doses import DueDose
 from app.services.prescription_scan import GEMINI_ENDPOINT, GEMINI_TIMEOUT_SECONDS
+
+logger = logging.getLogger(__name__)
 
 URGENT_KEYWORDS: dict[str, tuple[str, ...]] = {
     "en": (
@@ -41,16 +45,41 @@ _LATIN_PATTERNS = [
     for k in URGENT_KEYWORDS["en"]
 ]
 _NON_LATIN_KEYWORDS = tuple(k for lang, ks in URGENT_KEYWORDS.items() if lang != "en" for k in ks)
+# Obvious English negations and politeness that contain an urgent word. They are removed before matching, so
+# "I fell asleep and then I fell down" is still urgent. Kept short on purpose: over-alerting is the safe default.
+_URGENT_EXCLUSIONS = re.compile(
+    r"\b(?:thank you|thanks|thank u) (?:so much |very much )?for (?:your|the|all your|all the) help\b"
+    r"|\b(?:didn't|did not|never|haven't|have not) (?:fall|fallen)\b"
+    r"|\bfell asleep\b"
+    r"|\bno (?:chest )?pain\b",
+    re.IGNORECASE,
+)
 
 OUTCOMES = frozenset({"taken", "not_taken", "remind_later", "finished"})
 DEFAULT_DELAY_MINUTES = 15
-_BARE_NO = frozenset({"no", "nope", "nah", "नहीं"})
+_BARE_NO = frozenset({"no", "nope", "nah", "नहीं", "இல்லை", "illai"})
 
+# "Ran out" only for explicit phrases. The shared intent parser maps bare "finished" and Tamil "இல்லை" (no) to
+# MEDICINE_UNAVAILABLE, which is right for its other callers but wrong for a medicine answer, so the medicine rules
+# below never use that intent.
+_FINISHED_PHRASES: tuple[str, ...] = (
+    "ran out", "run out", "running out of", "out of medicine", "out of tablets", "out of pills",
+    "no tablets left", "no medicine left", "no pills left", "no more tablets", "no more medicine",
+    "tablets finished", "tablets are finished", "tablets have finished", "medicine finished",
+    "medicine is finished", "medicine has finished", "medicines finished", "pills finished",
+    "தீர்ந்து",  # ta: தீர்ந்துவிட்டது / தீர்ந்து போச்சு (ran out)
+    "खत्म हो गई", "खत्म हो गया", "खत्म हो गयी", "दवा खत्म", "दवाई खत्म", "गोली खत्म",
+)
+# Negations: "not taken". Checked before the "taken" words, because "not taken" contains "taken".
+_NEGATION_PHRASES: tuple[str, ...] = (
+    "not yet", "not taken", "not now", "haven't", "have not", "didn't", "did not", "not take",
+    "இல்லை", "வில்லை",  # ta: no / negative verb ending (எடுக்கவில்லை, சாப்பிடவில்லை)
+    "नहीं ली", "नहीं लिया", "नहीं ली है", "नहीं खाई", "नहीं खाया", "अभी तक नहीं", "अभी नहीं",
+)
 _RULE_OUTCOMES = {
     CONFIRM_TAKEN: "taken",
     NOT_TAKEN_YET: "not_taken",
     REMIND_LATER: "remind_later",
-    MEDICINE_UNAVAILABLE: "finished",
 }
 
 
@@ -58,6 +87,7 @@ def is_urgent(text: str) -> bool:
     normalised = (text or "").strip().lower().replace("’", "'")
     if not normalised:
         return False
+    normalised = _URGENT_EXCLUSIONS.sub(" ", normalised)
     if any(p.search(normalised) for p in _LATIN_PATTERNS):
         return True
     return any(k in normalised for k in _NON_LATIN_KEYWORDS)
@@ -143,20 +173,36 @@ def _from_gemini(text: str, due: list[DueDose]) -> MedicineAnswers:
     return MedicineAnswers(items=items, delay_minutes=delay)
 
 
+def _rule_outcome(normalised: str) -> str | None:
+    """The medicine outcome for a reply, or None. Explicit "ran out" phrases, then negations, then the shared
+    intent keywords except MEDICINE_UNAVAILABLE (so "finished breakfast and took it" is "taken")."""
+    if any(p in normalised for p in _FINISHED_PHRASES):
+        return "finished"
+    if normalised.strip(".!?, ") in _BARE_NO:
+        return "not_taken"
+    remind = any(k in normalised for intent, ks in _INTENT_KEYWORDS if intent == REMIND_LATER for k in ks)
+    if any(p in normalised for p in _NEGATION_PHRASES) and not remind:
+        return "not_taken"
+    for intent, keywords in _INTENT_KEYWORDS:
+        if intent == MEDICINE_UNAVAILABLE:
+            continue
+        if any(k in normalised for k in keywords):
+            return _RULE_OUTCOMES.get(intent)
+    return None
+
+
 def _from_rules(text: str, due: list[DueDose]) -> MedicineAnswers:
     if not due:
         return MedicineAnswers(unclear=True)
-    result = RuleBasedIntentParser().parse(text)
-    outcome = _RULE_OUTCOMES.get(result.intent)
-    if outcome is None and (text or "").strip().lower().strip(".!? ") in _BARE_NO:
-        outcome = "not_taken"
+    normalised = (text or "").strip().lower().replace("’", "'")
+    outcome = _rule_outcome(normalised)
     if outcome is None:
         return MedicineAnswers(unclear=True)
     if len(due) > 1 and outcome not in ("taken", "not_taken"):
         return MedicineAnswers(unclear=True)
     delay = None
     if outcome == "remind_later":
-        delay = result.delay_minutes or DEFAULT_DELAY_MINUTES
+        delay = RuleBasedIntentParser._extract_delay(normalised) or DEFAULT_DELAY_MINUTES
     return MedicineAnswers(items=[MedicineAnswer(d.medicine_id, outcome) for d in due], delay_minutes=delay)
 
 
@@ -164,6 +210,8 @@ def understand_medicines(text: str, due: list[DueDose], mode: str) -> MedicineAn
     if mode == ONLINE_LLM and settings.gemini_api_key and due:
         try:
             return _from_gemini(text, due)
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 - any failure falls back to the offline rules
+            # Only the exception type and its own message (never the key or the parent's words).
+            logger.warning("Gemini medicine understanding failed, using offline rules: %s: %s",
+                           type(exc).__name__, exc)
     return _from_rules(text, due)

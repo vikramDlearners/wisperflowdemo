@@ -120,3 +120,67 @@ def test_online_without_key_uses_rules(monkeypatch):
     monkeypatch.setattr(understanding, "ask_gemini", boom)
     r = understand_medicines("I took it", [_dose("a")], ONLINE_LLM)
     assert r.items[0].outcome == "taken"
+
+
+# ---------- "ran out" only for explicit phrases; negations are "not taken" ----------
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "இல்லை", "இன்னும் இல்லை", "எடுக்கவில்லை", "சாப்பிடவில்லை",
+        "अभी तक नहीं", "नहीं ली", "नहीं", "अभी नहीं",
+        "not yet", "no", "No.", "I haven't taken it", "I didn't take it",
+    ],
+)
+def test_rules_negations_are_not_taken(text):
+    r = understand_medicines(text, [_dose("a")], OFFLINE_RULES)
+    assert [i.outcome for i in r.items] == ["not_taken"], text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I ran out", "the tablets finished", "medicine finished", "no tablets left", "I am out of medicine",
+        "மருந்து தீர்ந்துவிட்டது", "दवा खत्म हो गई", "गोली खत्म हो गया", "दवा खत्म",
+    ],
+)
+def test_rules_explicit_ran_out_is_finished(text):
+    r = understand_medicines(text, [_dose("a")], OFFLINE_RULES)
+    assert [i.outcome for i in r.items] == ["finished"], text
+
+
+def test_rules_took_beats_finished_breakfast():
+    r = understand_medicines("I finished breakfast and took it", [_dose("a")], OFFLINE_RULES)
+    assert [i.outcome for i in r.items] == ["taken"]
+
+
+def test_rules_no_then_remind_later_still_reminds():
+    r = understand_medicines("No, remind me in 10 minutes", [_dose("a")], OFFLINE_RULES)
+    assert r.items[0].outcome == "remind_later"
+    assert r.delay_minutes == 10
+
+
+@pytest.mark.parametrize(
+    "text", ["thank you for your help", "thanks for the help", "I didn't fall", "I fell asleep early", "no pain today"],
+)
+def test_urgent_false_for_obvious_negations_and_politeness(text):
+    assert is_urgent(text) is False
+
+
+@pytest.mark.parametrize("text", ["I fell asleep and then I fell down", "help, I fell", "no pain but I feel dizzy"])
+def test_urgent_still_true_with_a_real_urgent_word(text):
+    assert is_urgent(text) is True
+
+
+def test_gemini_failure_is_logged_without_the_key(monkeypatch, caplog):
+    monkeypatch.setattr(settings, "gemini_api_key", "secret-key-123")
+
+    def boom(prompt):
+        raise RuntimeError("Gemini request failed with HTTP status 500")
+
+    monkeypatch.setattr(understanding, "ask_gemini", boom)
+    with caplog.at_level("WARNING", logger="app.services.understanding"):
+        understand_medicines("I took it", [_dose("a")], ONLINE_LLM)
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert warnings, "a failed Gemini call must be logged"
+    assert all("secret-key-123" not in r.getMessage() for r in warnings)
