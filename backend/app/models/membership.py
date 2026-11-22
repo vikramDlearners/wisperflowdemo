@@ -25,6 +25,7 @@ class FamilyMember(Base):
     family_id: Mapped[str] = mapped_column(String(36), ForeignKey("families.id"))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     role_id: Mapped[str] = mapped_column(String(36), ForeignKey("roles.id"))
+    relationship: Mapped[str | None] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="active")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow

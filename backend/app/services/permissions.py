@@ -55,6 +55,7 @@ DEFAULT_ROLES: dict[str, frozenset[str]] = {
             "tasks.view",
             "tasks.create",
             "tasks.assign",
+            "members.manage",
             "tasks.update_own",
             "appointments.view",
             "appointments.create",
@@ -75,7 +76,7 @@ DEFAULT_ROLES: dict[str, frozenset[str]] = {
             "activity.view",
         }
     ),
-    "Parent": frozenset({"parent_profile.view", "voice.use_parent_mode"}),
+    "Parent": _ALL,
 }
 
 

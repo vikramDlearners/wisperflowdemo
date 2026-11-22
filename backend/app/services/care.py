@@ -141,6 +141,7 @@ def create_medicine(
     quantity_remaining: int | None = None,
     refill_date: date | None = None,
     responsible_user_id: str | None = None,
+    purpose: str | None = None,
 ) -> Medicine:
     require(db, actor_id, family_id, "medicines.edit")
     _profile_in_family(db, family_id, care_profile_id)
@@ -150,6 +151,7 @@ def create_medicine(
         care_profile_id=care_profile_id,
         display_name=display_name.strip(),
         instructions_text=instructions_text,
+        purpose=purpose,
         quantity_remaining=quantity_remaining,
         refill_date=refill_date,
         responsible_user_id=responsible_user_id,
@@ -167,7 +169,7 @@ def update_medicine(
     require(db, actor_id, family_id, "medicines.edit")
     medicine = _medicine_in_family(db, family_id, medicine_id)
     allowed = {
-        "display_name", "instructions_text", "refill_date", "responsible_user_id", "active",
+        "display_name", "instructions_text", "purpose", "refill_date", "responsible_user_id", "active",
         "unit_price", "total_medicine_count",
     }
     unknown = set(changes) - allowed

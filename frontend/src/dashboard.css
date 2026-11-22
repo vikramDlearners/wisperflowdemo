@@ -1,0 +1,318 @@
+/* Family dashboard: card grid with soft pastel tints on a teal-green palette.
+   Reuses the teal tokens from parent-profile.css (--pp-*). */
+
+.db {
+  --db-teal: var(--pp-teal, #1f7a6e);
+  --db-teal-dark: var(--pp-teal-dark, #17645a);
+  --db-ink: var(--pp-ink, #1b2b28);
+  --db-muted: var(--pp-muted, #6b7c78);
+  --db-line: var(--pp-line, #e2e8e6);
+  --db-red: #c0392b;
+  --db-amber: #b7791f;
+  --db-green: #2f855a;
+
+  display: grid;
+  gap: 16px;
+}
+
+.db-card {
+  border-radius: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--db-line);
+  box-shadow: 0 1px 2px rgba(27, 43, 40, 0.05);
+  background: #fff;
+  color: var(--db-ink);
+  min-width: 0;
+}
+
+.db-tint-teal { background: #e6f4f1; }
+.db-tint-mint { background: #edf8f2; }
+.db-tint-blue { background: #eaf2fb; }
+.db-tint-lavender { background: #f1eefb; }
+.db-tint-rose { background: #fdeef0; }
+
+.db-card-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--db-teal-dark);
+}
+
+.db-big {
+  margin: 4px 0 6px;
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.db-big-sm { font-size: 1.3rem; }
+
+.db-sub {
+  margin: 2px 0;
+  font-weight: 600;
+}
+
+/* Badges */
+.db-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: var(--db-teal-soft, #e3f1ee);
+  color: var(--db-teal-dark);
+}
+
+.db-badge.is-good { background: #dcf3e4; color: var(--db-green); }
+.db-badge.is-red { background: #fde2df; color: var(--db-red); }
+
+/* Banners */
+.db-banner {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff4f2;
+  color: var(--db-red);
+  border: 1px solid #f5c6c0;
+}
+
+/* Overview */
+.db-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.db-overview-main {
+  display: grid;
+  gap: 12px;
+}
+
+.db-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.db-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--db-line);
+  background: #fff;
+  color: var(--db-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.db-switch.is-active {
+  border-color: var(--db-teal);
+  background: var(--db-teal-soft, #e3f1ee);
+  font-weight: 600;
+}
+
+.db-parent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.db-parent-text { flex: 1 1 160px; }
+.db-parent-name { font-size: 1.1rem; font-weight: 700; }
+
+.db-parent-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.db-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.db-avatar.is-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--db-teal);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.db-avatar.is-emoji {
+  font-size: 1.4rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.db-facts {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.db-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--db-line);
+}
+
+.db-facts dt { color: var(--db-muted); }
+.db-facts dd { margin: 0; font-weight: 600; text-align: right; }
+
+/* Summary row */
+.db-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+/* Lists row */
+.db-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.db-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.db-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.db-row-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.db-stamp { white-space: nowrap; font-size: 0.85rem; }
+
+.db-days {
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.db-days.is-green { background: #dcf3e4; color: var(--db-green); }
+.db-days.is-amber { background: #fdf0d5; color: var(--db-amber); }
+.db-days.is-red { background: #fde2df; color: var(--db-red); }
+
+/* Schedule timeline */
+.db-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.db-slot {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.db-slot.is-done { background: #dcf3e4; }
+
+.db-slot-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--db-muted);
+  border: 1px solid var(--db-line);
+}
+
+.db-slot.is-done .db-slot-icon {
+  background: var(--db-green);
+  border-color: var(--db-green);
+  color: #fff;
+}
+
+/* Schedule table */
+.db-schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.db-schedule-table th,
+.db-schedule-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--db-line);
+}
+
+.db-schedule-table th {
+  font-weight: 600;
+  color: var(--db-muted);
+  font-size: 0.85rem;
+}
+
+.db-schedule-time { color: var(--db-muted); font-size: 0.9rem; white-space: nowrap; }
+.db-schedule-name { font-weight: 600; }
+
+.db-schedule-status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.db-schedule-status.is-pending { background: rgba(255, 255, 255, 0.7); color: var(--db-muted); font-weight: 400; }
+.db-schedule-status.is-done { background: #dcf3e4; color: var(--db-green); }
+
+.db-slot-time { color: var(--db-muted); font-size: 0.9rem; }
+.db-slot-name { font-weight: 600; }
+.db-slot-status { font-size: 0.82rem; color: var(--db-muted); }
+.db-slot.is-done .db-slot-status { color: var(--db-green); font-weight: 600; }
+
+@media (max-width: 900px) {
+  .db-overview { grid-template-columns: 1fr; }
+}

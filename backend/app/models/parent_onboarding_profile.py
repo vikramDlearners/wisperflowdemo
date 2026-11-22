@@ -29,6 +29,7 @@ class ParentOnboardingProfile(Base):
     approximate_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     profile_picture_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     preferred_language: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     # Section: communication
     parent_mobile: Mapped[str | None] = mapped_column(String(20), nullable=True)

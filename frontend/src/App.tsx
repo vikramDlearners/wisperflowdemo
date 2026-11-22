@@ -16,10 +16,12 @@ import Appointments from "./pages/Appointments";
 import SharedRecords from "./pages/SharedRecords";
 import FamilyTimeline from "./pages/FamilyTimeline";
 import MembersPermissions from "./pages/MembersPermissions";
+import ManageProfile from "./pages/ManageProfile";
 import NotificationSettings from "./pages/NotificationSettings";
 import ParentChat from "./pages/ParentChat";
 import ParentOnboarding from "./pages/ParentOnboarding";
 import ParentProfilePage from "./pages/ParentProfilePage";
+import ParentDetails from "./pages/ParentDetails";
 
 // Reads :familyId from the URL and renders the page with it.
 function FamilyRoute({ render }: { render: (familyId: string) => ReactNode }) {
@@ -46,6 +48,10 @@ export default function App() {
       <Route path="/parent/accept-invite" element={<ParentAcceptInvite />} />
 
       <Route path="/family/:familyId" element={<Dashboard />} />
+      <Route
+        path="/family/:familyId/parents/:careProfileId"
+        element={<FamilyRoute render={() => <ParentDetails />} />}
+      />
       <Route
         path="/family/:familyId/profile"
         element={<FamilyRoute render={(familyId) => <ParentProfile familyId={familyId} />} />}
@@ -96,6 +102,10 @@ export default function App() {
       <Route
         path="/family/:familyId/members"
         element={<FamilyRoute render={(familyId) => <MembersPermissions familyId={familyId} />} />}
+      />
+      <Route
+        path="/family/:familyId/manage-profile"
+        element={<FamilyRoute render={() => <ManageProfile />} />}
       />
       <Route
         path="/family/:familyId/notifications"

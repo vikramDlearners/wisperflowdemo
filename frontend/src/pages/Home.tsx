@@ -99,7 +99,7 @@ const ROLES = [
   },
 ];
 
-const SIGNUP_ROLES = ["Parent", "Caretaker", "Hospital staff", "Child of a parent", "Others"];
+const SIGNUP_ROLES = ["Parent", "Caretaker", "Hospital staff", "Manager", "Others"];
 
 const FAQ = [
   {

@@ -166,13 +166,32 @@ def accept_parent_invite(db: Session, token: str) -> User:
 
 
 def _link_single_care_profile(db: Session, family_id: str, user_id: str) -> None:
-    """Link the parent to the family's care profile when there is exactly one and it is unlinked."""
+    """Link the parent to their own care profile in this family.
+
+    If they already have one here, do nothing. Otherwise link the family's only unlinked profile
+    when there is exactly one. Otherwise create a new profile for this parent.
+    """
     profiles = db.execute(
         select(CareProfile).where(CareProfile.family_id == family_id)
     ).scalars().all()
-    if len(profiles) == 1 and profiles[0].linked_user_id is None:
-        profiles[0].linked_user_id = user_id
+    if any(p.linked_user_id == user_id for p in profiles):
+        return
+    unlinked = [p for p in profiles if p.linked_user_id is None]
+    if len(unlinked) == 1:
+        unlinked[0].linked_user_id = user_id
         db.commit()
+        return
+    user = db.get(User, user_id)
+    name = (user.display_name or "").strip() or user.email
+    db.add(
+        CareProfile(
+            family_id=family_id,
+            display_name=name,
+            greeting_name=name,
+            linked_user_id=user_id,
+        )
+    )
+    db.commit()
 
 
 def create_auth_session(db: Session, user_id: str) -> str:
