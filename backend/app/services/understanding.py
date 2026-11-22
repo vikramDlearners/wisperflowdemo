@@ -76,6 +76,23 @@ _NEGATION_PHRASES: tuple[str, ...] = (
     "இல்லை", "வில்லை",  # ta: no / negative verb ending (எடுக்கவில்லை, சாப்பிடவில்லை)
     "नहीं ली", "नहीं लिया", "नहीं ली है", "नहीं खाई", "नहीं खाया", "अभी तक नहीं", "अभी नहीं",
 )
+# "Ran out" that is denied or not about medicine. Removed before the ran-out check, so "I haven't run out" is
+# never "finished" (alone it is unclear) and "ran out of time, didn't take it" is "not taken".
+_NOT_FINISHED = re.compile(
+    r"\b(?:haven't|have not|hasn't|has not|hadn't|had not|didn't|did not|not|never|isn't|is not|aren't|are not"
+    r"|won't|will not)\s+(?:yet\s+|already\s+)?(?:run|ran|running)\s+out"
+    r"(?:\s+of\s+(?:my\s+|the\s+)?(?:medicines?|tablets?|pills?))?(?:\s+yet)?\b"
+    r"|\b(?:isn't|is not|aren't|are not|not|haven't|hasn't|have not|has not)\s+(?:yet\s+)?(?:finished|over)\b"
+    r"|\bnot\s+out\s+of\s+(?:medicines?|tablets?|pills?)\b"
+    r"|\b(?:ran|run|running)\s+out\s+of\s+(?:time|patience)\b"
+    r"|தீர\S*(?:\s+\S*)?(?:வில்லை|இல்லை)"  # ta: தீர்ந்துவிடவில்லை / தீரவில்லை (has not run out)
+    r"|(?:दवा|दवाई|गोली)?\s*खत्म\s+नहीं(?:\s+(?:हुई|हुआ|हुयी|है|हुई है|हुआ है))?",  # hi: has not run out
+)
+# Words that show an answer is about the medicine (used when the reply also has urgent words: "I took a fall").
+_MEDICINE_WORDS = re.compile(r"\b(?:medicines?|meds|tablets?|pills?|doses?|capsules?|both|them)\b")
+_MEDICINE_WORDS_NON_LATIN = ("மருந்து", "மாத்திரை", "दवा", "दवाई", "गोली", "మందు", "మాత్ర", "മരുന്ന", "ഗുളിക",
+                             "ಔಷಧ", "ಮಾತ್ರೆ")
+
 _RULE_OUTCOMES = {
     CONFIRM_TAKEN: "taken",
     NOT_TAKEN_YET: "not_taken",
@@ -175,7 +192,9 @@ def _from_gemini(text: str, due: list[DueDose]) -> MedicineAnswers:
 
 def _rule_outcome(normalised: str) -> str | None:
     """The medicine outcome for a reply, or None. Explicit "ran out" phrases, then negations, then the shared
-    intent keywords except MEDICINE_UNAVAILABLE (so "finished breakfast and took it" is "taken")."""
+    intent keywords except MEDICINE_UNAVAILABLE (so "finished breakfast and took it" is "taken").
+    Denied or non-medicine "ran out" phrases are removed first."""
+    normalised = _NOT_FINISHED.sub(" ", normalised)
     if any(p in normalised for p in _FINISHED_PHRASES):
         return "finished"
     if normalised.strip(".!?, ") in _BARE_NO:
@@ -191,11 +210,19 @@ def _rule_outcome(normalised: str) -> str | None:
     return None
 
 
+def _mentions_medicine(normalised: str, due: list[DueDose]) -> bool:
+    if _MEDICINE_WORDS.search(normalised) or any(w in normalised for w in _MEDICINE_WORDS_NON_LATIN):
+        return True
+    return any(d.name and d.name.lower() in normalised for d in due)
+
+
 def _from_rules(text: str, due: list[DueDose]) -> MedicineAnswers:
     if not due:
         return MedicineAnswers(unclear=True)
     normalised = (text or "").strip().lower().replace("’", "'")
     outcome = _rule_outcome(normalised)
+    if outcome == "taken" and is_urgent(text) and not _mentions_medicine(normalised, due):
+        outcome = None  # "I took a fall" is not a dose taken
     if outcome is None:
         return MedicineAnswers(unclear=True)
     if len(due) > 1 and outcome not in ("taken", "not_taken"):

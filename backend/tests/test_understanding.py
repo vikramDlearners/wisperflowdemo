@@ -184,3 +184,36 @@ def test_gemini_failure_is_logged_without_the_key(monkeypatch, caplog):
     warnings = [r for r in caplog.records if r.levelname == "WARNING"]
     assert warnings, "a failed Gemini call must be logged"
     assert all("secret-key-123" not in r.getMessage() for r in warnings)
+
+
+# ---------- round 2: negated "ran out", urgent "took a fall" ----------
+
+@pytest.mark.parametrize("text", ["I haven't run out", "it has not run out yet", "the medicine is not finished",
+                                  "दवा खत्म नहीं हुई"])
+def test_rules_denied_ran_out_alone_is_unclear(text):
+    r = understand_medicines(text, [_dose("a")], OFFLINE_RULES)
+    assert r.unclear is True and r.items == [], text
+
+
+@pytest.mark.parametrize("text", ["I ran out of time, didn't take it", "தீர்ந்துவிடவில்லை, இன்னும் எடுக்கவில்லை",
+                                  "I haven't run out but I haven't taken it"])
+def test_rules_denied_ran_out_with_not_taken_is_not_taken(text):
+    r = understand_medicines(text, [_dose("a")], OFFLINE_RULES)
+    assert [i.outcome for i in r.items] == ["not_taken"], text
+
+
+def test_rules_denied_ran_out_tamil_alone_is_not_finished():
+    r = understand_medicines("தீர்ந்துவிடவில்லை", [_dose("a")], OFFLINE_RULES)
+    assert all(i.outcome != "finished" for i in r.items)
+
+
+def test_rules_urgent_took_a_fall_is_not_taken_as_a_dose():
+    r = understand_medicines("I took a fall", [_dose("a", "Amlodipine")], OFFLINE_RULES)
+    assert r.unclear is True and r.items == []
+
+
+@pytest.mark.parametrize("text", ["I took my tablets but I feel dizzy", "took Amlodipine, then I fell",
+                                  "I took both but I feel dizzy"])
+def test_rules_urgent_with_a_medicine_reference_is_still_taken(text):
+    r = understand_medicines(text, [_dose("a", "Amlodipine")], OFFLINE_RULES)
+    assert [i.outcome for i in r.items] == ["taken"], text
