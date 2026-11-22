@@ -18,6 +18,7 @@ from app.api import (
     tasks,
 )
 from app.services.errors import AuthError, NotFound
+from app.services.parent_context import ParentNotLinked
 from app.services.permissions import NotAMember, PermissionDenied
 
 app = FastAPI(title="CareCircle API")
@@ -46,6 +47,11 @@ def _permission_denied(_: Request, exc: PermissionDenied) -> JSONResponse:
 def _not_a_member(_: Request, exc: NotAMember) -> JSONResponse:
     # Non-members get 403 rather than 404 so family IDs cannot be probed.
     return JSONResponse(status_code=403, content={"detail": "You are not a member of this family"})
+
+
+@app.exception_handler(ParentNotLinked)
+def _parent_not_linked(_: Request, exc: ParentNotLinked) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": "Ask your family to link your profile"})
 
 
 @app.exception_handler(AuthError)

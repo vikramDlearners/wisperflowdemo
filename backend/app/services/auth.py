@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.care_profile import CareProfile
 from app.models.login_token import LoginToken
 from app.models.session import AuthSession
 from app.models.parent_invite import ParentInvite
@@ -160,7 +161,18 @@ def accept_parent_invite(db: Session, token: str) -> User:
     user = db.get(User, row.user_id)
     if user is None or user.status != "active":
         raise AuthError("Account is not active")
+    _link_single_care_profile(db, row.family_id, user.id)
     return user
+
+
+def _link_single_care_profile(db: Session, family_id: str, user_id: str) -> None:
+    """Link the parent to the family's care profile when there is exactly one and it is unlinked."""
+    profiles = db.execute(
+        select(CareProfile).where(CareProfile.family_id == family_id)
+    ).scalars().all()
+    if len(profiles) == 1 and profiles[0].linked_user_id is None:
+        profiles[0].linked_user_id = user_id
+        db.commit()
 
 
 def create_auth_session(db: Session, user_id: str) -> str:
