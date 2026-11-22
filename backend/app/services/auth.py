@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.care_profile import CareProfile
 from app.models.login_token import LoginToken
+from app.models.membership import FamilyMember
 from app.models.session import AuthSession
 from app.models.parent_invite import ParentInvite
 from app.models.user import User
@@ -168,7 +169,8 @@ def accept_parent_invite(db: Session, token: str) -> User:
 def _link_single_care_profile(db: Session, family_id: str, user_id: str) -> None:
     """Link the parent to their own care profile in this family.
 
-    If they already have one here, do nothing. Otherwise link the family's only unlinked profile
+    If they already have one here, do nothing. Otherwise link the unlinked profile that was created
+    for their membership (linked_member_id). Otherwise link the family's only unlinked profile
     when there is exactly one. Otherwise create a new profile for this parent.
     """
     profiles = db.execute(
@@ -176,7 +178,18 @@ def _link_single_care_profile(db: Session, family_id: str, user_id: str) -> None
     ).scalars().all()
     if any(p.linked_user_id == user_id for p in profiles):
         return
+    membership = db.execute(
+        select(FamilyMember).where(
+            FamilyMember.family_id == family_id, FamilyMember.user_id == user_id
+        )
+    ).scalar_one_or_none()
     unlinked = [p for p in profiles if p.linked_user_id is None]
+    if membership is not None:
+        own = [p for p in unlinked if p.linked_member_id == membership.id]
+        if own:
+            own[0].linked_user_id = user_id
+            db.commit()
+            return
     if len(unlinked) == 1:
         unlinked[0].linked_user_id = user_id
         db.commit()

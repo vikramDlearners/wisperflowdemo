@@ -57,6 +57,19 @@ def resolve_parent(db: Session, user: User) -> ParentContext:
     if len(parent_families) != 1:
         raise ParentNotLinked("Ask your family to link your profile")
     family_id = parent_families[0]
+    membership = next(m for m in memberships if m.family_id == family_id)
+    own = db.execute(
+        select(CareProfile).where(
+            CareProfile.family_id == family_id,
+            CareProfile.linked_member_id == membership.id,
+            CareProfile.linked_user_id.is_(None),
+        )
+    ).scalars().first()
+    if own is not None:
+        require(db, user.id, family_id, PARENT_PERMISSION)
+        own.linked_user_id = user.id
+        db.commit()
+        return _context(user, own)
     profiles = db.execute(
         select(CareProfile).where(CareProfile.family_id == family_id)
     ).scalars().all()

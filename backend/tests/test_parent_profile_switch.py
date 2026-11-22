@@ -106,17 +106,17 @@ def test_patch_changes_only_the_selected_parent(client, db_session, switch_setup
     assert mom_view.json()["preferred_name"] == "Mom"
 
 
-def test_patch_on_unlinked_care_profile_is_conflict(client, db_session, switch_setup):
+def test_patch_on_unlinked_care_profile_saves_details(client, db_session, switch_setup):
     s = switch_setup
     response = client.patch(
         _url(s["family"].id, s["unlinked"].id),
         json={"section": "parent", "parent_full_name": "Uncle", "preferred_name": "Uncle", "relationship": "other"},
         headers=_auth(db_session, s["manager"]),
     )
-    assert response.status_code == 409
-    assert response.json()["detail"] == (
-        "This parent has no linked account yet, so their profile cannot be saved."
-    )
+    assert response.status_code == 200, response.text
+    view = client.get(_url(s["family"].id, s["unlinked"].id), headers=_auth(db_session, s["manager"]))
+    assert view.status_code == 200, view.text
+    assert view.json()["parent_full_name"] == "Uncle"
 
 
 # ---------- the parent's language drives the chatbot ----------

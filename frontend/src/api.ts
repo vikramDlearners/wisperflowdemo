@@ -506,6 +506,10 @@ export interface ParentProfileOut {
   doctor_contact_number: string | null;
   preferred_hospital: string | null;
   care_instructions: string | null;
+  calcium_deficiency: boolean | null;
+  calcium_deficiency_notes: string | null;
+  sugar_problems: boolean | null;
+  sugar_problems_notes: string | null;
   caregiver_name: string | null;
   caregiver_relationship: string | null;
   caregiver_phone: string | null;

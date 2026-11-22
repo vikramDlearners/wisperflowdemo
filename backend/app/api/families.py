@@ -143,20 +143,24 @@ def _parent_in_family(db: Session, family_id: str, care_profile_id: str) -> Care
     return care_profile
 
 
+def _onboarding_for_care_profile(db: Session, care_profile: CareProfile) -> ParentOnboardingProfile | None:
+    if care_profile.linked_user_id is not None:
+        return db.scalar(
+            select(ParentOnboardingProfile).where(ParentOnboardingProfile.user_id == care_profile.linked_user_id)
+        )
+    return db.scalar(select(ParentOnboardingProfile).where(ParentOnboardingProfile.care_profile_id == care_profile.id))
+
+
 @router.get("/{family_id}/parents/{care_profile_id}/profile", response_model=ProfileOut)
 def get_parent_profile(
     family_id: str, care_profile_id: str, db: Session = DbSession, user: User = CurrentUser,
 ) -> ProfileOut:
     require(db, user.id, family_id, "dashboard.view")
     care_profile = _parent_in_family(db, family_id, care_profile_id)
-    if care_profile.linked_user_id is None:
-        # No account yet, so there is no saved profile: return the same unsaved defaults get_profile does.
-        return _profile_out(ParentOnboardingProfile())
-    profile = db.scalar(
-        select(ParentOnboardingProfile).where(ParentOnboardingProfile.user_id == care_profile.linked_user_id)
-    )
+    profile = _onboarding_for_care_profile(db, care_profile)
     if profile is None:
-        profile = ParentOnboardingProfile(user_id=care_profile.linked_user_id)
+        # Nothing saved yet: return the same unsaved defaults get_profile does.
+        return _profile_out(ParentOnboardingProfile())
     return _profile_out(profile)
 
 
@@ -167,21 +171,15 @@ def update_parent_profile(
 ) -> ProfileOut:
     require(db, user.id, family_id, "parent_profile.edit")
     care_profile = _parent_in_family(db, family_id, care_profile_id)
-    if care_profile.linked_user_id is None:
-        raise HTTPException(
-            status_code=409,
-            detail="This parent has no linked account yet, so their profile cannot be saved.",
-        )
-    profile = db.scalar(
-        select(ParentOnboardingProfile).where(ParentOnboardingProfile.user_id == care_profile.linked_user_id)
-    )
+    profile = _onboarding_for_care_profile(db, care_profile)
     if profile is None:
-        profile = ParentOnboardingProfile(user_id=care_profile.linked_user_id)
+        profile = ParentOnboardingProfile(user_id=care_profile.linked_user_id, care_profile_id=care_profile.id)
         db.add(profile)
     # Only touch the fields the client actually sent; the section name is not stored.
     for name in body.model_fields_set - {"section"}:
         setattr(profile, name, getattr(body, name))
-    if "preferred_language" in body.model_fields_set:
+    # Chatbot language is per user account, so it only syncs for a linked parent.
+    if "preferred_language" in body.model_fields_set and care_profile.linked_user_id is not None:
         care_svc.sync_chatbot_language(db, care_profile.linked_user_id, body.preferred_language)
     profile.updated_at = datetime.now(timezone.utc)
     db.commit()

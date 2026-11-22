@@ -64,20 +64,24 @@ def test_add_member_father_creates_one_linked_profile(db_session, family_setup):
     assert profiles[0].family_id == setup["family_id"]
 
 
-def test_add_member_without_relationship_creates_no_profile(db_session, family_setup):
+def test_add_parent_without_relationship_creates_profile(db_session, family_setup):
     setup = family_setup
     membership = _add(db_session, setup, "friend@example.com", None, "Friend")
 
     assert membership.relationship is None
-    assert _profiles_for(db_session, membership.id) == []
+    profiles = _profiles_for(db_session, membership.id)
+    assert len(profiles) == 1
+    assert profiles[0].family_id == setup["family_id"]
 
 
-def test_add_member_grandmother_creates_no_profile(db_session, family_setup):
+def test_add_parent_grandmother_creates_profile(db_session, family_setup):
     setup = family_setup
     membership = _add(db_session, setup, "nan@example.com", "grandmother", "Nan Doe")
 
     assert membership.relationship == "grandmother"
-    assert _profiles_for(db_session, membership.id) == []
+    profiles = _profiles_for(db_session, membership.id)
+    assert len(profiles) == 1
+    assert profiles[0].family_id == setup["family_id"]
 
 
 def test_add_member_normalises_relationship_case_and_spaces(db_session, family_setup):
