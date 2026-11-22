@@ -97,7 +97,10 @@ export default function App() {
         element={<FamilyRoute render={(familyId) => <FamilyTasks familyId={familyId} />} />}
       />
       <Route path="/family/:familyId/appointments" element={<Appointments />} />
-      <Route path="/family/:familyId/records" element={<SharedRecords />} />
+      <Route
+        path="/family/:familyId/records"
+        element={<FamilyRoute render={(familyId) => <SharedRecords familyId={familyId} />} />}
+      />
       <Route path="/family/:familyId/timeline" element={<FamilyTimeline />} />
       <Route
         path="/family/:familyId/members"

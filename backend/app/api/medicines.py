@@ -3,13 +3,16 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, File, Response, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, DbSession
+from app.models.dose import MedicineDose
 from app.models.medicine import Medicine
 from app.models.user import User
 from app.schemas import (
     MedicineCreate,
+    MedicineLastTakenOut,
     MedicineOut,
     MedicineUpdate,
     QuantityUpdate,
@@ -88,6 +91,28 @@ def create_medicine(
         purpose=body.purpose,
     )
     return _out(db, family_id, medicine)
+
+@router.get("/last-taken", response_model=list[MedicineLastTakenOut])
+def medicines_last_taken(
+    family_id: str, db: Session = DbSession, user: User = CurrentUser
+) -> list[MedicineLastTakenOut]:
+    medicines = svc.list_medicines(db, user.id, family_id)  # medicines.view + family scoping
+    rows = (
+        db.query(MedicineDose.medicine_id, func.max(MedicineDose.recorded_at))
+        .filter(
+            MedicineDose.family_id == family_id,
+            MedicineDose.status == "taken",
+        )
+        .group_by(MedicineDose.medicine_id)
+        .all()
+    )
+    last_taken = {medicine_id: last_at for medicine_id, last_at in rows}
+    return [
+        MedicineLastTakenOut(medicine_id=m.id, last_taken_at=last_taken.get(m.id))
+        for m in medicines
+    ]
+
+
 
 
 @router.get("/{medicine_id}", response_model=MedicineOut)

@@ -86,6 +86,13 @@ def complete_task(
     return _out(svc.update_task_status(db, user.id, family_id, task_id, "DONE"))
 
 
+@router.post("/{task_id}/notify", response_model=TaskOut)
+def notify_task(
+    family_id: str, task_id: str, db: Session = DbSession, user: User = CurrentUser
+) -> TaskOut:
+    return _out(svc.notify_task(db, user.id, family_id, task_id))
+
+
 @router.patch("/{task_id}/status", response_model=TaskOut)
 def update_task_status(
     family_id: str, task_id: str, body: TaskStatusUpdate,

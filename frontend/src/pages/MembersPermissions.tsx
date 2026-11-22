@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { ApiError, members, roles } from "../api";
 import type { MemberOut, RoleOut } from "../api";
 import { RELATIONSHIP_OPTIONS } from "../lib/constants";
+import { useNavigate } from "react-router-dom";
 
 interface MembersPermissionsProps {
   familyId: string;
@@ -23,6 +24,7 @@ const PERMISSION_OPTIONS: string[] = [
 ];
 
 export default function MembersPermissions({ familyId }: MembersPermissionsProps) {
+  const navigate = useNavigate();
   const [memberList, setMemberList] = useState<MemberOut[]>([]);
   const [roleList, setRoleList] = useState<RoleOut[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -200,6 +202,9 @@ export default function MembersPermissions({ familyId }: MembersPermissionsProps
           {addingMember ? "Adding…" : "Add member"}
         </button>
       </form>
+      <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
+        Back
+      </button>
 
       <h3>Roles</h3>
       {roleList.length === 0 ? (

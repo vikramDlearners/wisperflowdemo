@@ -129,6 +129,29 @@ def update_task_status(
     return task
 
 
+def notify_task(db: Session, actor_id: str, family_id: str, task_id: str) -> Task:
+    """Notify the assignee, or every other active member when the task is unassigned."""
+    require(db, actor_id, family_id, "tasks.update_own")
+    task = _task_in_family(db, family_id, task_id)
+    if task.assigned_to_user_id:
+        recipient_ids = [task.assigned_to_user_id]
+    else:
+        recipient_ids = list(
+            db.execute(
+                select(FamilyMember.user_id).where(
+                    FamilyMember.family_id == family_id,
+                    FamilyMember.status == "active",
+                    FamilyMember.user_id != actor_id,
+                )
+            ).scalars()
+        )
+    for user_id in recipient_ids:
+        notify(db, user_id, "task.notified", family_id=family_id, payload={"task_id": task.id, "title": task.title})
+    log_activity(db, family_id, actor_id, "task.notified", "task", task.id, {"title": task.title})
+    db.commit()
+    return task
+
+
 def _task_in_family(db: Session, family_id: str, task_id: str) -> Task:
     task = db.get(Task, task_id)
     if task is None or task.family_id != family_id:
