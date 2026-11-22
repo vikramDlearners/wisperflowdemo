@@ -183,3 +183,38 @@ def test_unlinked_parent_with_two_profiles_is_409(client, db_session, family_set
 
 def test_requires_sign_in(client):
     assert client.get("/api/parent/checkin").status_code == 401
+
+
+def _texts(body):
+    return [m["text"] for m in body["messages"]]
+
+
+def test_reloading_does_not_greet_again(client, db_session, world):
+    headers = _auth(db_session, world["parent"])
+    client.get("/api/parent/checkin", headers=headers)
+    body = client.get("/api/parent/checkin", headers=headers).json()
+    assert _texts(body) == ["Good morning, Amma!", "How are you feeling today?"]
+    assert body["step"] == "health"
+
+
+def test_reload_after_reminder_time_asks_once(client, db_session, world, tts, monkeypatch):
+    world["meds"][1].active = False
+    db_session.commit()
+    headers = _auth(db_session, world["parent"])
+    client.get("/api/parent/checkin", headers=headers)
+    client.post("/api/parent/checkin/text", json={"text": "fine"}, headers=headers)
+    r = client.post("/api/parent/checkin/text", json={"text": "remind me in 10 minutes"}, headers=headers)
+    assert r.json()["messages"][0]["text"] == "I'll remind you in 10 minutes."
+    ask = "Did you take Amlodipine?"
+
+    monkeypatch.setattr(parent_api, "_now", lambda: NOW + timedelta(minutes=5))
+    assert _texts(client.get("/api/parent/checkin", headers=headers).json()).count(ask) == 1
+
+    monkeypatch.setattr(parent_api, "_now", lambda: NOW + timedelta(minutes=11))
+    body = client.get("/api/parent/checkin", headers=headers).json()
+    assert _texts(body)[-1] == ask
+    assert _texts(body).count(ask) == 2
+    assert body["step"] == "medicines"
+    body = client.get("/api/parent/checkin", headers=headers).json()
+    assert _texts(body).count(ask) == 2
+    assert _texts(body).count("Good morning, Amma!") == 1

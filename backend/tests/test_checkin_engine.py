@@ -81,14 +81,18 @@ def test_second_start_same_day_no_new_row(db_session, world):
     engine.start_or_resume(db_session, world["ctx"], NOW)
     turn = engine.start_or_resume(db_session, world["ctx"], NOW)
     assert len(db_session.execute(select(HealthCheckin)).scalars().all()) == 1
-    assert turn.bot_messages == ["Good morning, Amma!", "How are you feeling today?"]
+    # A resume never greets again or repeats the question.
+    assert turn.bot_messages == []
+    assert turn.checkin.step == "health"
+    assert len(db_session.execute(select(ChatMessage)).scalars().all()) == 2
 
 
 def test_greeting_by_local_hour(db_session, world):
     # 14:00 IST == 08:30 UTC; 19:00 IST == 13:30 UTC
     t = engine.start_or_resume(db_session, world["ctx"], datetime(2026, 11, 22, 8, 30, tzinfo=timezone.utc))
     assert t.bot_messages[0] == "Good afternoon, Amma!"
-    t = engine.start_or_resume(db_session, world["ctx"], datetime(2026, 11, 22, 13, 30, tzinfo=timezone.utc))
+    # The next day's first check-in at 19:00 IST (13:30 UTC).
+    t = engine.start_or_resume(db_session, world["ctx"], datetime(2026, 11, 23, 13, 30, tzinfo=timezone.utc))
     assert t.bot_messages[0] == "Good evening, Amma!"
 
 
@@ -174,6 +178,18 @@ def test_done_step_appends_and_shares(db_session, world):
     assert len(updates) == 6
 
 
+def test_resume_in_medicines_asks_reminder_dose_not_yet_asked(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "remind me later", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "remind me in 10 minutes", NOW)
+    assert turn.bot_messages == ["I'll remind you in 10 minutes.", "Did you take Metformin?"]
+    # Amlodipine's reminder is due and it has not been asked since the parent's last message.
+    turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=11))
+    assert turn.bot_messages == [MEDS_LIST]
+    assert engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=12)).bot_messages == []
+
+
 def test_unclear_asks_first_medicine_then_answer_applies_to_it(db_session, world):
     engine.start_or_resume(db_session, world["ctx"], NOW)
     engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
@@ -204,7 +220,7 @@ def test_finished_alerts_family(db_session, world, email):
     assert dose.status == "skipped"
     # Later the same day it is never asked again and the family is not alerted twice.
     later = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(hours=2))
-    assert later.bot_messages == ["Good morning, Amma!", "Is there anything else you'd like to tell me?"]
+    assert later.bot_messages == []
     rows = db_session.execute(select(Notification).where(Notification.type == "medicine.finished")).scalars().all()
     assert len(rows) == 3 and len(email.sent) == 3
 
@@ -225,8 +241,12 @@ def test_resume_in_medicines_step_recomputes(db_session, world):
     engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
     doses_svc.record_dose(db_session, world["profile"], world["meds"][0].id, "08:00", "taken",
                           world["manager"].id, "manual", NOW)
+    # Metformin was already asked about since the parent's last message, so nothing new is stored.
     turn = engine.start_or_resume(db_session, world["ctx"], NOW)
-    assert turn.bot_messages == ["Good morning, Amma!", "Did you take Metformin?"]
+    assert turn.bot_messages == []
+    assert turn.checkin.step == "medicines"
+    turn = engine.handle_parent_text(db_session, world["ctx"], "yes", NOW)
+    assert turn.checkin.step == "done"
 
 
 def test_tamil_profile_greets_in_tamil(db_session, world):
@@ -273,11 +293,13 @@ def test_remind_later_dose_asked_again_after_done(db_session, world):
     assert turn.checkin.step == "done"
     # Before the reminder time nothing is due.
     early = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=5))
-    assert early.bot_messages[-1] == "Is there anything else you'd like to tell me?"
+    assert early.bot_messages == []
     turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=11))
-    assert turn.bot_messages == ["Good morning, Amma!", "Did you take Amlodipine?"]
+    assert turn.bot_messages == ["Did you take Amlodipine?"]
     assert turn.checkin.step == "medicines"
     assert _steps(db_session).count("medicines") == 2
+    again = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=11))
+    assert again.bot_messages == []
     turn = engine.handle_parent_text(db_session, world["ctx"], "yes", NOW + timedelta(minutes=12))
     assert turn.checkin.step == "done"
     assert db_session.execute(select(MedicineDose)).scalar_one().status == "taken"
@@ -295,7 +317,7 @@ def test_evening_dose_asked_after_morning_done(db_session, world):
     assert turn.checkin.step == "done"
     # 20:30 IST == 15:00 UTC
     turn = engine.start_or_resume(db_session, world["ctx"], datetime(2026, 11, 22, 15, 0, tzinfo=timezone.utc))
-    assert turn.bot_messages == ["Good evening, Amma!", "Did you take Atorvastatin?"]
+    assert turn.bot_messages == ["Did you take Atorvastatin?"]
     assert turn.checkin.step == "medicines"
 
 
@@ -327,9 +349,9 @@ def test_not_taken_not_reasked_same_exchange_but_after_30_minutes(db_session, wo
     turn = engine.handle_parent_text(db_session, world["ctx"], "nothing more", NOW + timedelta(minutes=5))
     assert turn.bot_messages[-1] == "Is there anything else you'd like to tell me?"
     turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=29))
-    assert turn.bot_messages[-1] == "Is there anything else you'd like to tell me?"
+    assert turn.bot_messages == []
     turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=30))
-    assert turn.bot_messages == ["Good morning, Amma!", "Did you take Amlodipine?"]
+    assert turn.bot_messages == ["Did you take Amlodipine?"]
     assert turn.checkin.step == "medicines"
 
 

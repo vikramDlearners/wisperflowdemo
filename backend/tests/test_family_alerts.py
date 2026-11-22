@@ -165,3 +165,52 @@ def test_scheduler_disabled_in_tests():
     from app.core.config import settings
 
     assert settings.scheduler_enabled is False
+
+
+# ---------- one bad item never stops the run ----------
+
+def test_one_failing_summary_does_not_stop_the_others(db_session, world, email, monkeypatch):
+    bad = _checkin(db_session, world, day=date(2026, 11, 21), health="bad one")
+    good = _checkin(db_session, world, health="good one")
+    real = alerts._summary_body
+
+    def flaky(db, checkin, profile):
+        if checkin.id == bad.id:
+            raise ValueError("broken data")
+        return real(db, checkin, profile)
+
+    monkeypatch.setattr(alerts, "_summary_body", flaky)
+    alerts.send_daily_summaries(db_session, IST_2000)
+    assert len(email.sent) == 3
+    assert all("good one" in body for _, _, body in email.sent)
+    db_session.refresh(bad)
+    db_session.refresh(good)
+    assert bad.summary_sent_at is None
+    assert good.summary_sent_at is not None
+
+
+def test_one_failing_profile_does_not_stop_missed_alerts(db_session, world, email, monkeypatch):
+    from app.models.care_profile import CareProfile
+    from app.models.medicine import Medicine
+    from app.models.prescription_scan import MedicineReminder
+
+    other = CareProfile(family_id=world["family_id"], display_name="Appa", greeting_name="",
+                        preferred_language="en", timezone="Asia/Kolkata")
+    db_session.add(other)
+    db_session.commit()
+    med = Medicine(care_profile_id=other.id, display_name="Aspirin", active=True)
+    db_session.add(med)
+    db_session.commit()
+    db_session.add(MedicineReminder(medicine_id=med.id, time_of_day="08:00", active=True))
+    db_session.commit()
+    real = alerts.doses_today
+
+    def flaky(db, profile, now):
+        if profile.id == world["profile"].id:
+            raise ValueError("bad timezone")
+        return real(db, profile, now)
+
+    monkeypatch.setattr(alerts, "doses_today", flaky)
+    alerts.alert_missed_doses(db_session, IST_0900)
+    assert {s for _, s, _ in email.sent} == {"Medicine not taken: Appa - Aspirin"}
+    assert len(email.sent) == 4  # no linked parent on Appa's profile, so all four members

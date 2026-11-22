@@ -7,7 +7,7 @@ step change writes a "checkin.updated" activity row. Medicine names only ever co
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, text as sql_text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -323,8 +323,54 @@ def _reopen_or(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: dat
     return [otherwise]
 
 
+def conversation(db: Session, checkin: HealthCheckin) -> list[ChatMessage]:
+    """The check-in's stored messages, oldest first."""
+    stmt = select(ChatMessage).where(ChatMessage.checkin_id == checkin.id).order_by(ChatMessage.created_at)
+    if db.get_bind().dialect.name == "sqlite":
+        # Messages stored in one commit can share a timestamp; insertion order breaks the tie.
+        stmt = stmt.order_by(sql_text("chat_messages.rowid"))
+    return list(db.execute(stmt).scalars())
+
+
+def _bot_texts_since_parent(history: list[ChatMessage]) -> list[str]:
+    out: list[str] = []
+    for m in reversed(history):
+        if m.sender == "parent":
+            break
+        out.append(m.text)
+    return out
+
+
+def _resume(
+    db: Session, ctx: ParentContext, checkin: HealthCheckin, history: list[ChatMessage], now: datetime
+) -> Turn:
+    msgs: list[str] = []
+    if checkin.step in (DONE, MEDICINES):
+        remaining = _remaining(db, ctx, now)
+        if checkin.step == DONE and remaining:
+            _set_step(db, ctx, checkin, MEDICINES, now)
+            msgs = [_ask_medicines(ctx, checkin, remaining)]
+        elif checkin.step == MEDICINES and remaining:
+            asked = _bot_texts_since_parent(history)
+            if any(not any(d.name in t for t in asked) for d in _unique(remaining)):
+                msgs = [_ask_medicines(ctx, checkin, remaining)]
+    if msgs:
+        return _turn(db, ctx, checkin, msgs)
+    number = call_number(db, ctx) if checkin.urgent else None
+    return Turn(checkin=checkin, bot_messages=[], call_number=number, urgent=bool(checkin.urgent))
+
+
 def start_or_resume(db: Session, ctx: ParentContext, now: datetime) -> Turn:
+    """Open today's check-in. Greets only while the conversation has no stored messages.
+
+    After that a resume stores nothing unless a question is newly needed: from "done" when doses are due
+    again, or in "medicines" when a due dose has not been asked about since the parent's last message.
+    Turn.bot_messages holds only the messages this call added (possibly none).
+    """
     checkin = _get_or_create(db, ctx, now)
+    history = conversation(db, checkin)
+    if history:
+        return _resume(db, ctx, checkin, history, now)
     msgs = [_greeting(ctx, now)]
     if checkin.step in (GREET, HEALTH):
         _set_step(db, ctx, checkin, HEALTH, now)

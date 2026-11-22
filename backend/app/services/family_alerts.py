@@ -43,9 +43,13 @@ def family_recipients(db: Session, family_id: str) -> list[User]:
     )
 
 
+def _members_except(db: Session, family_id: str, parent_user_id: str | None) -> list[User]:
+    return [u for u in family_recipients(db, family_id) if u.id != parent_user_id]
+
+
 def other_members(db: Session, ctx: ParentContext) -> list[User]:
     """Active family members except the parent."""
-    return [u for u in family_recipients(db, ctx.family_id) if u.id != ctx.user_id]
+    return _members_except(db, ctx.family_id, ctx.user_id)
 
 
 def _payload(ctx: ParentContext, checkin: HealthCheckin, text: str | None) -> dict:
@@ -58,10 +62,15 @@ def _payload(ctx: ParentContext, checkin: HealthCheckin, text: str | None) -> di
 
 
 def _email(users: list[User], subject: str, body: str) -> None:
+    """Send one email per member that has an address; a failed send is logged and the rest still go."""
     provider = get_email_provider()
     for user in users:
-        if user.email:
+        if not user.email:
+            continue
+        try:
             provider.send(user.email, subject, body)
+        except Exception:  # noqa: BLE001 - one bad address must not stop the others
+            logger.exception("Could not email user %s: %s", user.id, subject)
 
 
 def notify_family_update(db: Session, ctx: ParentContext, checkin: HealthCheckin) -> None:
@@ -101,22 +110,6 @@ def notify_family_finished(db: Session, ctx: ParentContext, medicine: DueDose) -
 
 
 # ---------- scheduled jobs ----------
-
-def _members_except(db: Session, family_id: str, parent_user_id: str | None) -> list[User]:
-    return [u for u in family_recipients(db, family_id) if u.id != parent_user_id]
-
-
-def _email_each(users: list[User], subject: str, body: str) -> None:
-    """Like _email, but a failed send is logged and does not stop the others (jobs email after committing)."""
-    provider = get_email_provider()
-    for user in users:
-        if not user.email:
-            continue
-        try:
-            provider.send(user.email, subject, body)
-        except Exception:  # noqa: BLE001 - a background job must not die on one bad address
-            logger.exception("Could not email user %s: %s", user.id, subject)
-
 
 def _slot_label(slot: str) -> str:
     return "any time" if slot == ANY_SLOT else slot
@@ -197,30 +190,41 @@ def send_daily_summaries(db: Session, now: datetime) -> int:
     A check-in is due once its local day is over, or on its own day from 20:00 local time.
     """
     now = _aware(now)
-    pending = db.execute(
-        select(HealthCheckin)
+    pending_ids = list(db.execute(
+        select(HealthCheckin.id)
         .where(HealthCheckin.summary_sent_at.is_(None))
         .order_by(HealthCheckin.checkin_date, HealthCheckin.id)
-    ).scalars().all()
+    ).scalars())
     sent = 0
-    for checkin in pending:
-        profile = db.get(CareProfile, checkin.care_profile_id)
-        if profile is None:
-            continue
-        local = local_now(profile, now)
-        if checkin.checkin_date > local.date():
-            continue
-        if checkin.checkin_date == local.date() and local.hour < SUMMARY_LOCAL_HOUR:
-            continue
-        subject = f"Today's check-in with {profile.display_name}"
-        body = _summary_body(db, checkin, profile)
-        users = _members_except(db, checkin.family_id, checkin.parent_user_id)
-        # Mark sent before emailing, so a crash mid-send can never repeat the summary.
-        checkin.summary_sent_at = now
-        db.commit()
-        _email_each(users, subject, body)
-        sent += 1
+    for checkin_id in pending_ids:
+        try:
+            sent += _summarise(db, checkin_id, now)
+        except Exception:  # noqa: BLE001 - one bad check-in must not block every later one
+            db.rollback()
+            logger.exception("Daily summary failed for check-in %s", checkin_id)
     return sent
+
+
+def _summarise(db: Session, checkin_id: str, now: datetime) -> int:
+    checkin = db.get(HealthCheckin, checkin_id)
+    if checkin is None or checkin.summary_sent_at is not None:
+        return 0
+    profile = db.get(CareProfile, checkin.care_profile_id)
+    if profile is None:
+        return 0
+    local = local_now(profile, now)
+    if checkin.checkin_date > local.date():
+        return 0
+    if checkin.checkin_date == local.date() and local.hour < SUMMARY_LOCAL_HOUR:
+        return 0
+    subject = f"Today's check-in with {profile.display_name}"
+    body = _summary_body(db, checkin, profile)
+    users = _members_except(db, checkin.family_id, checkin.parent_user_id)
+    # Mark sent before emailing, so a crash mid-send can never repeat the summary.
+    checkin.summary_sent_at = now
+    db.commit()
+    _email(users, subject, body)
+    return 1
 
 
 def alert_missed_doses(db: Session, now: datetime) -> int:
@@ -228,49 +232,61 @@ def alert_missed_doses(db: Session, now: datetime) -> int:
     or after the reminder the parent asked for. Skipped doses count as answered. Returns slots alerted.
     """
     now = _aware(now)
+    profile_ids = list(db.execute(select(CareProfile.id).order_by(CareProfile.created_at, CareProfile.id)).scalars())
     total = 0
-    for profile in db.execute(select(CareProfile)).scalars().all():
-        logged = logged_today(db, profile, now)
-        missed: list[tuple[DueDose, MedicineDose | None]] = []
-        for dose in doses_today(db, profile, now):
-            if dose.due_at is None or dose.status in ("taken", "skipped"):
-                continue
-            row = logged.get((dose.medicine_id, dose.slot))
-            if row is not None and row.family_alerted_at is not None:
-                continue
-            deadline = _aware(row.remind_at) if row is not None and row.remind_at is not None else dose.due_at
-            if now < deadline + MISSED_AFTER:
-                continue
-            missed.append((dose, row))
-        if not missed:
-            continue
-        users = _members_except(db, profile.family_id, profile.linked_user_id)
-        name = profile.display_name
-        for dose, row in missed:
-            if row is None:
-                row = MedicineDose(
-                    family_id=profile.family_id, care_profile_id=profile.id, medicine_id=dose.medicine_id,
-                    dose_date=today_for(profile, now), slot=dose.slot, status="not_taken",
-                    recorded_at=now, source="chatbot",
-                )
-                db.add(row)
-            row.family_alerted_at = now
-            payload = {
-                "care_profile_id": profile.id,
-                "parent_name": name,
-                "medicine_id": dose.medicine_id,
-                "medicine_name": dose.name,
-                "slot": dose.slot,
-            }
-            for user in users:
-                notify(db, user.id, "medicine.missed", family_id=profile.family_id, payload=payload)
-        # Mark alerted before emailing, so a crash mid-send can never repeat the alert.
-        db.commit()
-        for dose, _ in missed:
-            _email_each(
-                users,
-                f"Medicine not taken: {name} - {dose.name}",
-                f"{name} has not taken {dose.name} (due at {dose.slot}) today. Please check in with {name}.",
-            )
-            total += 1
+    for profile_id in profile_ids:
+        try:
+            total += _alert_profile(db, profile_id, now)
+        except Exception:  # noqa: BLE001 - one bad profile must not block every later one
+            db.rollback()
+            logger.exception("Missed-dose check failed for care profile %s", profile_id)
     return total
+
+
+def _alert_profile(db: Session, profile_id: str, now: datetime) -> int:
+    profile = db.get(CareProfile, profile_id)
+    if profile is None:
+        return 0
+    logged = logged_today(db, profile, now)
+    missed: list[tuple[DueDose, MedicineDose | None]] = []
+    for dose in doses_today(db, profile, now):
+        if dose.due_at is None or dose.status in ("taken", "skipped"):
+            continue
+        row = logged.get((dose.medicine_id, dose.slot))
+        if row is not None and row.family_alerted_at is not None:
+            continue
+        deadline = _aware(row.remind_at) if row is not None and row.remind_at is not None else dose.due_at
+        if now < deadline + MISSED_AFTER:
+            continue
+        missed.append((dose, row))
+    if not missed:
+        return 0
+    users = _members_except(db, profile.family_id, profile.linked_user_id)
+    name = profile.display_name
+    for dose, row in missed:
+        if row is None:
+            row = MedicineDose(
+                family_id=profile.family_id, care_profile_id=profile.id, medicine_id=dose.medicine_id,
+                dose_date=today_for(profile, now), slot=dose.slot, status="not_taken",
+                recorded_at=now, source="chatbot",
+            )
+            db.add(row)
+        row.family_alerted_at = now
+        payload = {
+            "care_profile_id": profile.id,
+            "parent_name": name,
+            "medicine_id": dose.medicine_id,
+            "medicine_name": dose.name,
+            "slot": dose.slot,
+        }
+        for user in users:
+            notify(db, user.id, "medicine.missed", family_id=profile.family_id, payload=payload)
+    # Mark alerted before emailing, so a crash mid-send can never repeat the alert.
+    db.commit()
+    for dose, _ in missed:
+        _email(
+            users,
+            f"Medicine not taken: {name} - {dose.name}",
+            f"{name} has not taken {dose.name} (due at {dose.slot}) today. Please check in with {name}.",
+        )
+    return len(missed)

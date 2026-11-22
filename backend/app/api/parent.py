@@ -5,11 +5,10 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
-from sqlalchemy import select, text as sql_text
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, DbSession
-from app.models.checkin import ChatMessage, HealthCheckin
+from app.models.checkin import HealthCheckin
 from app.models.medicine import Medicine
 from app.models.user import User
 from app.schemas import (
@@ -39,13 +38,9 @@ def _now() -> datetime:
 
 
 def _messages(db: Session, checkin: HealthCheckin) -> list[ChatMessageOut]:
-    stmt = select(ChatMessage).where(ChatMessage.checkin_id == checkin.id).order_by(ChatMessage.created_at)
-    if db.get_bind().dialect.name == "sqlite":
-        # Messages stored in one commit can share a timestamp; insertion order breaks the tie.
-        stmt = stmt.order_by(sql_text("chat_messages.rowid"))
     return [
         ChatMessageOut(sender=m.sender, text=m.text, created_at=_aware(m.created_at))
-        for m in db.execute(stmt).scalars()
+        for m in engine.conversation(db, checkin)
     ]
 
 
