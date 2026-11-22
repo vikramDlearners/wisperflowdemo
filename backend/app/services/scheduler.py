@@ -1,4 +1,5 @@
-"""Background jobs: missed-dose alerts every 10 minutes and daily summaries every 30 minutes.
+"""Background jobs: missed-dose alerts every 10 minutes, daily summaries every 30 minutes, and a summary of
+each finished parent chat (with tasks for important points) every 2 minutes.
 
 Started from app.main only when settings.scheduler_enabled is true (tests turn it off).
 Each run opens its own database session and closes it.
@@ -12,6 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.services.conversation_summary import summarise_conversations
 from app.services.family_alerts import alert_missed_doses, send_daily_summaries
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,8 @@ def build_scheduler() -> BackgroundScheduler:
     common = {"coalesce": True, "max_instances": 1, "replace_existing": True}
     sched.add_job(run_job, "interval", minutes=10, args=[alert_missed_doses], id="alert_missed_doses", **common)
     sched.add_job(run_job, "interval", minutes=30, args=[send_daily_summaries], id="send_daily_summaries", **common)
+    sched.add_job(run_job, "interval", minutes=2, args=[summarise_conversations], id="summarise_conversations",
+                  **common)
     return sched
 
 

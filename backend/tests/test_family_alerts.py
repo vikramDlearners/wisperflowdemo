@@ -128,12 +128,13 @@ def test_remind_later_moves_the_deadline(db_session, world, email):
 
 # ---------- scheduler ----------
 
-def test_scheduler_has_both_jobs_and_is_not_started():
+def test_scheduler_has_its_jobs_and_is_not_started():
     sched = scheduler_svc.build_scheduler()
     jobs = {j.id: j for j in sched.get_jobs()}
-    assert set(jobs) == {"alert_missed_doses", "send_daily_summaries"}
+    assert set(jobs) == {"alert_missed_doses", "send_daily_summaries", "summarise_conversations"}
     assert jobs["alert_missed_doses"].trigger.interval == timedelta(minutes=10)
     assert jobs["send_daily_summaries"].trigger.interval == timedelta(minutes=30)
+    assert jobs["summarise_conversations"].trigger.interval == timedelta(minutes=2)
     assert sched.running is False
 
 

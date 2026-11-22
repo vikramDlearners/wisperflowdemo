@@ -16,6 +16,7 @@ from app.models.appointment import Appointment
 from app.models.dose import MedicineDose
 from app.models.checkin import ChatMessage, HealthCheckin
 from app.models.meal import MealLog
+from app.models.conversation_summary import ConversationSummary
 from app.models.notification import Notification
 from app.models.activity import ActivityLog
 from app.models.app_setting import AppSetting
@@ -40,6 +41,7 @@ __all__ = [
     "HealthCheckin",
     "ChatMessage",
     "MealLog",
+    "ConversationSummary",
     "Notification",
     "ActivityLog",
     "AppSetting",
