@@ -1,3 +1,4 @@
+import http.client
 import io
 import json
 import urllib.error
@@ -77,7 +78,6 @@ def test_tts_request_and_bytes(captured):
     assert json.loads(req.data) == {
         "text": "Namaste",
         "model_id": "eleven_multilingual_v2",
-        "language_code": "hi",
     }
 
 
@@ -125,3 +125,39 @@ def test_bad_stt_response(captured):
 def test_factories():
     assert isinstance(get_speech_to_text(), ElevenLabsSpeechToText)
     assert isinstance(get_text_to_speech(), ElevenLabsTextToSpeech)
+
+
+def test_incomplete_read_becomes_speech_unavailable(monkeypatch):
+    def boom(request, timeout=None):
+        raise http.client.IncompleteRead(b"x")
+
+    monkeypatch.setattr(speech.urllib.request, "urlopen", boom)
+    with pytest.raises(SpeechUnavailable):
+        ElevenLabsSpeechToText().transcribe(b"a", "en", "audio/webm")
+    with pytest.raises(SpeechUnavailable):
+        ElevenLabsTextToSpeech().synthesize("hi", "en")
+
+
+def test_mime_parameters_stripped(captured):
+    captured["install"](json.dumps({"text": "x"}).encode())
+    ElevenLabsSpeechToText().transcribe(b"A", "en", "Audio/WebM;codecs=opus")
+    data = captured["request"].data
+    assert b"Content-Type: audio/webm\r\n" in data and b"codecs" not in data
+    assert b'filename="audio.webm"' in data
+
+
+def test_mime_crlf_not_injected(captured):
+    captured["install"](json.dumps({"text": "x"}).encode())
+    ElevenLabsSpeechToText().transcribe(b"A", "en", "audio/webm\r\nX-Evil: 1")
+    data = captured["request"].data
+    assert b"X-Evil" not in data
+    assert b"Content-Type: application/octet-stream\r\n" in data
+    assert b'filename="audio.bin"' in data
+
+
+def test_mime_mp4_and_unknown_subtype(captured):
+    captured["install"](json.dumps({"text": "x"}).encode())
+    ElevenLabsSpeechToText().transcribe(b"A", "en", "audio/mp4")
+    assert b'filename="audio.mp4"' in captured["request"].data
+    ElevenLabsSpeechToText().transcribe(b"A", "en", "audio/ogg")
+    assert b'filename="audio.bin"' in captured["request"].data

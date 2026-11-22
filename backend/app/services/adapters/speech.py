@@ -5,7 +5,9 @@ Tests mock get_speech_to_text() / get_text_to_speech(), or urllib.request.urlope
 The API key is never logged or put in an exception message.
 """
 
+import http.client
 import json
+import re
 import urllib.error
 import urllib.request
 import uuid
@@ -42,11 +44,25 @@ def _send(request: urllib.request.Request) -> bytes:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             return response.read()
     except urllib.error.HTTPError as exc:
-        raise SpeechUnavailable(f"ElevenLabs request failed with HTTP status {exc.code}") from None
+        status = exc.code
+        exc.close()
+        raise SpeechUnavailable(f"ElevenLabs request failed with HTTP status {status}") from None
     except urllib.error.URLError:
         raise SpeechUnavailable("ElevenLabs request failed (network error)") from None
-    except OSError:
+    except (OSError, http.client.HTTPException):
         raise SpeechUnavailable("ElevenLabs request failed (could not read response)") from None
+
+
+_AUDIO_MIME = re.compile(r"^audio/[a-z0-9.+-]+$")
+_EXTENSIONS = {"webm": "webm", "mp4": "mp4"}
+
+
+def _clean_audio_mime(mime_type: str) -> tuple[str, str]:
+    """Whitelist the browser-supplied mime type; return (content_type, filename)."""
+    base = (mime_type or "").split(";", 1)[0].strip().lower()
+    if not _AUDIO_MIME.fullmatch(base):
+        return "application/octet-stream", "audio.bin"
+    return base, f"audio.{_EXTENSIONS.get(base.split('/', 1)[1], 'bin')}"
 
 
 def _multipart(fields: dict[str, str], file_field: str, filename: str, content_type: str, data: bytes):
@@ -70,11 +86,12 @@ def _multipart(fields: dict[str, str], file_field: str, filename: str, content_t
 class ElevenLabsSpeechToText:
     def transcribe(self, audio: bytes, language: str, mime_type: str) -> str:
         api_key = _api_key()
+        file_type, filename = _clean_audio_mime(mime_type)
         body, content_type = _multipart(
             {"model_id": settings.elevenlabs_stt_model, "language_code": language},
             "file",
-            "audio.webm",
-            mime_type or "application/octet-stream",
+            filename,
+            file_type,
             audio,
         )
         request = urllib.request.Request(
@@ -99,7 +116,8 @@ class ElevenLabsTextToSpeech:
         voice_id = settings.elevenlabs_voice_id
         if not voice_id:
             raise SpeechUnavailable("ElevenLabs voice is not configured")
-        body = {"text": text, "model_id": settings.elevenlabs_tts_model, "language_code": language}
+        # language_code is only accepted on Turbo/Flash v2.5; multilingual v2 detects it from the text.
+        body = {"text": text, "model_id": settings.elevenlabs_tts_model}
         request = urllib.request.Request(
             TTS_URL.format(voice_id=voice_id),
             data=json.dumps(body).encode("utf-8"),
