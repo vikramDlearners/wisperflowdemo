@@ -48,9 +48,9 @@ NOT_TAKEN_REASK = timedelta(minutes=30)
 _CLOSINGS = tuple(sorted({
     "ok", "okay", "okey", "k", "fine", "alright", "all right", "good", "bye", "bye bye", "goodbye", "good bye",
     "see you", "good night", "thank you", "thank you so much", "thank you very much", "thanks", "thanks a lot",
-    "thank u", "no", "nope", "nothing", "nothing else", "nothing more", "that's all", "that is all", "yes",
+    "thank u", "no", "nope", "nothing", "nothing else", "nothing more", "that's all", "that is all",
     "நன்றி", "ரொம்ப நன்றி", "மிக்க நன்றி", "சரி", "போதும்", "ஒன்றுமில்லை", "ஒன்னுமில்லை", "இல்லை", "வணக்கம்", "பை",
-    "धन्यवाद", "शुक्रिया", "ठीक है", "ठीक", "बस", "अलविदा", "नहीं", "कुछ नहीं", "हाँ", "हां", "नमस्ते", "बाय",
+    "धन्यवाद", "शुक्रिया", "ठीक है", "ठीक", "बस", "अलविदा", "नहीं", "कुछ नहीं", "नमस्ते", "बाय",
     "ధన్యవాదాలు", "ధన్యవాదం", "సరే", "ఏమీ లేదు", "లేదు", "బై",
     "നന്ദി", "ശരി", "ഒന്നുമില്ല", "ഇല്ല", "ബൈ",
     "ಧನ್ಯವಾದ", "ಧನ್ಯವಾದಗಳು", "ಸರಿ", "ಏನೂ ಇಲ್ಲ", "ಇಲ್ಲ", "ಬೈ",

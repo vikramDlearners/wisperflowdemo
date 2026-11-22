@@ -497,3 +497,11 @@ def test_conversation_orders_by_sequence_not_insert_order(db_session, world):
 def test_indexes_for_dose_and_message_lookups():
     assert "ix_chat_messages_checkin_id" in {i.name for i in ChatMessage.__table__.indexes}
     assert "ix_medicine_doses_profile_date" in {i.name for i in MedicineDose.__table__.indexes}
+
+
+def test_is_closing_only_for_pure_closings():
+    assert engine.is_closing("ok, bye. Thank you!") is True
+    assert engine.is_closing("சரி நன்றி") is True
+    assert engine.is_closing("yes") is False  # "anything else?" -> "yes" means more is coming
+    assert engine.is_closing("ok but my knee hurts") is False
+    assert engine.is_closing("") is False
