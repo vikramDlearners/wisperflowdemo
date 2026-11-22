@@ -6,8 +6,16 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser, DbSession
 from app.models.medicine import Medicine
 from app.models.user import User
-from app.schemas import MedicineCreate, MedicineOut, MedicineUpdate, QuantityUpdate
+from app.schemas import (
+    MedicineCreate,
+    MedicineOut,
+    MedicineUpdate,
+    QuantityUpdate,
+    ReminderTimesIn,
+    ReminderTimesOut,
+)
 from app.services import care as svc
+from app.services import reminders as reminders_svc
 from app.services.prescription_scan import MAX_IMAGE_BYTES
 
 router = APIRouter(prefix="/api/families/{family_id}/medicines", tags=["medicines"])
@@ -110,3 +118,20 @@ def get_medicine_image(
 ) -> Response:
     image_bytes, content_type = svc.get_medicine_image(db, user.id, family_id, medicine_id)
     return Response(content=image_bytes, media_type=content_type)
+
+
+@router.get("/{medicine_id}/reminders", response_model=ReminderTimesOut)
+def get_reminders(
+    family_id: str, medicine_id: str, db: Session = DbSession, user: User = CurrentUser
+) -> ReminderTimesOut:
+    svc.get_medicine(db, user.id, family_id, medicine_id)  # medicines.view + family scoping
+    return ReminderTimesOut(times=reminders_svc.list_reminder_times(db, medicine_id))
+
+
+@router.put("/{medicine_id}/reminders", response_model=ReminderTimesOut)
+def put_reminders(
+    family_id: str, medicine_id: str, body: ReminderTimesIn,
+    db: Session = DbSession, user: User = CurrentUser,
+) -> ReminderTimesOut:
+    times = reminders_svc.set_reminder_times(db, user.id, family_id, medicine_id, body.times)
+    return ReminderTimesOut(times=times)

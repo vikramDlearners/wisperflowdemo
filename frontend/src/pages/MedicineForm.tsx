@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../medicines.css";
+import "../prescription-scan.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import { createCareProfileFromOnboarding } from "../careProfileSetup";
 import {
@@ -63,6 +64,8 @@ export default function MedicineForm({
   // Pricing: price per tablet and how many tablets were bought; the server computes the total.
   const [unitPrice, setUnitPrice] = useState("");
   const [totalCount, setTotalCount] = useState("");
+  // Reminder times (HH:MM); saved with a PUT after the medicine itself is saved.
+  const [times, setTimes] = useState<string[]>([]);
   const [linkedScanId, setLinkedScanId] = useState<string | null>(null);
 
   // Medicine photo. Only members with medicines.edit can add or remove it.
@@ -103,11 +106,15 @@ export default function MedicineForm({
       members.list(familyId).catch(() => [] as MemberOut[]),
       isEdit ? medicines.get(familyId, medicineId) : Promise.resolve(null),
       families.me(familyId).catch(() => null),
+      isEdit
+        ? medicines.getReminders(familyId, medicineId).then((r) => r.times).catch(() => [] as string[])
+        : Promise.resolve([] as string[]),
     ])
-      .then(([profileList, memberList, med, access]) => {
+      .then(([profileList, memberList, med, access, reminderTimes]) => {
         if (cancelled) return;
         setProfiles(profileList);
         setPeople(memberList);
+        setTimes(reminderTimes);
         // If permissions can't be read, show the controls; the server still enforces them.
         setCanEditPhoto(access ? access.permissions.includes("medicines.edit") : true);
         if (med) {
@@ -148,6 +155,10 @@ export default function MedicineForm({
     }
     if (totalCount.trim() !== "" && !(Number.isInteger(Number(totalCount)) && Number(totalCount) >= 0)) {
       setError("Tablets bought must be a whole number, 0 or more.");
+      return;
+    }
+    if (times.some((t) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) {
+      setError("Please fill in every reminder time, or remove the empty ones.");
       return;
     }
     setSaving(true);
@@ -194,6 +205,8 @@ export default function MedicineForm({
           result = await medicines.update(familyId, result.id, pricing);
         }
       }
+      // Reminder times are saved separately too (PUT replaces them all).
+      await medicines.setReminders(familyId, result.id, times);
       // Photo is a separate upload after the medicine itself is saved.
       let photoProblem: string | null = null;
       try {
@@ -367,6 +380,37 @@ export default function MedicineForm({
                       </strong>
                     </div>
                   </div>
+                </div>
+
+                <div className="pp-field mf-span">
+                  <span id="mf-times-label">Reminder times</span>
+                  <div className="ps-times" role="group" aria-labelledby="mf-times-label">
+                    {times.map((t, ti) => (
+                      <span key={ti} className="ps-time">
+                        <input
+                          type="time"
+                          value={t}
+                          aria-label={`Time ${ti + 1}`}
+                          onChange={(e) => setTimes(times.map((x, i) => (i === ti ? e.target.value : x)))}
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Remove time ${ti + 1}`}
+                          onClick={() => setTimes(times.filter((_, i) => i !== ti))}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <button
+                      type="button"
+                      className="ps-add-time"
+                      onClick={() => setTimes([...times, "12:00"])}
+                    >
+                      + Add time
+                    </button>
+                  </div>
+                  <span className="md-sub">Optional · leave empty for a once-a-day medicine.</span>
                 </div>
 
                 {linkedScanId && (

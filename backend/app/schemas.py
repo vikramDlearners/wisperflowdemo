@@ -387,6 +387,13 @@ class ProfileOut(BaseModel):
 _HH_MM = re.compile(r"([01][0-9]|2[0-3]):[0-5][0-9]")
 
 
+def _validate_hh_mm_list(values: list[str]) -> list[str]:
+    for value in values:
+        if not _HH_MM.fullmatch(value):
+            raise ValueError(f"time must be 24-hour HH:MM: {value}")
+    return values
+
+
 class PrescriptionScanOut(BaseModel):
     id: str
     document_type: str
@@ -404,10 +411,20 @@ class PrescriptionMedicineIn(BaseModel):
     @field_validator("times")
     @classmethod
     def _times_are_hh_mm(cls, values: list[str]) -> list[str]:
-        for value in values:
-            if not _HH_MM.fullmatch(value):
-                raise ValueError(f"time must be 24-hour HH:MM: {value}")
-        return values
+        return _validate_hh_mm_list(values)
+
+
+class ReminderTimesIn(BaseModel):
+    times: list[str] = Field(default_factory=list, max_length=12)
+
+    @field_validator("times")
+    @classmethod
+    def _times_are_hh_mm(cls, values: list[str]) -> list[str]:
+        return _validate_hh_mm_list(values)
+
+
+class ReminderTimesOut(BaseModel):
+    times: list[str]
 
 
 class PrescriptionScanConfirm(BaseModel):

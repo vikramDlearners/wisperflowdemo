@@ -399,6 +399,10 @@ export const medicines = {
     del(`/api/families/${familyId}/medicines/${medicineId}`),
   updateQuantity: (familyId: string, medicineId: string, body: QuantityUpdate) =>
     patch<MedicineOut>(`/api/families/${familyId}/medicines/${medicineId}/quantity`, body),
+  getReminders: (familyId: string, medicineId: string) =>
+    get<{ times: string[] }>(`/api/families/${familyId}/medicines/${medicineId}/reminders`),
+  setReminders: (familyId: string, medicineId: string, times: string[]) =>
+    put<{ times: string[] }>(`/api/families/${familyId}/medicines/${medicineId}/reminders`, { times }),
 };
 
 // ---- tasks (verified against api/tasks.py) ----
