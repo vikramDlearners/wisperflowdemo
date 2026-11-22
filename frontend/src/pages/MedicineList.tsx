@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import "../medicines.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import { ApiError, medicines, members, type MedicineOut, type MemberOut } from "../api";
-import { useMedicineImage } from "../medicineImage";
+import { formatPrice, useMedicineImage } from "../medicineImage";
 
 interface MedicineListProps {
   familyId: string;
@@ -246,7 +246,9 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
                                     {m.quantity_remaining != null
                                       ? `${m.quantity_remaining} left`
                                       : "Quantity not tracked"}
+                                    {formatPrice(m.total_price) && <> · {formatPrice(m.total_price)}</>}
                                   </div>
+                                  {m.prescription_scan_id && <span className="md-rx">From prescription</span>}
                                 </div>
                               </div>
                             </td>
@@ -322,7 +324,7 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
 
 // Photo thumbnail (GET .../image), or the ✚ icon when the medicine has no photo.
 function MedThumb({ familyId, medicine, tone }: { familyId: string; medicine: MedicineOut; tone: string }) {
-  const url = useMedicineImage(familyId, medicine.id);
+  const url = useMedicineImage(familyId, medicine.has_image === false ? null : medicine.id);
   return url ? (
     <img className="md-med-photo" src={url} alt={`Photo of ${medicine.display_name}`} />
   ) : (

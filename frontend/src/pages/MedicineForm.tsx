@@ -8,6 +8,7 @@ import {
   ImageUploadUnavailable,
   uploadMedicineImage,
   useMedicineImage,
+  formatPrice,
 } from "../medicineImage";
 import {
   ApiError,
@@ -59,6 +60,10 @@ export default function MedicineForm({
   const [refillDate, setRefillDate] = useState("");
   const [responsible, setResponsible] = useState("");
   const [active, setActive] = useState(true);
+  // Pricing: price per tablet and how many tablets were bought; the server computes the total.
+  const [unitPrice, setUnitPrice] = useState("");
+  const [totalCount, setTotalCount] = useState("");
+  const [linkedScanId, setLinkedScanId] = useState<string | null>(null);
 
   // Medicine photo. Only members with medicines.edit can add or remove it.
   const [canEditPhoto, setCanEditPhoto] = useState(true);
@@ -113,6 +118,9 @@ export default function MedicineForm({
           setRefillDate(med.refill_date ?? "");
           setResponsible(med.responsible_user_id ?? "");
           setActive(med.active);
+          setUnitPrice(med.unit_price != null ? String(Number(med.unit_price)) : "");
+          setTotalCount(med.total_medicine_count != null ? String(med.total_medicine_count) : "");
+          setLinkedScanId(med.prescription_scan_id ?? null);
         } else {
           setProfileId((current) => current || profileList[0]?.id || "");
         }
@@ -134,11 +142,23 @@ export default function MedicineForm({
       setError("Please enter the medicine name.");
       return;
     }
+    if (unitPrice.trim() !== "" && !(Number(unitPrice) >= 0)) {
+      setError("Price per tablet must be 0 or more.");
+      return;
+    }
+    if (totalCount.trim() !== "" && !(Number.isInteger(Number(totalCount)) && Number(totalCount) >= 0)) {
+      setError("Tablets bought must be a whole number, 0 or more.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const refill = refillDate === "" ? null : refillDate;
       const owner = responsible === "" ? null : responsible;
+      const pricing = {
+        unit_price: unitPrice.trim() === "" ? null : Number(unitPrice),
+        total_medicine_count: totalCount.trim() === "" ? null : Number(totalCount),
+      };
       let result: MedicineOut;
 
       if (isEdit) {
@@ -148,6 +168,7 @@ export default function MedicineForm({
           refill_date: refill,
           responsible_user_id: owner,
           active,
+          ...pricing,
         };
         result = await medicines.update(familyId, medicineId, body);
       } else {
@@ -168,6 +189,10 @@ export default function MedicineForm({
           responsible_user_id: owner,
         };
         result = await medicines.create(familyId, body);
+        // Create doesn't accept pricing; set it with a follow-up update.
+        if (pricing.unit_price !== null || pricing.total_medicine_count !== null) {
+          result = await medicines.update(familyId, result.id, pricing);
+        }
       }
       // Photo is a separate upload after the medicine itself is saved.
       let photoProblem: string | null = null;
@@ -300,6 +325,58 @@ export default function MedicineForm({
                     ))}
                   </select>
                 </label>
+
+                <div className="mf-span mf-price">
+                  <div className="mf-price-head">
+                    <strong>Pricing</strong>
+                    <span className="md-sub">Optional · for tracking medicine costs</span>
+                  </div>
+                  <div className="mf-price-row">
+                    <label className="pp-field">
+                      Price per tablet (₹)
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        inputMode="decimal"
+                        placeholder="e.g. 4.50"
+                        value={unitPrice}
+                        onChange={(e) => setUnitPrice(e.target.value)}
+                      />
+                    </label>
+                    <span className="mf-price-x" aria-hidden="true">×</span>
+                    <label className="pp-field">
+                      Tablets bought
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        inputMode="numeric"
+                        placeholder="e.g. 30"
+                        value={totalCount}
+                        onChange={(e) => setTotalCount(e.target.value)}
+                      />
+                    </label>
+                    <span className="mf-price-x" aria-hidden="true">=</span>
+                    <div className="mf-price-total">
+                      <span>Total</span>
+                      <strong>
+                        {unitPrice !== "" && totalCount !== "" && Number(unitPrice) >= 0 && Number(totalCount) >= 0
+                          ? formatPrice(Number(unitPrice) * Number(totalCount))
+                          : "—"}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {linkedScanId && (
+                  <p className="mf-span mf-linked">
+                    🧾 Added from a prescription scan.{" "}
+                    <Link to={`/family/${familyId}/prescription-scan?scan=${linkedScanId}&profile=${profileId}`}>
+                      View prescription
+                    </Link>
+                  </p>
+                )}
 
                 {isEdit && (
                   <label className="mf-toggle mf-span">

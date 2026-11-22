@@ -869,3 +869,101 @@
     gap: 2px;
   }
 }
+
+/* ---------- Pricing & prescription link ---------- */
+.mf-price {
+  border: 1px solid var(--pp-line);
+  border-radius: 12px;
+  padding: 14px;
+  background: #fafcfb;
+}
+.mf-price-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+.mf-price-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(110px, 0.8fr);
+  gap: 10px;
+  align-items: end;
+}
+.mf-price-x {
+  padding-bottom: 10px;
+  color: var(--pp-muted);
+  font-weight: 700;
+}
+.mf-price-total {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mf-price-total span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #4a5b57;
+}
+.mf-price-total strong {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--pp-teal-soft);
+  color: var(--pp-teal-dark);
+  font-size: 1rem;
+}
+.mf-linked {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eef3fb;
+  color: #3e5f8a;
+  font-size: 0.85rem;
+}
+.mf-linked a,
+.md-d-dl a {
+  color: var(--pp-teal-dark);
+  font-weight: 700;
+}
+.md-rx {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #eef3fb;
+  color: #3e5f8a;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+.md-d-tag-rx {
+  background: #eef3fb;
+  color: #3e5f8a;
+}
+.md-d-facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 1100px) {
+  .md-d-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .md-d-facts {
+    grid-template-columns: 1fr;
+  }
+  .mf-price-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .mf-price-x {
+    display: none;
+  }
+  .mf-price-total {
+    grid-column: 1 / -1;
+  }
+}

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import "../medicines.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
-import { useMedicineImage } from "../medicineImage";
+import { formatPrice, useMedicineImage } from "../medicineImage";
 import {
   ApiError,
   careProfiles,
@@ -172,6 +172,7 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
                     {medicine.active ? "Active" : "Inactive"}
                   </span>
                   {recipient && <span className="md-d-tag">For {recipient.display_name}</span>}
+                  {medicine.prescription_scan_id && <span className="md-d-tag md-d-tag-rx">🧾 From prescription</span>}
                 </div>
                 <h1>{medicine.display_name}</h1>
                 <p className="md-d-instructions">
@@ -235,6 +236,17 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
                   </>
                 )}
               </div>
+              <div className="pp-card md-d-fact">
+                <span className="md-d-fact-label">Cost</span>
+                <strong>{formatPrice(medicine.total_price) ?? "—"}</strong>
+                <span className="md-sub">
+                  {formatPrice(medicine.unit_price) && medicine.total_medicine_count != null
+                    ? `${formatPrice(medicine.unit_price)} × ${medicine.total_medicine_count} tablets`
+                    : formatPrice(medicine.unit_price)
+                      ? `${formatPrice(medicine.unit_price)} per tablet`
+                      : "Price not added"}
+                </span>
+              </div>
             </div>
 
             <div className="md-d-grid">
@@ -253,6 +265,32 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
                   <div>
                     <dt>Care recipient</dt>
                     <dd>{recipient?.display_name ?? <span className="pp-muted">—</span>}</dd>
+                  </div>
+                  <div>
+                    <dt>Price per tablet</dt>
+                    <dd>{formatPrice(medicine.unit_price) ?? <span className="pp-muted">Not added</span>}</dd>
+                  </div>
+                  <div>
+                    <dt>Tablets bought</dt>
+                    <dd>{medicine.total_medicine_count ?? <span className="pp-muted">Not added</span>}</dd>
+                  </div>
+                  <div>
+                    <dt>Total cost</dt>
+                    <dd>{formatPrice(medicine.total_price) ?? <span className="pp-muted">—</span>}</dd>
+                  </div>
+                  <div>
+                    <dt>Source</dt>
+                    <dd>
+                      {medicine.prescription_scan_id ? (
+                        <Link
+                          to={`/family/${familyId}/prescription-scan?scan=${medicine.prescription_scan_id}&profile=${medicine.care_profile_id}`}
+                        >
+                          From a prescription scan · view prescription
+                        </Link>
+                      ) : (
+                        "Entered by a family member"
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt>Status</dt>

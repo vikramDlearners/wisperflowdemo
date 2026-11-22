@@ -103,3 +103,13 @@ export function checkImageFile(file: File): string | null {
   if (file.size > MAX_IMAGE_BYTES) return "This photo is larger than 10 MB. Please choose a smaller one.";
   return null;
 }
+
+// ---------- pricing helpers ----------
+
+/** Formats a price (number or decimal string) as Indian rupees, or null when unset. */
+export function formatPrice(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  return n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+}
