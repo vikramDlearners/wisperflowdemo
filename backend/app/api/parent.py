@@ -28,6 +28,7 @@ from app.services import checkin as engine
 from app.services.adapters.speech import SpeechUnavailable, get_speech_to_text, get_text_to_speech
 from app.services.doses import _aware, logged_today
 from app.services.parent_context import ParentContext, resolve_parent
+from app.services.permissions import get_membership, permission_codes_for
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,11 @@ router = APIRouter(prefix="/api/parent", tags=["parent"])
 
 MAX_AUDIO_BYTES = 2 * 1024 * 1024
 VOICE_UNAVAILABLE = "Voice isn't available right now. Please type instead."
+
+
+def _can_open_portal(db: Session, ctx: ParentContext) -> bool:
+    membership = get_membership(db, ctx.user_id, ctx.family_id)
+    return "dashboard.view" in permission_codes_for(db, membership)
 
 
 def _now() -> datetime:
@@ -102,6 +108,8 @@ def get_checkin(new_session: bool = False, db: Session = DbSession, user: User =
     audio, audio_type = _speak(turn.bot_messages, ctx.language)
     return CheckinOut(
         checkin_id=turn.checkin.id,
+        family_id=ctx.family_id,
+        can_open_portal=_can_open_portal(db, ctx),
         step=turn.checkin.step,
         messages=_messages(db, turn.checkin),
         call_number=turn.call_number,

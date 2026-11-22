@@ -79,6 +79,7 @@ export default function ParentChat() {
   const t = parentStrings(language);
   const [callNumber, setCallNumber] = useState<string | null>(null);
   const [helpNumber, setHelpNumber] = useState<string | null>(null);
+  const [familyId, setFamilyId] = useState<string | null>(null);
   const [reminders, setReminders] = useState<ReminderDue[]>([]);
   const [phase, setPhase] = useState<Phase>("idle");
   const [notice, setNotice] = useState<string | null>(null);
@@ -242,6 +243,7 @@ export default function ParentChat() {
       setLanguage(data.language || "");
       setCallNumber(data.call_number);
       setHelpNumber(data.help_number);
+      setFamilyId(data.can_open_portal && data.family_id ? data.family_id : null);
       setReminders(data.reminders_due);
       setLoad({ kind: "ready" });
       // Speaks the greeting / newly asked question (null on a plain reload).
@@ -473,6 +475,11 @@ export default function ParentChat() {
     <header className="pc-header">
       <h1 className="pc-brand">CareCircle</h1>
       <div className="pc-header-actions">
+        {load.kind === "ready" && familyId && (
+          <Link to={`/family/${familyId}`} className="pc-portal-btn">
+            {t.moveToPortal}
+          </Link>
+        )}
         {load.kind === "ready" && (
           <button
             type="button"

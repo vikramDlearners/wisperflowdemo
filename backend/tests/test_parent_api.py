@@ -73,7 +73,8 @@ def test_get_checkin_starts_today(client, db_session, world):
     assert r.status_code == 200
     body = r.json()
     assert set(body) == {
-        "checkin_id", "step", "messages", "call_number", "help_number", "language", "reminders_due",
+        "checkin_id", "family_id", "can_open_portal", "step", "messages", "call_number", "help_number",
+        "language", "reminders_due",
         "audio", "audio_type",
     }
     assert body["step"] == "health"
@@ -374,3 +375,30 @@ def test_turn_reports_the_current_language(client, db_session, world):
     assert body["language"] == "hi"
     # The very next reply is already in the new language.
     assert body["messages"][0]["text"].startswith("बताने के लिए धन्यवाद")
+
+
+def test_checkin_returns_the_family_for_the_portal_link(client, db_session, world):
+    r = client.get("/api/parent/checkin", headers=_auth(db_session, world["parent"]))
+    assert r.json()["family_id"] == world["family_id"]
+
+
+def test_portal_link_only_when_the_parent_can_open_the_overview(client, db_session, world):
+    from sqlalchemy import select
+    from app.models.membership import FamilyMember
+    from app.models.role import RolePermission
+
+    headers = _auth(db_session, world["parent"])
+    membership = db_session.execute(
+        select(FamilyMember).where(FamilyMember.user_id == world["parent"].id)
+    ).scalar_one()
+    rows = db_session.execute(
+        select(RolePermission).where(RolePermission.role_id == membership.role_id,
+                                     RolePermission.permission == "dashboard.view")
+    ).scalars().all()
+    for row in rows:
+        db_session.delete(row)
+    db_session.commit()
+    assert client.get("/api/parent/checkin", headers=headers).json()["can_open_portal"] is False
+    db_session.add(RolePermission(role_id=membership.role_id, permission="dashboard.view"))
+    db_session.commit()
+    assert client.get("/api/parent/checkin", headers=headers).json()["can_open_portal"] is True

@@ -493,6 +493,10 @@ class ReminderDueOut(BaseModel):
 
 class CheckinOut(BaseModel):
     checkin_id: str
+    # The parent's family, for the "Move to Portal" link to its Overview page.
+    family_id: str
+    # True when the parent may open that page (dashboard.view); otherwise the link is not shown.
+    can_open_portal: bool = False
     step: str
     messages: list[ChatMessageOut]
     call_number: str | None

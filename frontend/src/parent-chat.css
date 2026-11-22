@@ -71,6 +71,22 @@
   gap: 8px;
 }
 
+/* Narrow phones: the brand on its own row, the three buttons on the row below. */
+@media (max-width: 480px) {
+  .pc-header {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .pc-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .pc-portal-btn {
+    padding: 8px 12px;
+    font-size: 17px;
+  }
+}
+
 .pc-help-btn {
   min-height: 48px;
   padding: 8px 18px;
@@ -82,6 +98,23 @@
   font-size: 20px;
   font-weight: 700;
   cursor: pointer;
+}
+/* "Move to Portal": opens the family's Overview page */
+.pc-portal-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--pc-teal);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.pc-portal-btn:hover {
+  background: var(--pc-teal-dark);
 }
 .pc-help-btn[aria-expanded="true"] {
   background: var(--pc-teal);

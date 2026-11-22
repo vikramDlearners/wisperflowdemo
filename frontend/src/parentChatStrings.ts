@@ -36,6 +36,7 @@ export interface ParentStrings {
   logOut: string;
   photoOf: string;
   closePhoto: string;
+  moveToPortal: string;
   emergencyQuestion: string;
   emergencyYes: string;
   emergencyNo: string;
@@ -50,6 +51,7 @@ const en: ParentStrings = {
   logOut: "Log out",
   photoOf: "Photo",
   closePhoto: "Close",
+  moveToPortal: "Move to Portal",
   emergencyQuestion: "Is this an emergency?",
   emergencyYes: "Yes, it's an emergency",
   emergencyNo: "No, I just need help",
@@ -92,6 +94,7 @@ const hi: ParentStrings = {
   logOut: "लॉग आउट",
   photoOf: "फ़ोटो",
   closePhoto: "बंद करें",
+  moveToPortal: "पोर्टल पर जाएँ",
   emergencyQuestion: "क्या यह आपातकाल है?",
   emergencyYes: "हाँ, आपातकाल है",
   emergencyNo: "नहीं, बस मदद चाहिए",
@@ -134,6 +137,7 @@ const ta: ParentStrings = {
   logOut: "வெளியேறு",
   photoOf: "படம்",
   closePhoto: "மூடு",
+  moveToPortal: "போர்ட்டலுக்குச் செல்",
   emergencyQuestion: "இது அவசரமா?",
   emergencyYes: "ஆம், அவசரம்",
   emergencyNo: "இல்லை, உதவி மட்டும் வேண்டும்",
@@ -176,6 +180,7 @@ const te: ParentStrings = {
   logOut: "లాగ్ అవుట్",
   photoOf: "ఫోటో",
   closePhoto: "మూసివేయి",
+  moveToPortal: "పోర్టల్‌కు వెళ్ళండి",
   emergencyQuestion: "ఇది అత్యవసరమా?",
   emergencyYes: "అవును, అత్యవసరం",
   emergencyNo: "లేదు, కొంచెం సహాయం కావాలి",
@@ -218,6 +223,7 @@ const ml: ParentStrings = {
   logOut: "ലോഗ് ഔട്ട്",
   photoOf: "ഫോട്ടോ",
   closePhoto: "അടയ്ക്കുക",
+  moveToPortal: "പോർട്ടലിലേക്ക് പോകുക",
   emergencyQuestion: "ഇത് അടിയന്തരമാണോ?",
   emergencyYes: "അതെ, അടിയന്തരമാണ്",
   emergencyNo: "ഇല്ല, ഒരു സഹായം മതി",
@@ -260,6 +266,7 @@ const kn: ParentStrings = {
   logOut: "ಲಾಗ್ ಔಟ್",
   photoOf: "ಫೋಟೋ",
   closePhoto: "ಮುಚ್ಚಿ",
+  moveToPortal: "ಪೋರ್ಟಲ್‌ಗೆ ಹೋಗಿ",
   emergencyQuestion: "ಇದು ತುರ್ತು ಪರಿಸ್ಥಿತಿಯೇ?",
   emergencyYes: "ಹೌದು, ತುರ್ತು",
   emergencyNo: "ಇಲ್ಲ, ಸ್ವಲ್ಪ ಸಹಾಯ ಬೇಕು",

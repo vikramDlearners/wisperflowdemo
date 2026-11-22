@@ -27,6 +27,10 @@ export interface ReminderDue {
 
 export interface CheckinOut {
   checkin_id: string;
+  /** The parent's family: "Move to Portal" opens its Overview page. */
+  family_id: string;
+  /** False when the parent's role can't view the Overview page: the link is then hidden. */
+  can_open_portal?: boolean;
   step: string;
   messages: ChatMessage[];
   /** Set only once something urgent was reported today (drives the red Call button). */
