@@ -605,9 +605,8 @@ export default function ParentProfilePage() {
                   </div>
                   <div className="pp-access-row">
                     <span className="pp-muted">Parent participant access</span>
-                    <span className={`pp-badge${inviteMsg ? "" : " pp-badge-muted"}`}>
-                      {inviteMsg ? "Invite sent" : "Not active"}
-                    </span>
+                    {/* Parent access is on by default; after a link is sent the badge says so. */}
+                    <span className="pp-badge">{inviteMsg ? "Invite sent" : "Enabled"}</span>
                   </div>
 
                   <div className="pp-invite">
