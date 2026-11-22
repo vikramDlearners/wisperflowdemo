@@ -122,3 +122,29 @@
     height: 44px;
   }
 }
+
+/* A parent in the portal: a clear way back to their chat. */
+.ws-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #1f6f5c;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ws-chat-btn:hover {
+  background: #17584a;
+}
+.ws-nav-chat {
+  margin-bottom: 8px;
+  background: #e3f1ec;
+  color: #17584a;
+  font-weight: 700;
+}

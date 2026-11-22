@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../parent-profile.css";
 import "../workspace.css";
-import { auth, getProfile, type UserOut } from "../api";
+import { auth, families, getProfile, type UserOut } from "../api";
 import LogoutButton from "./LogoutButton";
 
 // Family workspace shell: sidebar navigation + top bar. Uses the pp- styles
@@ -52,6 +52,8 @@ interface WorkspaceLayoutProps {
 export default function WorkspaceLayout({ familyId, current, title, children }: WorkspaceLayoutProps) {
   const [user, setUser] = useState<UserOut | null>(null);
   const [parentName, setParentName] = useState<string | null>(null);
+  // A parent who came here from their chat ("Move to Portal") gets a clear way back to it.
+  const [isParent, setIsParent] = useState(false);
   // Sidebar drawer state for tablet/mobile widths (always visible on desktop).
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
@@ -82,6 +84,20 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!familyId) return;
+    let active = true;
+    families
+      .me(familyId)
+      .then((access) => active && setIsParent(access.role === "Parent"))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [familyId]);
+
+  const showBackToChat = isParent || user?.role === "parent";
 
   const fam = (path: string) => (familyId ? `/family/${familyId}${path}` : null);
   const workspace: NavItem[] = [
@@ -136,6 +152,12 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
         </div>
 
         <nav aria-label="Workspace">
+          {showBackToChat && (
+            <Link to="/parent/chat" className="pp-nav-item ws-nav-chat">
+              <span className="pp-nav-icon" aria-hidden="true">💬</span>
+              Back to chat
+            </Link>
+          )}
           <p className="pp-nav-heading">Workspace</p>
           {renderNav(workspace)}
           <p className="pp-nav-heading">Settings</p>
@@ -185,6 +207,11 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
             <span aria-hidden="true">⌕</span>
             <input type="search" placeholder="Search records, tasks..." aria-label="Search records and tasks" />
           </label>
+          {showBackToChat && (
+            <Link to="/parent/chat" className="ws-chat-btn">
+              <span aria-hidden="true">💬</span> Back to chat
+            </Link>
+          )}
           <button type="button" className="pp-bell ws-bell" aria-label="Notifications">
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
               <path
