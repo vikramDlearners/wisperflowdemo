@@ -4,8 +4,15 @@ import { careProfiles, getProfile, type CareProfileOut } from "./api";
 // none yet, create one from the parent details entered during onboarding so the user
 // is never blocked. Needs the parent_profile.edit permission (Family manager has it).
 
-// Onboarding stores the language name; care profiles take a code (en, ta, hi).
-const LANGUAGE_CODES: Record<string, string> = { english: "en", tamil: "ta", hindi: "hi" };
+// Onboarding stores the language name; care profiles take a code (en, ta, hi, te, ml, kn).
+const LANGUAGE_CODES: Record<string, string> = {
+  english: "en",
+  tamil: "ta",
+  hindi: "hi",
+  telugu: "te",
+  malayalam: "ml",
+  kannada: "kn",
+};
 
 export async function createCareProfileFromOnboarding(familyId: string): Promise<CareProfileOut> {
   const parent = await getProfile().catch(() => null);

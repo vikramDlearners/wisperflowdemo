@@ -11,10 +11,11 @@ from app.models.medicine import Medicine
 from app.models.prescription_scan import PrescriptionScan
 from app.services.activity import log_activity
 from app.services.errors import NotFound
+from app.services.languages import LANGUAGE_CODES
 from app.services.permissions import require
 from app.services.prescription_scan import ALLOWED_MIME_TYPES, MAX_IMAGE_BYTES
 
-ALLOWED_LANGUAGES = frozenset({"en", "ta", "hi"})
+ALLOWED_LANGUAGES = frozenset(LANGUAGE_CODES)
 
 
 def list_care_profiles(db: Session, actor_id: str, family_id: str) -> list[CareProfile]:
@@ -41,7 +42,7 @@ def create_care_profile(
 ) -> CareProfile:
     require(db, actor_id, family_id, "parent_profile.edit")
     if preferred_language not in ALLOWED_LANGUAGES:
-        raise ValueError("preferred_language must be one of en, ta, hi")
+        raise ValueError("preferred_language must be one of en, ta, hi, te, ml, kn")
     profile = CareProfile(
         family_id=family_id,
         display_name=display_name.strip(),
@@ -66,7 +67,7 @@ def update_care_profile(
     if unknown:
         raise ValueError(f"Cannot update fields: {sorted(unknown)}")
     if "preferred_language" in changes and changes["preferred_language"] not in ALLOWED_LANGUAGES:
-        raise ValueError("preferred_language must be one of en, ta, hi")
+        raise ValueError("preferred_language must be one of en, ta, hi, te, ml, kn")
     for field, value in changes.items():
         setattr(profile, field, value.strip() if isinstance(value, str) else value)
     log_activity(
