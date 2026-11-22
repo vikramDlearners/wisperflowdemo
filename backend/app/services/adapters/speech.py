@@ -110,14 +110,24 @@ class ElevenLabsSpeechToText:
         return text.strip()
 
 
+def tts_model_for(language: str) -> str:
+    """The TTS model for a language code: its entry in elevenlabs_tts_model_by_language ("te:eleven_v3,...")
+    if there is one, else elevenlabs_tts_model. Malformed entries are ignored."""
+    for entry in (settings.elevenlabs_tts_model_by_language or "").split(","):
+        code, sep, model = entry.partition(":")
+        if sep and code.strip() and model.strip() and code.strip().lower() == (language or "").lower():
+            return model.strip()
+    return settings.elevenlabs_tts_model
+
+
 class ElevenLabsTextToSpeech:
     def synthesize(self, text: str, language: str) -> tuple[bytes, str]:
         api_key = _api_key()
         voice_id = settings.elevenlabs_voice_id
         if not voice_id:
             raise SpeechUnavailable("ElevenLabs voice is not configured")
-        # language_code is only accepted on Turbo/Flash v2.5; multilingual v2 detects it from the text.
-        body = {"text": text, "model_id": settings.elevenlabs_tts_model}
+        # language_code is only accepted on Turbo/Flash v2.5; multilingual v2 and v3 detect it from the text.
+        body = {"text": text, "model_id": tts_model_for(language)}
         request = urllib.request.Request(
             TTS_URL.format(voice_id=voice_id),
             data=json.dumps(body).encode("utf-8"),

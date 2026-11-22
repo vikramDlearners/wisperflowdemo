@@ -170,7 +170,11 @@ def test_mime_mp4_and_unknown_subtype(captured):
     [("te", "eleven_v3"), ("ml", "eleven_v3"), ("kn", "eleven_v3"),
      ("en", "eleven_multilingual_v2"), ("ta", "eleven_multilingual_v2"), ("hi", "eleven_multilingual_v2")],
 )
-def test_tts_model_defaults_by_language(language, model):
+def test_tts_model_defaults_by_language(monkeypatch, language, model):
+    from app.core.config import Settings
+
+    for name in ("elevenlabs_tts_model", "elevenlabs_tts_model_by_language"):
+        monkeypatch.setattr(settings, name, Settings.model_fields[name].default)
     assert speech.tts_model_for(language) == model
 
 

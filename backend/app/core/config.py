@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     elevenlabs_api_key: Optional[str] = None
     elevenlabs_stt_model: str = "scribe_v1"
     elevenlabs_tts_model: str = "eleven_multilingual_v2"
+    # Per-language TTS model overrides, "code:model" pairs separated by commas. Telugu, Malayalam and Kannada
+    # are not supported by multilingual v2, so they default to eleven_v3; other languages use elevenlabs_tts_model.
+    elevenlabs_tts_model_by_language: str = "te:eleven_v3,ml:eleven_v3,kn:eleven_v3"
     elevenlabs_voice_id: Optional[str] = None
 
     intent_mode: str = "offline_rules"
