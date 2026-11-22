@@ -1,0 +1,185 @@
+"""Parent check-in API: start/resume, text turns, voice turns, spoken replies."""
+
+import base64
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from app.api import parent as parent_api
+from app.models.care_profile import CareProfile
+from app.models.user import User
+from app.services import doses as doses_svc
+from app.services.adapters.speech import SpeechUnavailable
+
+from tests.test_checkin_engine import offline, world  # noqa: F401
+from tests.test_parent_invites import _auth, email, family_setup  # noqa: F401
+
+# 08:30 IST on 2026-11-22
+NOW = datetime(2026, 11, 22, 3, 0, tzinfo=timezone.utc)
+VOICE_DOWN = {"detail": "Voice isn't available right now. Please type instead."}
+
+
+class FakeTTS:
+    def __init__(self, fail=False):
+        self.fail = fail
+        self.calls = []
+
+    def synthesize(self, text, language):
+        self.calls.append((text, language))
+        if self.fail:
+            raise SpeechUnavailable("down")
+        return b"MP3DATA", "audio/mpeg"
+
+
+class FakeSTT:
+    def __init__(self, text="I am fine", fail=False):
+        self.text, self.fail = text, fail
+        self.calls = []
+
+    def transcribe(self, audio, language, mime_type):
+        self.calls.append((audio, language, mime_type))
+        if self.fail:
+            raise SpeechUnavailable("down")
+        return self.text
+
+
+@pytest.fixture(autouse=True)
+def fixed_now(monkeypatch):
+    monkeypatch.setattr(parent_api, "_now", lambda: NOW)
+
+
+@pytest.fixture()
+def tts(monkeypatch):
+    fake = FakeTTS()
+    monkeypatch.setattr(parent_api, "get_text_to_speech", lambda: fake)
+    return fake
+
+
+def _stt(monkeypatch, **kw):
+    fake = FakeSTT(**kw)
+    monkeypatch.setattr(parent_api, "get_speech_to_text", lambda: fake)
+    return fake
+
+
+def test_get_checkin_starts_today(client, db_session, world):
+    r = client.get("/api/parent/checkin", headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"checkin_id", "step", "messages", "call_number", "language", "reminders_due"}
+    assert body["step"] == "health"
+    assert body["language"] == "en"
+    assert [(m["sender"], m["text"]) for m in body["messages"]] == [
+        ("bot", "Good morning, Amma!"), ("bot", "How are you feeling today?"),
+    ]
+    assert all(m["created_at"] for m in body["messages"])
+    assert body["call_number"] is None
+    assert body["reminders_due"] == []
+
+
+def test_get_checkin_lists_future_reminders(client, db_session, world):
+    amlodipine = world["meds"][0]
+    doses_svc.set_remind_later(db_session, world["profile"], amlodipine.id, "08:00", 30, NOW)
+    r = client.get("/api/parent/checkin", headers=_auth(db_session, world["parent"]))
+    due = r.json()["reminders_due"]
+    assert len(due) == 1
+    assert due[0]["medicine_id"] == amlodipine.id
+    assert due[0]["name"] == "Amlodipine"
+    assert due[0]["slot"] == "08:00"
+    assert datetime.fromisoformat(due[0]["remind_at"].replace("Z", "+00:00")) == NOW + timedelta(minutes=30)
+
+
+def test_text_turn_returns_messages_and_audio(client, db_session, world, tts):
+    headers = _auth(db_session, world["parent"])
+    client.get("/api/parent/checkin", headers=headers)
+    r = client.post("/api/parent/checkin/text", json={"text": "my knee hurts"}, headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"messages", "step", "urgent", "call_number", "audio", "audio_type"}
+    assert body["messages"][0] == {
+        "sender": "bot",
+        "text": "Thank you for telling me. I've shared it with Carer Doe, Manager and Viewer Doe.",
+    }
+    assert body["step"] == "medicines"
+    assert body["urgent"] is False and body["call_number"] is None
+    assert base64.b64decode(body["audio"]) == b"MP3DATA"
+    assert body["audio_type"] == "audio/mpeg"
+    assert tts.calls == [(" ".join(m["text"] for m in body["messages"]), "en")]
+
+
+def test_text_turn_audio_null_when_tts_fails(client, db_session, world, monkeypatch):
+    monkeypatch.setattr(parent_api, "get_text_to_speech", lambda: FakeTTS(fail=True))
+    r = client.post("/api/parent/checkin/text", json={"text": "my knee hurts"},
+                    headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 200
+    assert r.json()["audio"] is None and r.json()["audio_type"] is None
+    assert r.json()["messages"]
+
+
+def test_urgent_turn_exposes_call_number(client, db_session, world, tts, email):
+    r = client.post("/api/parent/checkin/text", json={"text": "I fell"}, headers=_auth(db_session, world["parent"]))
+    assert r.json()["urgent"] is True
+    assert r.json()["call_number"] == "+91 98765 43210"
+
+
+def test_voice_turn_returns_transcript(client, db_session, world, tts, monkeypatch):
+    stt = _stt(monkeypatch, text="my knee hurts")
+    r = client.post(
+        "/api/parent/checkin/voice",
+        files={"file": ("clip.webm", b"AUDIO", "audio/webm")},
+        headers=_auth(db_session, world["parent"]),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["transcript"] == "my knee hurts"
+    assert body["step"] == "medicines"
+    assert body["messages"][0]["text"].startswith("Thank you for telling me.")
+    assert stt.calls == [(b"AUDIO", "en", "audio/webm")]
+
+
+def test_voice_stt_failure_is_503(client, db_session, world, tts, monkeypatch):
+    _stt(monkeypatch, fail=True)
+    r = client.post("/api/parent/checkin/voice", files={"file": ("c.webm", b"AUDIO", "audio/webm")},
+                    headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 503
+    assert r.json() == VOICE_DOWN
+
+
+def test_voice_empty_transcript_is_503(client, db_session, world, tts, monkeypatch):
+    _stt(monkeypatch, text="   ")
+    r = client.post("/api/parent/checkin/voice", files={"file": ("c.webm", b"AUDIO", "audio/webm")},
+                    headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 503
+    assert r.json() == VOICE_DOWN
+
+
+def test_voice_over_2mb_is_rejected(client, db_session, world, tts, monkeypatch):
+    stt = _stt(monkeypatch)
+    big = b"x" * (2 * 1024 * 1024 + 1)
+    r = client.post("/api/parent/checkin/voice", files={"file": ("c.webm", big, "audio/webm")},
+                    headers=_auth(db_session, world["parent"]))
+    assert r.status_code == 413
+    assert stt.calls == []
+
+
+def test_viewer_is_forbidden(client, db_session, family_setup):
+    s = family_setup
+    viewer = db_session.get(User, s["caregiver_membership"].user_id)
+    db_session.add(CareProfile(family_id=s["family_id"], display_name="Amma", greeting_name="", linked_user_id=viewer.id))
+    db_session.commit()
+    r = client.get("/api/parent/checkin", headers=_auth(db_session, viewer))
+    assert r.status_code == 403
+
+
+def test_unlinked_parent_with_two_profiles_is_409(client, db_session, family_setup):
+    s = family_setup
+    parent = db_session.get(User, s["membership"].user_id)
+    for name in ("A", "B"):
+        db_session.add(CareProfile(family_id=s["family_id"], display_name=name, greeting_name=""))
+    db_session.commit()
+    r = client.get("/api/parent/checkin", headers=_auth(db_session, parent))
+    assert r.status_code == 409
+    assert r.json() == {"detail": "Ask your family to link your profile"}
+
+
+def test_requires_sign_in(client):
+    assert client.get("/api/parent/checkin").status_code == 401

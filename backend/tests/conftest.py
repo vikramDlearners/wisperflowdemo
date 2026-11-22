@@ -1,12 +1,14 @@
 """Shared test setup: point the app at an in-memory SQLite database.
 
-DATABASE_URL is set before any `app` module is imported, because
+DATABASE_URL and SCHEDULER_ENABLED are set before any `app` module is imported, because
 app.core.config reads settings (and app.core.db builds its engine) at import time.
 """
 
 import os
 
 os.environ["DATABASE_URL"] = "sqlite://"
+# Never start the background scheduler thread in tests.
+os.environ["SCHEDULER_ENABLED"] = "false"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

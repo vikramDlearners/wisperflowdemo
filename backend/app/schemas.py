@@ -436,3 +436,49 @@ class PrescriptionScanConfirmOut(BaseModel):
     notified_user_ids: list[str]
 
 
+
+
+# ---------- parent check-in ----------
+
+class ChatMessageOut(BaseModel):
+    sender: Literal["bot", "parent"]
+    text: str
+    created_at: datetime
+
+
+class ReminderDueOut(BaseModel):
+    medicine_id: str
+    name: str
+    slot: str
+    remind_at: datetime
+
+
+class CheckinOut(BaseModel):
+    checkin_id: str
+    step: str
+    messages: list[ChatMessageOut]
+    call_number: str | None
+    language: str
+    reminders_due: list[ReminderDueOut]
+
+
+class ParentTextIn(BaseModel):
+    text: str = Field(max_length=2000)
+
+
+class TurnMessageOut(BaseModel):
+    sender: Literal["bot", "parent"]
+    text: str
+
+
+class TurnOut(BaseModel):
+    messages: list[TurnMessageOut]
+    step: str
+    urgent: bool
+    call_number: str | None
+    audio: str | None
+    audio_type: str | None
+
+
+class VoiceTurnOut(TurnOut):
+    transcript: str

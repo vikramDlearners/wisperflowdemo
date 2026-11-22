@@ -32,6 +32,9 @@ class Settings(BaseSettings):
 
     intent_mode: str = "offline_rules"
 
+    # Background jobs (missed-dose alerts, daily summaries). Tests turn this off.
+    scheduler_enabled: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
