@@ -66,6 +66,8 @@ export default function MedicineForm({
   const [totalCount, setTotalCount] = useState("");
   // Reminder times (HH:MM); saved with a PUT after the medicine itself is saved.
   const [times, setTimes] = useState<string[]>([]);
+  // What the server had when loaded; null means the load failed, so we must not overwrite it.
+  const [loadedTimes, setLoadedTimes] = useState<string[] | null>([]);
   const [linkedScanId, setLinkedScanId] = useState<string | null>(null);
 
   // Medicine photo. Only members with medicines.edit can add or remove it.
@@ -107,14 +109,18 @@ export default function MedicineForm({
       isEdit ? medicines.get(familyId, medicineId) : Promise.resolve(null),
       families.me(familyId).catch(() => null),
       isEdit
-        ? medicines.getReminders(familyId, medicineId).then((r) => r.times).catch(() => [] as string[])
-        : Promise.resolve([] as string[]),
+        ? medicines
+            .getReminders(familyId, medicineId)
+            .then((r) => r.times)
+            .catch(() => null as string[] | null)
+        : Promise.resolve([] as string[] | null),
     ])
       .then(([profileList, memberList, med, access, reminderTimes]) => {
         if (cancelled) return;
         setProfiles(profileList);
         setPeople(memberList);
-        setTimes(reminderTimes);
+        setTimes(reminderTimes ?? []);
+        setLoadedTimes(reminderTimes);
         // If permissions can't be read, show the controls; the server still enforces them.
         setCanEditPhoto(access ? access.permissions.includes("medicines.edit") : true);
         if (med) {
@@ -206,7 +212,10 @@ export default function MedicineForm({
         }
       }
       // Reminder times are saved separately too (PUT replaces them all).
-      await medicines.setReminders(familyId, result.id, times);
+      // Skipped when unchanged, and when the load failed (it would wipe the existing times).
+      const changed =
+        loadedTimes !== null && JSON.stringify([...new Set(times)].sort()) !== JSON.stringify([...loadedTimes].sort());
+      if (changed) await medicines.setReminders(familyId, result.id, times);
       // Photo is a separate upload after the medicine itself is saved.
       let photoProblem: string | null = null;
       try {
@@ -410,6 +419,11 @@ export default function MedicineForm({
                       + Add time
                     </button>
                   </div>
+                  {loadedTimes === null && (
+                    <span role="alert" className="pp-alert">
+                      Could not load the current reminder times, so they will be left unchanged on save.
+                    </span>
+                  )}
                   <span className="md-sub">Optional · leave empty for a once-a-day medicine.</span>
                 </div>
 
