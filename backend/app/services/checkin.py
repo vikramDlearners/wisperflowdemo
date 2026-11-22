@@ -278,9 +278,13 @@ def _handle_medicines(db: Session, ctx: ParentContext, checkin: HealthCheckin, t
         msgs.append(_say(ctx, "meds_remind", minutes=remind_minutes))
     if finished:
         family = _family_names(db, ctx)
+        has_family = bool(other_members(db, ctx))
         for dose in finished:
             notify_family_finished(db, ctx, dose)
-            msgs.append(_say(ctx, "meds_finished", family=family, name=dose.name))
+            if has_family:
+                msgs.append(_say(ctx, "meds_finished", family=family, name=dose.name))
+            else:
+                msgs.append(_say(ctx, "meds_finished_alone", name=dose.name))
     return msgs + _continue_medicines(db, ctx, checkin, now, announce_none=False)
 
 
@@ -333,6 +337,8 @@ def _share_health(db: Session, ctx: ParentContext, checkin: HealthCheckin, text:
     if is_urgent(text):
         return _urgent(db, ctx, checkin, text)
     notify_family_update(db, ctx, checkin)
+    if not other_members(db, ctx):
+        return _say(ctx, "health_noted_alone")  # nobody to share it with: do not claim it was shared
     return _say(ctx, "health_noted", family=_family_names(db, ctx))
 
 

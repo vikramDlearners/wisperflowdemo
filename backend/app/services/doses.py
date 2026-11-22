@@ -151,20 +151,22 @@ def record_dose(
             dose_date=day, slot=slot,
         )
         apply(row)
-        db.add(row)
+        # Flush the caller's pending work first, so the savepoint below only ever undoes this one insert.
+        db.flush()
         try:
-            db.commit()
+            with db.begin_nested():
+                db.add(row)
+                db.flush()
         except IntegrityError:
-            # Another request recorded this slot first: answer it by updating that row instead.
-            db.rollback()
+            # Another request recorded this slot first: answer it by updating that row instead. Only the
+            # savepoint is rolled back; the caller's turn (messages, urgent flag, notifications) is kept.
             row = _existing(db, medicine_id, day, slot)
             if row is None:
                 raise
             apply(row)
-            db.commit()
     else:
         apply(row)
-        db.commit()
+    db.commit()
     db.refresh(row)
     return row
 

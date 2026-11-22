@@ -505,3 +505,75 @@ def test_is_closing_only_for_pure_closings():
     assert engine.is_closing("yes") is False  # "anything else?" -> "yes" means more is coming
     assert engine.is_closing("ok but my knee hurts") is False
     assert engine.is_closing("") is False
+
+
+# ---------- round 2 ----------
+
+def test_racing_dose_insert_keeps_the_turn_state(db_session, world, email, monkeypatch):
+    """A dose row created by another request mid-turn must not undo this turn's urgent alert or messages."""
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
+    amlodipine, _ = world["meds"]
+    # Another request (e.g. the missed-dose job) has written Amlodipine's row; this turn does not see it at first.
+    db_session.add(MedicineDose(
+        family_id=world["family_id"], care_profile_id=world["profile"].id, medicine_id=amlodipine.id,
+        dose_date=date(2026, 11, 22), slot="08:00", status="missed", source="system", recorded_at=NOW,
+    ))
+    db_session.commit()
+    real = doses_svc._existing
+    seen = []
+
+    def stale_once(db, medicine_id, day, slot):
+        if medicine_id == amlodipine.id and not seen:
+            seen.append(1)
+            return None
+        return real(db, medicine_id, day, slot)
+
+    monkeypatch.setattr(doses_svc, "_existing", stale_once)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I took both but I feel dizzy", NOW)
+    assert seen  # the race happened
+    db_session.expire_all()
+    checkin = db_session.get(HealthCheckin, turn.checkin.id)
+    assert checkin.urgent is True
+    assert "I feel dizzy" in (checkin.health_text or "")
+    assert len(_urgent_notes(db_session)) == 3
+    parent_texts = [m.text for m in engine.conversation(db_session, checkin) if m.sender == "parent"]
+    assert parent_texts[-1] == "I took both but I feel dizzy"
+    rows = db_session.execute(select(MedicineDose)).scalars().all()
+    assert len(rows) == 2 and {r.status for r in rows} == {"taken"}
+
+
+def _without_family(db, world):
+    from app.models.membership import FamilyMember
+
+    for m in db.execute(select(FamilyMember)).scalars():
+        if m.user_id != world["parent"].id:
+            m.status = "removed"
+    db.commit()
+
+
+def test_health_noted_without_family_does_not_claim_sharing(db_session, world):
+    _without_family(db_session, world)
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "my knee hurts", NOW)
+    assert turn.bot_messages[0] == reply("health_noted_alone", "en")
+    assert "shared" not in turn.bot_messages[0] and "family" not in turn.bot_messages[0]
+
+
+def test_meds_finished_without_family_does_not_claim_telling(db_session, world):
+    _without_family(db_session, world)
+    world["meds"][1].active = False
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "it ran out", NOW)
+    assert turn.bot_messages[0] == reply("meds_finished_alone", "en", name="Amlodipine")
+    assert "told" not in turn.bot_messages[0]
+
+
+@pytest.mark.parametrize("language", ["en", "ta", "hi", "te", "ml", "kn"])
+def test_alone_variants_translated(language):
+    from app.services.replies import TEMPLATES
+
+    for key in ("health_noted_alone", "meds_finished_alone"):
+        assert key in TEMPLATES[language], (language, key)
