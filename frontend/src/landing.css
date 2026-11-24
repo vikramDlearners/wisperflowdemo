@@ -607,3 +607,14 @@ html:has(.lp) {
     display: none;
   }
 }
+
+/* Logo emblem next to the CareCircle name. */
+.lp-logo-img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+.lp-footer .lp-logo-img {
+  width: 32px;
+  height: 32px;
+}

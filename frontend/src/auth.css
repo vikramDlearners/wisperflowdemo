@@ -574,3 +574,19 @@
     transition: none;
   }
 }
+
+/* The logo emblem sits on a white tile so it reads on the dark panel. */
+.au-logo-mark {
+  background: #fff;
+  padding: 3px;
+  box-sizing: border-box;
+}
+.au-logo-mobile .au-logo-mark {
+  background: #fff;
+  border: 1px solid var(--au-line, #e2e8e6);
+}
+.au-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}

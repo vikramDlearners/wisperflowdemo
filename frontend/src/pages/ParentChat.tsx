@@ -473,7 +473,10 @@ export default function ParentChat() {
 
   const header = (
     <header className="pc-header">
-      <h1 className="pc-brand">CareCircle</h1>
+      <h1 className="pc-brand">
+        <img src="/carecircle-mark.png" alt="" className="pc-brand-img" width="34" height="34" />
+        CareCircle
+      </h1>
       <div className="pc-header-actions">
         {load.kind === "ready" && familyId && (
           <Link to={`/family/${familyId}`} className="pc-portal-btn">

@@ -225,7 +225,7 @@ export default function Home() {
       <header className="lp-nav">
         <div className="lp-wrap lp-nav-inner">
           <a href="#top" className="lp-logo">
-            <span className="lp-logo-mark" aria-hidden="true">◎</span> CareCircle
+            <img src="/carecircle-mark.png" alt="" className="lp-logo-img" width="40" height="40" /> CareCircle
           </a>
           <nav className="lp-nav-links" aria-label="Main">
             <a href="#how">How it works</a>
@@ -605,7 +605,7 @@ export default function Home() {
       <footer className="lp-footer">
         <div className="lp-wrap lp-footer-inner">
           <span className="lp-logo">
-            <span className="lp-logo-mark" aria-hidden="true">◎</span> CareCircle
+            <img src="/carecircle-mark.png" alt="" className="lp-logo-img" width="40" height="40" /> CareCircle
           </span>
           <span>Voice-first family care · English · தமிழ் · हिन्दी · తెలుగు · മലയാളം · ಕನ್ನಡ</span>
           <span>© {new Date().getFullYear()} CareCircle</span>

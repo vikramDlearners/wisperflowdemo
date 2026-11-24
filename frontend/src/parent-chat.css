@@ -526,3 +526,16 @@
 .pc-emergency-call {
   text-decoration: none;
 }
+
+/* Logo emblem before the name in the parent chat header. */
+.pc-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pc-brand-img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  flex: none;
+}

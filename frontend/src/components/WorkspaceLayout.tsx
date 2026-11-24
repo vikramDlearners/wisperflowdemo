@@ -144,7 +144,7 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
       <div className="ws-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />
       <aside className="pp-sidebar" id="ws-sidebar" aria-label="Sidebar">
         <div className="pp-brand">
-          <span className="pp-brand-mark" aria-hidden="true">✳</span>
+          <span className="pp-brand-mark" aria-hidden="true"><img src="/carecircle-mark.png" alt="" className="pp-brand-img" width="36" height="36" /></span>
           <div>
             <div className="pp-brand-name">CareCircle</div>
             <div className="pp-brand-tag">Family care, together</div>

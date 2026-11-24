@@ -247,7 +247,7 @@ export default function Landing() {
       {/* Brand panel */}
       <aside className="au-brand" aria-hidden="true">
         <Link to="/" className="au-logo" tabIndex={-1}>
-          <span className="au-logo-mark">✳</span>
+          <span className="au-logo-mark"><img src="/carecircle-mark.png" alt="" className="au-logo-img" width="30" height="30" /></span>
           CareCircle
         </Link>
 
@@ -281,7 +281,7 @@ export default function Landing() {
             ← Home
           </Link>
           <Link to="/" className="au-logo au-logo-mobile">
-            <span className="au-logo-mark">✳</span>
+            <span className="au-logo-mark"><img src="/carecircle-mark.png" alt="" className="au-logo-img" width="30" height="30" /></span>
             CareCircle
           </Link>
         </div>
