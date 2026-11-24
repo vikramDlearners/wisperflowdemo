@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
+import TimeSelect from "../components/TimeSelect";
 import { Link, useSearchParams } from "react-router-dom";
 import "../medicines.css";
 import "../prescription-scan.css";
@@ -509,13 +510,12 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
                                 key={ti}
                                 className={`ps-time${rowErr && rowErr.time === ti ? " is-error" : ""}`}
                               >
-                                <input
-                                  type="time"
+                                <TimeSelect
                                   value={t}
-                                  aria-label={`Time ${ti + 1}`}
-                                  onChange={(e) => {
+                                  ariaLabel={`Time ${ti + 1}`}
+                                  onChange={(v) => {
                                     const times = [...row.times];
-                                    times[ti] = e.target.value;
+                                    times[ti] = v;
                                     updateRow(row.key, { times });
                                   }}
                                 />

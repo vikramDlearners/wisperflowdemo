@@ -165,3 +165,41 @@
   font-size: 0.75rem;
   text-align: center;
 }
+
+/* 12-hour time picker with AM / PM (components/TimeSelect.tsx). */
+.time-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  height: 38px;
+  background: #fff;
+}
+.time-select select {
+  height: 30px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  color: inherit;
+  cursor: pointer;
+}
+.time-select select:hover {
+  background: #f1f5f3;
+}
+.time-select select:focus-visible {
+  outline: 2px solid #1f7a6e;
+  outline-offset: 0;
+}
+.time-select-colon {
+  font-weight: 700;
+}
+/* Standing alone (appointment time) it looks like the other inputs. */
+.pp-field > .time-select {
+  align-self: flex-start;
+  border: 1px solid var(--pp-line, #e2e8e6);
+  border-radius: 8px;
+  height: 40px;
+}

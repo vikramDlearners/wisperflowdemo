@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { estimateRefill, REFILL_BUFFER_DAYS, toDateInput } from "../refill";
+import TimeSelect from "../components/TimeSelect";
 import { Link, useNavigate } from "react-router-dom";
 import "../medicines.css";
 import "../prescription-scan.css";
@@ -461,11 +462,10 @@ export default function MedicineForm({
                   <div className="ps-times" role="group" aria-labelledby="mf-times-label">
                     {times.map((t, ti) => (
                       <span key={ti} className="ps-time">
-                        <input
-                          type="time"
+                        <TimeSelect
                           value={t}
-                          aria-label={`Time ${ti + 1}`}
-                          onChange={(e) => setTimes(times.map((x, i) => (i === ti ? e.target.value : x)))}
+                          ariaLabel={`Time ${ti + 1}`}
+                          onChange={(v) => setTimes(times.map((x, i) => (i === ti ? v : x)))}
                         />
                         <button
                           type="button"

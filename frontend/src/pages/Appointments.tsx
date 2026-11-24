@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import TimeSelect from "../components/TimeSelect";
 import { useParams } from "react-router-dom";
 import "../medicines.css";
 import "../appointments.css";
@@ -647,15 +648,14 @@ export default function Appointments() {
                   onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })}
                 />
               </label>
-              <label className="pp-field">
-                Time
-                <input
-                  type="time"
-                  required
+              <div className="pp-field">
+                <span>Time</span>
+                <TimeSelect
                   value={form.start_time}
-                  onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+                  ariaLabel="Appointment time"
+                  onChange={(v) => setForm({ ...form, start_time: v })}
                 />
-              </label>
+              </div>
             </div>
             <label className="pp-field">
               Doctor or clinic
