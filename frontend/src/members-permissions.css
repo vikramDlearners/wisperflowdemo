@@ -1,0 +1,231 @@
+/* Family members & permissions page: roles and permissions. */
+.parent-layout.mp-page {
+  max-width: 760px;
+}
+
+.mp-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+.mp-roles-head h2 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+}
+.mp-roles-head p {
+  margin: 0;
+}
+
+.mp-role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mp-role {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.mp-role[open] {
+  box-shadow: 0 6px 18px rgba(31, 45, 42, 0.06);
+}
+.mp-role-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  position: relative;
+  padding: 14px 40px 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+.mp-role-summary::-webkit-details-marker {
+  display: none;
+}
+.mp-role-summary::after {
+  content: "▾";
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.mp-role[open] > .mp-role-summary::after {
+  transform: rotate(180deg);
+}
+.mp-role-summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+.mp-role-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--text);
+}
+.mp-role-meta {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.mp-new-role .mp-role-name {
+  color: var(--primary);
+}
+
+.mp-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--primary-hover);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.mp-tag-warn {
+  background: #fbe9d5;
+  color: #8a4b12;
+}
+
+.mp-role-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.mp-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding-top: 12px;
+}
+.mp-group {
+  margin: 0;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  min-width: 0;
+}
+.mp-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.mp-link {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: var(--primary);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+.mp-link:hover {
+  text-decoration: underline;
+}
+.mp-perm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  font-size: 0.95rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.mp-perm + .mp-perm {
+  border-top: 1px dashed var(--border);
+}
+.mp-perm input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.mp-role-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.mp-saved {
+  margin-right: auto;
+  color: var(--primary);
+  font-weight: 700;
+}
+.mp-btn {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mp-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+.mp-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.mp-btn-ghost {
+  background: var(--surface);
+  color: var(--primary);
+}
+.mp-btn-ghost:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+.mp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  font-weight: 600;
+}
+.mp-field input {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+}
+
+@media (max-width: 620px) {
+  .mp-groups {
+    grid-template-columns: 1fr;
+  }
+  .mp-role-meta {
+    margin-left: 0;
+    width: 100%;
+  }
+  .mp-role-actions .mp-btn {
+    flex: 1;
+  }
+}

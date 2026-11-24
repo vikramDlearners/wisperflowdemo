@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import type { FormEvent } from "react";
 import { ApiError, members, roles } from "../api";
 import type { MemberOut, RoleOut } from "../api";
 import { RELATIONSHIP_OPTIONS } from "../lib/constants";
 import { useNavigate } from "react-router-dom";
+import "../members-permissions.css";
 
 interface MembersPermissionsProps {
   familyId: string;
@@ -15,13 +16,118 @@ function messageOf(err: unknown): string {
   return "Something went wrong.";
 }
 
-const PERMISSION_OPTIONS: string[] = [
-  "dashboard.view", "parent_profile.view", "parent_profile.edit", "medicines.view", "medicines.edit",
-  "medicine_quantity.update", "reports.view", "reports.upload", "tasks.view", "tasks.create",
-  "tasks.assign", "tasks.update_own", "appointments.view", "appointments.create", "appointments.update",
-  "appointments.delete", "activity.view", "members.manage", "roles.manage", "notifications.configure",
-  "voice.use_parent_mode",
+// Permissions grouped by area, with plain-language labels (the code stays the stored value).
+const PERMISSION_GROUPS: { title: string; items: { code: string; label: string }[] }[] = [
+  {
+    title: "Overview & parent profile",
+    items: [
+      { code: "dashboard.view", label: "See the family dashboard" },
+      { code: "parent_profile.view", label: "View parent profile" },
+      { code: "parent_profile.edit", label: "Edit parent profile" },
+    ],
+  },
+  {
+    title: "Medicines",
+    items: [
+      { code: "medicines.view", label: "View medicines" },
+      { code: "medicines.edit", label: "Add and edit medicines" },
+      { code: "medicine_quantity.update", label: "Update tablets left" },
+    ],
+  },
+  {
+    title: "Records",
+    items: [
+      { code: "reports.view", label: "View records" },
+      { code: "reports.upload", label: "Upload records" },
+    ],
+  },
+  {
+    title: "Tasks",
+    items: [
+      { code: "tasks.view", label: "View tasks" },
+      { code: "tasks.create", label: "Create tasks" },
+      { code: "tasks.assign", label: "Assign tasks" },
+      { code: "tasks.update_own", label: "Update own tasks" },
+    ],
+  },
+  {
+    title: "Appointments",
+    items: [
+      { code: "appointments.view", label: "View appointments" },
+      { code: "appointments.create", label: "Add appointments" },
+      { code: "appointments.update", label: "Change appointments" },
+      { code: "appointments.delete", label: "Delete appointments" },
+    ],
+  },
+  {
+    title: "Family & settings",
+    items: [
+      { code: "activity.view", label: "See activity" },
+      { code: "members.manage", label: "Manage members" },
+      { code: "roles.manage", label: "Manage roles" },
+      { code: "notifications.configure", label: "Notification settings" },
+    ],
+  },
+  {
+    title: "Parent chat",
+    items: [{ code: "voice.use_parent_mode", label: "Use the parent chat" }],
+  },
 ];
+
+const PERMISSION_OPTIONS: string[] = PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => i.code));
+
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((p) => b.includes(p));
+
+interface PermissionPickerProps {
+  idPrefix: string;
+  selected: string[];
+  onChange: (next: string[]) => void;
+}
+
+// The grouped checkbox grid, used by every role card and by "Create role".
+function PermissionPicker({ idPrefix, selected, onChange }: PermissionPickerProps) {
+  const toggle = (code: string, on: boolean) =>
+    onChange(on ? [...selected, code] : selected.filter((v) => v !== code));
+  return (
+    <div className="mp-groups">
+      {PERMISSION_GROUPS.map((group) => {
+        const codes = group.items.map((i) => i.code);
+        const allOn = codes.every((c) => selected.includes(c));
+        return (
+          <fieldset key={group.title} className="mp-group">
+            <legend className="mp-group-title">
+              {group.title}
+              <button
+                type="button"
+                className="mp-link"
+                onClick={() =>
+                  onChange(
+                    allOn
+                      ? selected.filter((v) => !codes.includes(v))
+                      : [...selected, ...codes.filter((c) => !selected.includes(c))],
+                  )
+                }
+              >
+                {allOn ? "Clear" : "All"}
+              </button>
+            </legend>
+            {group.items.map((item) => (
+              <label key={item.code} className="mp-perm" htmlFor={`${idPrefix}-${item.code}`}>
+                <input
+                  type="checkbox"
+                  id={`${idPrefix}-${item.code}`}
+                  checked={selected.includes(item.code)}
+                  onChange={(e) => toggle(item.code, e.target.checked)}
+                />
+                <span>{item.label}</span>
+              </label>
+            ))}
+          </fieldset>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function MembersPermissions({ familyId }: MembersPermissionsProps) {
   const navigate = useNavigate();
@@ -44,8 +150,8 @@ export default function MembersPermissions({ familyId }: MembersPermissionsProps
   const [creatingRole, setCreatingRole] = useState(false);
 
   const [permDrafts, setPermDrafts] = useState<Record<string, string[]>>({});
-
-  const selectedValues = (e: ChangeEvent<HTMLSelectElement>) => Array.from(e.target.selectedOptions, (o) => o.value);
+  const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
+  const [savedRoleId, setSavedRoleId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -144,14 +250,18 @@ export default function MembersPermissions({ familyId }: MembersPermissionsProps
 
   const handleSavePermissions = async (role: RoleOut) => {
     setActionError(null);
+    setSavingRoleId(role.id);
     try {
       const updated = await roles.updatePermissions(familyId, role.id, {
         permissions: permDrafts[role.id] ?? [],
       });
       setRoleList((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
       setPermDrafts((prev) => ({ ...prev, [updated.id]: updated.permissions }));
+      setSavedRoleId(updated.id);
     } catch (err: unknown) {
       setActionError(messageOf(err));
+    } finally {
+      setSavingRoleId(null);
     }
   };
 
@@ -159,7 +269,7 @@ export default function MembersPermissions({ familyId }: MembersPermissionsProps
   if (error) return <p role="alert">{error}</p>;
 
   return (
-    <main className="parent-layout wizard-page" aria-labelledby="members-permissions-heading">
+    <main className="parent-layout wizard-page mp-page" aria-labelledby="members-permissions-heading">
       <h1 id="members-permissions-heading">Family members &amp; permissions</h1>
 
       {actionError && <p role="alert" className="wizard-error">{actionError}</p>}
@@ -206,65 +316,95 @@ export default function MembersPermissions({ familyId }: MembersPermissionsProps
         Back
       </button>
 
-      <h3>Roles</h3>
-      {roleList.length === 0 ? (
-        <p>No roles yet.</p>
-      ) : (
-        <ul>
-          {roleList.map((r) => (
-            <li key={r.id}>
-              <strong>{r.name}</strong>
-              {r.is_system ? " (system)" : ""}
-              <fieldset className="wizard-field">
-                <legend>Permissions</legend>
-                {PERMISSION_OPTIONS.map((p) => {
-                  const selected = permDrafts[r.id] ?? [];
-                  return (
-                    <label key={p}>
-                      <input
-                        type="checkbox"
-                        id={`perm-${r.id}-${p}`}
-                        checked={selected.includes(p)}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                            ? [...selected, p]
-                            : selected.filter((v) => v !== p);
-                          setPermDrafts((prev) => ({ ...prev, [r.id]: next }));
-                        }}
-                      />
-                      {p}
-                    </label>
-                  );
-                })}
-              </fieldset>
+      <section className="mp-roles" aria-labelledby="mp-roles-title">
+        <div className="mp-roles-head">
+          <h2 id="mp-roles-title">Roles &amp; permissions</h2>
+          <p className="muted">What each role can do in this family. Open a role to change it.</p>
+        </div>
 
-              <button type="button" className="btn btn-secondary" onClick={() => void handleSavePermissions(r)}>
-                Save permissions
+        {roleList.length === 0 ? (
+          <p className="muted">No roles yet.</p>
+        ) : (
+          <div className="mp-role-list">
+            {roleList.map((r) => {
+              const draft = permDrafts[r.id] ?? [];
+              const known = draft.filter((p) => PERMISSION_OPTIONS.includes(p));
+              const changed = !sameSet(draft, r.permissions);
+              const memberCount = memberList.filter((m) => m.role_name === r.name).length;
+              return (
+                <details key={r.id} className="mp-role">
+                  <summary className="mp-role-summary">
+                    <span className="mp-role-name">
+                      {r.name}
+                      {r.is_system && <span className="mp-tag">System</span>}
+                      {changed && <span className="mp-tag mp-tag-warn">Unsaved</span>}
+                    </span>
+                    <span className="mp-role-meta">
+                      {memberCount} {memberCount === 1 ? "member" : "members"} ·{" "}
+                      {known.length === PERMISSION_OPTIONS.length
+                        ? "Full access"
+                        : `${known.length} of ${PERMISSION_OPTIONS.length} allowed`}
+                    </span>
+                  </summary>
+                  <div className="mp-role-body">
+                    <PermissionPicker
+                      idPrefix={`perm-${r.id}`}
+                      selected={draft}
+                      onChange={(next) => {
+                        setSavedRoleId(null);
+                        setPermDrafts((prev) => ({ ...prev, [r.id]: next }));
+                      }}
+                    />
+                    <div className="mp-role-actions">
+                      {savedRoleId === r.id && !changed && (
+                        <span role="status" className="mp-saved">
+                          ✓ Saved
+                        </span>
+                      )}
+                      {changed && (
+                        <button
+                          type="button"
+                          className="mp-btn mp-btn-ghost"
+                          onClick={() => setPermDrafts((prev) => ({ ...prev, [r.id]: r.permissions }))}
+                        >
+                          Undo changes
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="mp-btn"
+                        disabled={!changed || savingRoleId === r.id}
+                        onClick={() => void handleSavePermissions(r)}
+                      >
+                        {savingRoleId === r.id ? "Saving…" : "Save permissions"}
+                      </button>
+                    </div>
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        )}
+
+        <details className="mp-role mp-new-role">
+          <summary className="mp-role-summary">
+            <span className="mp-role-name">+ Create a new role</span>
+            <span className="mp-role-meta">For example “Nurse” or “Neighbour”</span>
+          </summary>
+          <form className="mp-role-body" onSubmit={handleCreateRole} aria-label="Create role">
+            <label className="mp-field">
+              Role name
+              <input value={roleName} onChange={(e) => setRoleName(e.target.value)} required maxLength={64} />
+            </label>
+            <PermissionPicker idPrefix="new-role" selected={rolePermissions} onChange={setRolePermissions} />
+            <div className="mp-role-actions">
+              <button type="submit" className="mp-btn" disabled={creatingRole || roleName.trim() === ""}>
+                {creatingRole ? "Creating…" : "Create role"}
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <form className="wizard-form" onSubmit={handleCreateRole} aria-label="Create role">
-        <label className="wizard-field">
-          Role name
-          <input value={roleName} onChange={(e) => setRoleName(e.target.value)} required maxLength={64} />
-        </label>
-        <label className="wizard-field">
-          Permissions
-          <select multiple value={rolePermissions} onChange={(e) => setRolePermissions(selectedValues(e))}>
-            {PERMISSION_OPTIONS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className="btn" disabled={creatingRole || roleName.trim() === ""}>
-          {creatingRole ? "Creating…" : "Create role"}
-        </button>
-      </form>
+            </div>
+          </form>
+        </details>
+      </section>
     </main>
   );
 }
