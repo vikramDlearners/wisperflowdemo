@@ -731,3 +731,97 @@
     padding-bottom: 2px;
   }
 }
+
+/* ---- voice mode in the New task panel ---- */
+.tasks-voice {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #eef7f4, #f7fbfa);
+  border: 1px solid #cfe7e0;
+}
+.tasks-voice__label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.tasks-voice__label small {
+  flex-basis: 100%;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--t-muted);
+}
+.tasks-voice textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 12px 14px;
+  border: 1.5px solid #cfe0db;
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--t-ink);
+  resize: vertical;
+}
+.tasks-voice textarea:focus-visible {
+  outline: 3px solid #9fd3c9;
+  outline-offset: 0;
+  border-color: var(--t-teal);
+}
+.tasks-voice__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tasks-voice__hint {
+  font-size: 12px;
+  color: var(--t-muted);
+}
+.tasks-voice__note {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #cfe7e0;
+  font-size: 13px;
+  color: var(--t-teal-dark);
+}
+.tasks-voice__note.is-bad {
+  border-color: #f5c2bd;
+  background: var(--t-bad-soft);
+  color: var(--t-bad);
+}
+.tasks-voice__or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--t-muted);
+}
+.tasks-voice__or::before,
+.tasks-voice__or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #d6e6e1;
+}
+@keyframes tasks-filled-glow {
+  from { background: #dff5ef; }
+  to { background: transparent; }
+}
+.tasks-field.is-filled {
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px #7cc9b8;
+  animation: tasks-filled-glow 4s ease-out;
+}

@@ -216,6 +216,17 @@ export interface TaskUpdate {
   priority?: string | null;
 }
 
+/** Voice mode: what POST .../tasks/parse-text read from the spoken task. Unknown fields are null. */
+export interface TaskTextOut {
+  title: string | null;
+  description: string | null;
+  due_date: string | null; // YYYY-MM-DD
+  priority: "low" | "normal" | "high";
+  assignee_user_id: string | null;
+  assignee_name: string | null;
+  source: "gemini" | "rules";
+}
+
 export interface TaskOut {
   id: string;
   title: string;
@@ -489,6 +500,8 @@ export const tasks = {
     del(`/api/families/${familyId}/tasks/${taskId}`),
   assign: (familyId: string, taskId: string, body: TaskAssign) =>
     post<TaskOut>(`/api/families/${familyId}/tasks/${taskId}/assign`, body),
+  parseText: (familyId: string, text: string, today: string) =>
+    post<TaskTextOut>(`/api/families/${familyId}/tasks/parse-text`, { text, today }),
   complete: (familyId: string, taskId: string) =>
     post<TaskOut>(`/api/families/${familyId}/tasks/${taskId}/complete`),
   notify: (familyId: string, taskId: string) =>

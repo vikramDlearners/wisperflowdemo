@@ -220,6 +220,22 @@ class TaskCreate(BaseModel):
     care_profile_id: str | None = None
 
 
+class TaskTextIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    # The family member's own date, so "tomorrow" means their tomorrow; defaults to the server's date.
+    today: date | None = None
+
+
+class TaskTextOut(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    due_date: date | None = None
+    priority: str = "normal"
+    assignee_user_id: str | None = None
+    assignee_name: str | None = None
+    source: str
+
+
 class TaskAssign(BaseModel):
     assignee_user_id: str
 

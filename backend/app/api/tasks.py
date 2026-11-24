@@ -1,13 +1,19 @@
 """Family tasks. Viewing needs tasks.view; creating and editing need tasks.create; assigning needs tasks.assign; completing and status updates need tasks.update_own; deleting needs tasks.assign."""
 
+from datetime import date
+
 from fastapi import APIRouter, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, DbSession
+from app.models.membership import FamilyMember
 from app.models.task import Task
 from app.models.user import User
-from app.schemas import TaskAssign, TaskCreate, TaskOut, TaskStatusUpdate, TaskUpdate
+from app.schemas import TaskAssign, TaskCreate, TaskOut, TaskStatusUpdate, TaskTextIn, TaskTextOut, TaskUpdate
 from app.services import tasks as svc
+from app.services.permissions import require
+from app.services.task_text import parse_task_text
 
 router = APIRouter(prefix="/api/families/{family_id}/tasks", tags=["tasks"])
 
@@ -28,6 +34,23 @@ def _out(task: Task) -> TaskOut:
 @router.get("", response_model=list[TaskOut])
 def list_tasks(family_id: str, db: Session = DbSession, user: User = CurrentUser) -> list[TaskOut]:
     return [_out(t) for t in svc.list_tasks(db, user.id, family_id)]
+
+
+@router.post("/parse-text", response_model=TaskTextOut)
+def parse_text(
+    family_id: str, body: TaskTextIn, db: Session = DbSession, user: User = CurrentUser
+) -> TaskTextOut:
+    """Voice mode: read a spoken task into the form (title, notes, due date, urgency, who does it).
+    The person is matched only against this family's active members."""
+    require(db, user.id, family_id, "tasks.create")
+    rows = db.execute(
+        select(User.id, User.display_name)
+        .join(FamilyMember, FamilyMember.user_id == User.id)
+        .where(FamilyMember.family_id == family_id, FamilyMember.status == "active")
+        .order_by(User.display_name)
+    ).all()
+    members = [(uid, name) for uid, name in rows if name]
+    return TaskTextOut(**parse_task_text(body.text, body.today or date.today(), members, me_id=user.id))
 
 
 @router.post("", response_model=TaskOut, status_code=201)

@@ -37,6 +37,8 @@ const IDEAS = [
 
 const DONE_LIMIT = 5;
 
+const VOICE_EXAMPLE = "Get the medicine from the store next week and assign it to Deepak";
+
 function statusOf(task: TaskOut): Status {
   const s = task.status.trim().toUpperCase().replace(/[\s-]+/g, "_");
   if (s === "DONE" || s === "COMPLETED") return "DONE";
@@ -148,6 +150,13 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);
 
+  // Voice mode for a new task: say it all in one go (Wispr Flow types it), "Fill the form" fills the fields.
+  const [spoken, setSpoken] = useState("");
+  const [reading, setReading] = useState(false);
+  const [readNote, setReadNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [filled, setFilled] = useState<string[]>([]);
+  const voiceRef = useRef<HTMLTextAreaElement | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -183,8 +192,16 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
   }, [toast]);
 
   useEffect(() => {
-    if (editing) titleRef.current?.focus();
+    if (editing === "new" && !draft.title) voiceRef.current?.focus();
+    else if (editing) titleRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
+
+  useEffect(() => {
+    if (filled.length === 0) return;
+    const t = window.setTimeout(() => setFilled([]), 6000);
+    return () => window.clearTimeout(t);
+  }, [filled]);
 
   // If permissions can't be read, show every control; the server still checks.
   const can = (code: string) => permissions === null || permissions.includes(code);
@@ -233,8 +250,63 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
   function openNew(title = "") {
     setDraft({ ...EMPTY_DRAFT, title });
     setFormError(null);
+    setSpoken("");
+    setReadNote(null);
+    setFilled([]);
     setEditing("new");
   }
+
+  async function fillFromSpeech() {
+    if (!spoken.trim()) {
+      setReadNote({ text: "Say or type the task first.", bad: true });
+      voiceRef.current?.focus();
+      return;
+    }
+    setReading(true);
+    setReadNote(null);
+    try {
+      const r = await tasks.parseText(familyId, spoken.trim(), toDateInput(new Date()));
+      const got: string[] = [];
+      const next: Draft = { ...draft };
+      if (r.title) {
+        next.title = r.title;
+        got.push("title");
+      }
+      if (r.description) {
+        next.description = r.description;
+        got.push("notes");
+      }
+      if (r.due_date) {
+        next.due = r.due_date;
+        got.push("due date");
+      }
+      if (r.priority !== "normal" || draft.priority !== "normal") {
+        next.priority = r.priority;
+        if (r.priority !== "normal") got.push("urgency");
+      }
+      if (r.assignee_user_id && canAssign) {
+        next.assignee = r.assignee_user_id;
+        got.push("who will do it");
+      }
+      setDraft(next);
+      setFilled(got);
+      setFormError(null);
+      const who = r.assignee_user_id
+        ? ` · for ${r.assignee_user_id === myId ? "you" : r.assignee_name}`
+        : "";
+      setReadNote(
+        got.length
+          ? { text: `Filled ${got.join(", ")}${who}${r.source === "gemini" ? " (read by Gemini)" : ""}. Check it and press Add task.` }
+          : { text: "Couldn't make out a task from that. Try again, or fill the fields below.", bad: true },
+      );
+    } catch (err) {
+      setReadNote({ text: messageOf(err), bad: true });
+    } finally {
+      setReading(false);
+    }
+  }
+
+  const filledClass = (key: string) => (filled.includes(key) ? " is-filled" : "");
 
   function openEdit(task: TaskOut) {
     setDraft({
@@ -252,6 +324,8 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
   function closeForm() {
     setEditing(null);
     setFormError(null);
+    setReadNote(null);
+    setFilled([]);
   }
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
@@ -522,7 +596,53 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
         </button>
       </div>
 
-      <label className="tasks-field tasks-field--wide">
+      {editing === "new" && (
+        <div className="tasks-voice">
+          <label htmlFor="tasks-voice-box" className="tasks-voice__label">
+            <span aria-hidden="true">🎙️</span> Say it in one go
+            <small>Task, when, and who will do it. Speak with Wispr Flow or type.</small>
+          </label>
+          <textarea
+            id="tasks-voice-box"
+            ref={voiceRef}
+            rows={3}
+            maxLength={2000}
+            value={spoken}
+            placeholder={`e.g. “${VOICE_EXAMPLE}”`}
+            onChange={(e) => {
+              setSpoken(e.target.value);
+              setReadNote(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                void fillFromSpeech();
+              }
+            }}
+          />
+          <div className="tasks-voice__actions">
+            <button type="button" className="tasks-btn tasks-btn--primary" disabled={reading} onClick={() => void fillFromSpeech()}>
+              {reading ? "Reading…" : "✨ Fill the form"}
+            </button>
+            {!spoken && (
+              <button type="button" className="tasks-link" onClick={() => setSpoken(VOICE_EXAMPLE)}>
+                Try an example
+              </button>
+            )}
+            <span className="tasks-voice__hint">Ctrl + Enter also works</span>
+          </div>
+          {readNote && (
+            <p className={`tasks-voice__note${readNote.bad ? " is-bad" : ""}`} role={readNote.bad ? "alert" : "status"}>
+              {readNote.text}
+            </p>
+          )}
+          <div className="tasks-voice__or" aria-hidden="true">
+            <span>or fill in the details</span>
+          </div>
+        </div>
+      )}
+
+      <label className={`tasks-field tasks-field--wide${filledClass("title")}`}>
         <span>What needs doing?</span>
         <input
           ref={titleRef}
@@ -534,7 +654,7 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
         />
       </label>
 
-      <label className="tasks-field tasks-field--wide">
+      <label className={`tasks-field tasks-field--wide${filledClass("notes")}`}>
         <span>
           Notes <small>Optional</small>
         </span>
@@ -546,7 +666,7 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
         />
       </label>
 
-      <div className="tasks-field">
+      <div className={`tasks-field${filledClass("due date")}`}>
         <span id="tasks-due-label">When is it due?</span>
         <div className="tasks-chips" role="group" aria-labelledby="tasks-due-label">
           {quickDue.map((q) => (
@@ -570,7 +690,7 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
         </div>
       </div>
 
-      <div className="tasks-field">
+      <div className={`tasks-field${filledClass("urgency")}`}>
         <span id="tasks-priority-label">How urgent?</span>
         <div className="tasks-segment" role="radiogroup" aria-labelledby="tasks-priority-label">
           {PRIORITIES.map((p) => (
@@ -589,7 +709,7 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
       </div>
 
       {canAssign && (
-        <label className="tasks-field">
+        <label className={`tasks-field${filledClass("who will do it")}`}>
           <span>Who will do it?</span>
           <select value={draft.assignee} onChange={(e) => setDraft({ ...draft, assignee: e.target.value })}>
             <option value="">Decide later</option>
