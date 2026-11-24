@@ -1,26 +1,32 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { fetchProfilePhoto } from "../profilePhoto";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import "../dashboard.css";
+import DoseButtons from "../components/DoseButtons";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import {
   ApiError,
   auth,
+  careProfiles,
+  families,
   getFamilyDashboard,
+  medicines,
+  members,
   type DashboardParentOut,
   type DashboardResponse,
   type DashboardStockItemOut,
+  type DoseToday,
+  type MemberOut,
   tasks,
   type TaskOut,
 } from "../api";
+import { canRecord, doseLabel, slotName, sortDoses } from "../doses";
+import { isChild } from "../lib/constants";
 
 // Family dashboard: GET /api/families/{familyId}/dashboard, optionally scoped
 // to one parent with care_profile_id.
 
 const TIME_RE = /^(\d{1,2}):(\d{2})/;
-
-// Medicines without reminder times are recorded per part of the day.
-const SLOT_PART_NAMES: Record<string, string> = { morning: "Morning", noon: "Afternoon", night: "Night" };
 
 function formatTime(hhmm: string): string {
   const m = TIME_RE.exec(hhmm);
@@ -53,6 +59,92 @@ function errorText(err: unknown): string {
   return err instanceof ApiError ? err.detail : "Could not load the dashboard.";
 }
 
+function greetingFor(hour: number): string {
+  if (hour < 12) return "Good morning";
+  return hour < 17 ? "Good afternoon" : "Good evening";
+}
+
+function startOfDay(offset = 0): Date {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset);
+}
+
+function dayLabel(d: Date): string {
+  if (d >= startOfDay() && d < startOfDay(1)) return "Today";
+  if (d >= startOfDay(1) && d < startOfDay(2)) return "Tomorrow";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+// "09:40 AM" today, else "3 Jun".
+function shortStamp(iso: string): string {
+  const d = new Date(iso);
+  return d >= startOfDay()
+    ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    : d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+function count(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+const isDone = (t: TaskOut) => ["done", "completed"].includes(t.status.toLowerCase());
+
+const DOSE_TONES = { taken: "green", missed: "red", skipped: "amber", due: "blue" } as const;
+
+interface Attention {
+  key: string;
+  icon: string;
+  title: string;
+  detail: string;
+  tag: string;
+  tone: "red" | "amber" | "blue";
+  action: string;
+  to: string;
+}
+
+function Pill({ tone, children }: { tone: string; children: ReactNode }) {
+  return <span className={`ov-pill is-${tone}`}>{children}</span>;
+}
+
+interface StatProps {
+  label: string;
+  value: ReactNode;
+  sub: string;
+  icon: string;
+  to: string;
+}
+
+function Stat({ label, value, sub, icon, to }: StatProps) {
+  return (
+    <Link to={to} className="ov-card ov-stat">
+      <span>
+        <span className="ov-stat-label">{label}</span>
+        <strong className="ov-stat-value">{value}</strong>
+        <span className="ov-stat-sub">{sub}</span>
+      </span>
+      <span className="ov-tile" aria-hidden="true">{icon}</span>
+    </Link>
+  );
+}
+
+interface PanelProps {
+  title: string;
+  link?: { text: string; to: string };
+  children: ReactNode;
+}
+
+function Panel({ title, link, children }: PanelProps) {
+  return (
+    <section className="ov-card ov-panel">
+      <div className="ov-panel-head">
+        <h2>{title}</h2>
+        {link && <Link to={link.to}>{link.text} <span aria-hidden="true">→</span></Link>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 type Tone = "red" | "amber" | "green";
 
 function stockTone(item: DashboardStockItemOut): Tone {
@@ -71,13 +163,14 @@ interface AvatarProps {
   name: string;
   photoUrl: string | null;
   gender: string | null;
+  child: boolean;
   familyId: string;
   careProfileId: string;
   hasPhoto?: boolean;
 }
 
 // The parent's uploaded photo first (fetched with sign-in), else the image link, else an emoji or initials.
-function Avatar({ name, photoUrl, gender, familyId, careProfileId, hasPhoto }: AvatarProps) {
+function Avatar({ name, photoUrl, gender, child, familyId, careProfileId, hasPhoto }: AvatarProps) {
   const [uploaded, setUploaded] = useState<string | null>(null);
   useEffect(() => {
     if (!hasPhoto) {
@@ -104,7 +197,7 @@ function Avatar({ name, photoUrl, gender, familyId, careProfileId, hasPhoto }: A
   if (gender === "male" || gender === "female") {
     return (
       <span className="db-avatar is-emoji" aria-hidden="true">
-        {gender === "male" ? "👨" : "👩"}
+        {child ? (gender === "male" ? "👦" : "👧") : gender === "male" ? "👨" : "👩"}
       </span>
     );
   }
@@ -115,24 +208,28 @@ function Avatar({ name, photoUrl, gender, familyId, careProfileId, hasPhoto }: A
   );
 }
 
+// The overview reads as one page: pieces the user may not see are simply left out.
 export default function Dashboard() {
   const { familyId = "" } = useParams();
-  const navigate = useNavigate();
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
-  const [familyTasks, setFamilyTasks] = useState<TaskOut[]>([]);
+  const [familyTasks, setFamilyTasks] = useState<TaskOut[] | null>(null);
   const [tasksError, setTasksError] = useState<string | null>(null);
+  const [team, setTeam] = useState<MemberOut[]>([]);
+  const [doses, setDoses] = useState<DoseToday[]>([]);
+  const [zones, setZones] = useState<Record<string, string>>({});
+  const [perms, setPerms] = useState<string[]>([]);
+  const [recorded, setRecorded] = useState(0); // bumped after a dose is recorded, to load the page again
+  const [shareNote, setShareNote] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     auth
       .me()
-      .then((me) => {
-        if (active) setUserName(me.display_name);
-      })
+      .then((me) => active && setUserName(me.display_name))
       .catch(() => undefined);
     return () => {
       active = false;
@@ -144,37 +241,156 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     getFamilyDashboard(familyId, selectedId ? { care_profile_id: selectedId } : {})
-      .then((res) => {
-        if (active) setData(res);
-      })
-      .catch((err) => {
-        if (active) setError(errorText(err));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+      .then((res) => active && setData(res))
+      .catch((err) => active && setError(errorText(err)))
+      .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [familyId, selectedId]);
+  }, [familyId, selectedId, recorded]);
 
   useEffect(() => {
     let active = true;
     setTasksError(null);
     tasks
       .list(familyId)
-      .then((res) => {
-        if (active) setFamilyTasks(res);
-      })
-      .catch((err) => {
-        if (active) setTasksError(errorText(err));
-      });
+      .then((res) => active && setFamilyTasks(res))
+      .catch((err) => active && setTasksError(errorText(err)));
+    members
+      .list(familyId)
+      .then((res) => active && setTeam(res))
+      .catch(() => undefined);
+    families
+      .me(familyId)
+      .then((res) => active && setPerms(res.permissions))
+      .catch(() => undefined);
+    careProfiles
+      .list(familyId)
+      .then((res) => active && setZones(Object.fromEntries(res.map((p) => [p.id, p.timezone]))))
+      .catch(() => undefined);
     return () => {
       active = false;
     };
   }, [familyId]);
 
-  const greeting = `Good Evening, ${userName ?? "there"}`;
+  // When each dose was answered; the dashboard itself only says how.
+  const profileId = data?.selected_care_profile_id ?? null;
+  useEffect(() => {
+    if (!profileId) return;
+    let active = true;
+    medicines
+      .dosesToday(familyId, profileId)
+      .then((res) => active && setDoses(res))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [familyId, profileId, recorded]);
+
+  const path = (p: string) => `/family/${familyId}${p}`;
+  const addProfile = `/onboarding/parent?add=1&family=${familyId}`;
+  const firstName = userName?.trim().split(/\s+/)[0];
+  const parent: DashboardParentOut | undefined = data?.parents.find(
+    (p) => p.care_profile_id === data.selected_care_profile_id,
+  );
+
+  const schedule = data
+    ? sortDoses(
+        data.today_schedule.map((item) => ({
+          medicine_id: item.medicine_id,
+          slot: item.slot,
+          status: item.status as DoseToday["status"],
+          recorded_at:
+            doses.find((d) => d.medicine_id === item.medicine_id && d.slot === item.slot)?.recorded_at ?? null,
+        })),
+      )
+    : [];
+  const medicineNames = new Map(data?.today_schedule.map((i) => [i.medicine_id, i.medicine_name]));
+  const mayRecord = perms.includes("medicine_quantity.update");
+  const zone = profileId ? zones[profileId] : undefined;
+  const openTasks = (familyTasks ?? []).filter((t) => !isDone(t));
+  const overdue = openTasks.filter((t) => t.due_at && new Date(t.due_at) < new Date());
+  const dueToday = openTasks.filter((t) => t.due_at && dayLabel(new Date(t.due_at)) === "Today");
+  const missed = schedule.filter((d) => d.status === "missed" || d.status === "not_taken");
+  const lowStock = data?.medicine_stock.filter((m) => m.low) ?? [];
+
+  const attention: Attention[] = [
+    ...missed.map((d): Attention => ({
+      key: `dose-${d.medicine_id}-${d.slot}`,
+      icon: "!",
+      title: `${medicineNames.get(d.medicine_id)} was ${d.status === "missed" ? "missed" : "not taken"}`,
+      detail: `Today · ${slotName(d.slot)}`,
+      tag: "Missed",
+      tone: "red",
+      action: "Review medicine",
+      to: path(`/medicines/${d.medicine_id}`),
+    })),
+    ...(data?.emergency.active && missed.length === 0
+      ? [{
+          key: "emergency",
+          icon: "!",
+          title: "Emergency alert active",
+          detail: data.emergency.last_check_at ? `Last check ${formatStamp(data.emergency.last_check_at)}` : "A dose was missed today",
+          tag: "Open",
+          tone: "red" as const,
+          action: "Review activity",
+          to: path("/activity"),
+        }]
+      : []),
+    ...lowStock.map((m): Attention => ({
+      key: `stock-${m.medicine_id}`,
+      icon: "▤",
+      title: `${m.display_name} is running low`,
+      detail: daysLabel(m),
+      tag: "Low stock",
+      tone: "amber",
+      action: "Review stock",
+      to: path(`/medicines/${m.medicine_id}`),
+    })),
+    ...openTasks
+      .filter((t) => overdue.includes(t) || !t.assigned_to_user_id)
+      .map((t): Attention => {
+        const late = overdue.includes(t);
+        return {
+          key: `task-${t.id}`,
+          icon: "☷",
+          title: t.title,
+          detail: t.due_at ? `Due ${formatStamp(t.due_at)}` : "No due date",
+          tag: late ? "Overdue" : "Unassigned",
+          tone: late ? "amber" : "blue",
+          action: late ? "Review task" : "Assign caregiver",
+          to: path("/tasks"),
+        };
+      }),
+  ];
+  const onTrack = attention.length === 0;
+  const appt = data?.next_appointment ?? null;
+
+  const summary = data
+    ? [
+        data.medicines_today.total > 0
+          ? `${data.medicines_today.taken} of ${count(data.medicines_today.total, "check-in")} confirmed`
+          : "No medicines scheduled today",
+        `${count(attention.length, "item")} ${attention.length === 1 ? "needs" : "need"} attention`,
+        appt ? `next appointment: ${dayLabel(parseDay(appt.scheduled_date))} at ${formatTime(appt.start_time)}` : "no upcoming appointments",
+      ].join(", ") + "."
+    : "";
+
+  async function shareUpdate() {
+    if (!parent) return;
+    const text = `Care update for ${parent.display_name}: ${summary}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "CareCircle update", text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      setShareNote("Update copied. Paste it into any chat or email.");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setShareNote("Could not share the update from this browser.");
+    }
+  }
 
   let content: ReactNode;
   if (!data) {
@@ -184,16 +400,12 @@ export default function Dashboard() {
       </div>
     ) : (
       <p role="status" className="pp-muted">
-        Loading dashboard…
+        Loading overview…
       </p>
     );
   } else {
-    const parent: DashboardParentOut | undefined =
-      data.parents.find((p) => p.care_profile_id === data.selected_care_profile_id) ?? data.parents[0];
-    const taken = data.medicines_today.taken;
-    const total = data.medicines_today.total;
-    const lowCount = data.medicine_stock.filter((s) => s.low).length;
-    const appt = data.next_appointment;
+    const { taken, total } = data.medicines_today;
+    const shownAttention = attention.slice(0, 4);
 
     content = (
       <>
@@ -204,226 +416,268 @@ export default function Dashboard() {
         )}
         {loading && <p role="status" className="pp-muted">Updating…</p>}
 
-        {/* Parent overview */}
-        <section className="db-card db-tint-teal db-overview" aria-label="Parent overview">
-          <div className="db-overview-main">
-            <h2 className="db-card-title">Parent Overview</h2>
-            {data.parents.length > 0 ? (
-              <div className="db-switcher" role="group" aria-label="Choose parent">
-                {data.parents.map((p) => {
-                  const active = p.care_profile_id === parent?.care_profile_id;
-                  return (
-                    <button
-                      key={p.care_profile_id}
-                      type="button"
-                      className={`db-switch${active ? " is-active" : ""}`}
-                      aria-pressed={active}
-                      onClick={() => setSelectedId(p.care_profile_id)}
-                    >
-                      <Avatar
-                        name={p.display_name}
-                        photoUrl={p.photo_url}
-                        gender={p.gender}
-                        familyId={familyId}
-                        careProfileId={p.care_profile_id}
-                        hasPhoto={p.has_photo}
-                      />
-                      {p.display_name}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="pp-muted">No parents added yet.</p>
-            )}
-            {parent && (
-              <div className="db-parent">
-                <Avatar
-                  name={parent.display_name}
-                  photoUrl={parent.photo_url}
-                  gender={parent.gender}
-                  familyId={familyId}
-                  careProfileId={parent.care_profile_id}
-                  hasPhoto={parent.has_photo}
-                />
-                <div className="db-parent-text">
-                  <button
-                    type="button"
-                    className="db-parent-name db-parent-link"
-                    onClick={() => navigate(`/family/${familyId}/parents/${parent.care_profile_id}`)}
-                  >
-                    {parent.display_name}
-                  </button>
-                  <div className="pp-muted">
-                    {parent.age !== null ? `${parent.age} years` : "Age not set"}
-                    {parent.relationship && ` • ${parent.relationship}`}
-                  </div>
-                </div>
-                {parent.all_good && <span className="db-badge is-good">✓ All Good</span>}
-              </div>
-            )}
+        {data.parents.length > 1 && (
+          <div className="db-switcher" role="group" aria-label="Choose profile">
+            {data.parents.map((p) => {
+              const active = p.care_profile_id === parent?.care_profile_id;
+              return (
+                <button
+                  key={p.care_profile_id}
+                  type="button"
+                  className={`db-switch${active ? " is-active" : ""}`}
+                  aria-pressed={active}
+                  onClick={() => setSelectedId(p.care_profile_id)}
+                >
+                  {p.display_name}
+                </button>
+              );
+            })}
           </div>
-          <dl className="db-facts">
-            <div>
-              <dt>Health</dt>
-              <dd>{parent?.known_health_conditions || "None recorded"}</dd>
+        )}
+
+        {parent ? (
+          <section className={`ov-pulse${onTrack ? "" : " is-attention"}`} aria-label="Care pulse">
+            <Avatar
+              name={parent.display_name}
+              photoUrl={parent.photo_url}
+              gender={parent.gender}
+              child={isChild(parent.relationship)}
+              familyId={familyId}
+              careProfileId={parent.care_profile_id}
+              hasPhoto={parent.has_photo}
+            />
+            <div className="ov-pulse-text">
+              <h2>
+                <Link to={path(`/parents/${parent.care_profile_id}`)}>{parent.display_name}</Link>
+                {onTrack ? "'s care looks on track today." : "'s care needs a look today."}
+              </h2>
+              <p>{summary}</p>
+              <p className="ov-pulse-facts">
+                <span>{parent.age !== null ? `${parent.age} years` : "Age not set"}{parent.relationship && ` · ${parent.relationship}`}</span>
+                <span>Health: {parent.known_health_conditions || "None recorded"}</span>
+                <span>Caregiver: {parent.primary_caregiver_name || "Not set"}</span>
+              </p>
             </div>
-            <div>
-              <dt><span aria-hidden="true">💊</span> Medicines</dt>
-              <dd>{data.daily_medicine_count} Medicine(s) daily</dd>
+            <Pill tone={onTrack ? "green" : "amber"}>{onTrack ? "On track" : "Needs attention"}</Pill>
+          </section>
+        ) : (
+          <section className="ov-pulse">
+            <div className="ov-pulse-text">
+              <h2>No profiles added yet.</h2>
+              <p>Add a parent or child to start following their care here.</p>
             </div>
-            <div>
-              <dt>Primary Caregiver</dt>
-              <dd>{parent?.primary_caregiver_name || "Not set"}</dd>
-            </div>
-          </dl>
-        </section>
-
-        {/* Summary cards */}
-        <div className="db-summary">
-          <section className="db-card db-tint-mint">
-            <h3 className="db-card-title"><span aria-hidden="true">💊</span> Today's Medicines</h3>
-            <p className="db-big">
-              {taken} / {total}
-            </p>
-            {total > 0 && taken === total && <span className="db-badge is-good">✓ Completed</span>}
+            <Link to={addProfile} className="pp-btn ov-btn">Add profile</Link>
           </section>
+        )}
 
-          <section className="db-card db-tint-blue">
-            <h3 className="db-card-title"><span aria-hidden="true">📅</span> Next Appointment</h3>
-            {appt ? (
-              <>
-                <p className="db-big db-big-sm">{parseDay(appt.scheduled_date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</p>
-                <p className="db-sub">{appt.title}</p>
-                <p className="pp-muted">
-                  {appt.doctor}
-                  {appt.location && ` • ${appt.location}`}
-                </p>
-                <p className="pp-muted">{formatTime(appt.start_time)}</p>
-              </>
-            ) : (
-              <p className="pp-muted">No upcoming appointments.</p>
-            )}
-          </section>
-
-          <section className="db-card db-tint-lavender">
-            <h3 className="db-card-title"><span aria-hidden="true">💊</span> Medicine Stock</h3>
-            <p className="db-big">
-              {lowCount > 0 ? <span className="db-badge is-red">{lowCount} Low</span> : <span className="db-badge is-good">All OK</span>}
-            </p>
-            <p className="pp-muted">Out of {data.medicine_stock.length} medicines</p>
-          </section>
-
-          <section className="db-card db-tint-rose">
-            <h3 className="db-card-title">Emergency</h3>
-            {data.emergency.active ? (
-              <span className="db-badge is-red">Emergency alert active</span>
-            ) : (
-              <span className="db-badge is-good">✓ No Active Alerts</span>
-            )}
-            <p className="pp-muted">
-              {data.emergency.last_check_at
-                ? `Last check: ${formatStamp(data.emergency.last_check_at)}`
-                : "No check recorded yet"}
-            </p>
-          </section>
+        <div className="ov-stats">
+          <Stat
+            label="Medicine check-ins"
+            value={`${taken} / ${total}`}
+            sub={total === 0 ? "None scheduled today" : `Today · ${taken} confirmed`}
+            icon="◷"
+            to={path("/medicines")}
+          />
+          <Stat
+            label="Needs attention"
+            value={attention.length}
+            sub={
+              [
+                missed.length > 0 && `${missed.length} missed`,
+                lowStock.length > 0 && `${lowStock.length} low stock`,
+                overdue.length > 0 && count(overdue.length, "overdue task"),
+              ].filter(Boolean).join(" · ") || (onTrack ? "All clear" : "Tasks to assign")
+            }
+            icon="!"
+            to={path(missed.length || lowStock.length ? "/medicines" : "/tasks")}
+          />
+          {familyTasks && (
+            <Stat label="Open tasks" value={openTasks.length} sub={`${dueToday.length} due today`} icon="☷" to={path("/tasks")} />
+          )}
+          <Stat
+            label="Upcoming appointment"
+            value={appt ? dayLabel(parseDay(appt.scheduled_date)) : "None"}
+            sub={appt ? `${formatTime(appt.start_time)} · ${appt.doctor || appt.title}` : "Nothing booked"}
+            icon="▦"
+            to={path("/appointments")}
+          />
         </div>
 
-        {/* Lists */}
-        <div className="db-lists">
-          <section className="db-card db-tint-mint" aria-label="Medicine stock list">
-            <h2 className="db-card-title"><span aria-hidden="true">💊</span> Medicine Stock</h2>
-            {data.medicine_stock.length === 0 ? (
-              <p className="pp-muted">No medicines in stock.</p>
+        <div className="ov-row ov-row-wide">
+          <Panel title="Today's medicine check-ins" link={{ text: "View all", to: path("/medicines") }}>
+            {schedule.length === 0 ? (
+              <p className="ov-empty">No doses scheduled today.</p>
             ) : (
-              <ul className="db-list">
-                {data.medicine_stock.map((s) => (
-                  <li key={s.medicine_id} className="db-row">
-                    <div className="db-row-main">
-                      <strong>{s.display_name}</strong>
-                      <span className="pp-muted">
-                        {[s.instructions_text, s.purpose].filter(Boolean).join(" • ") || "—"}
-                      </span>
-                    </div>
-                    <span className={`db-days is-${stockTone(s)}`}>{daysLabel(s)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="db-card db-tint-blue" aria-label="Today's schedule">
-            <h2 className="db-card-title">Today's Schedule</h2>
-            <table className="db-schedule-table">
-              <thead>
-                <tr>
-                  <th scope="col">Time</th>
-                  <th scope="col"><span aria-hidden="true">💊</span> Medicine</th>
-                  <th scope="col">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.today_schedule.length === 0 ? (
+              <table className="ov-table">
+                <thead>
                   <tr>
-                    <td colSpan={3} className="pp-muted">No doses scheduled today.</td>
+                    <th scope="col">Schedule</th>
+                    <th scope="col">Reported status</th>
+                    <th scope="col">Updated</th>
+                    {mayRecord && <th scope="col">Record</th>}
                   </tr>
-                ) : (
-                  data.today_schedule.map((item, i) => {
-                    const done = item.status === "taken";
+                </thead>
+                <tbody>
+                  {schedule.map((d) => {
+                    const label = doseLabel({ ...d, recorded_at: null }, zone);
                     return (
-                      <tr key={`${item.medicine_id}-${item.slot}-${i}`}>
-                        <td className="db-schedule-time">
-                          {item.slot === "any" || item.slot in SLOT_PART_NAMES
-                            ? (SLOT_PART_NAMES[item.slot] ?? "Any time")
-                            : formatTime(item.slot)}
-                        </td>
-                        <td className="db-schedule-name">{item.medicine_name}</td>
+                      <tr key={`${d.medicine_id}-${d.slot}`}>
                         <td>
-                          <span className={`db-schedule-status${done ? " is-done" : " is-pending"}`}>
-                            {done ? "Completed" : "Pending"}
-                          </span>
+                          <strong>{slotName(d.slot)}</strong>
+                          <span className="pp-muted">{medicineNames.get(d.medicine_id)}</span>
                         </td>
+                        <td><Pill tone={DOSE_TONES[label.tone]}>{label.text.replace("✓ ", "")}</Pill></td>
+                        <td className="pp-muted">{d.recorded_at ? shortStamp(d.recorded_at) : "—"}</td>
+                        {mayRecord && profileId && (
+                          <td className="ov-record">
+                            {d.status !== "taken" && d.status !== "skipped" && canRecord(d, zone) && (
+                              <DoseButtons
+                                familyId={familyId}
+                                careProfileId={profileId}
+                                dose={d}
+                                medicineName={medicineNames.get(d.medicine_id) ?? "this medicine"}
+                                onRecorded={() => setRecorded((n) => n + 1)}
+                              />
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
-          </section>
+                  })}
+                </tbody>
+              </table>
+            )}
+          </Panel>
 
-          <section className="db-card db-tint-lavender" aria-label="Tasks">
-            <h2 className="db-card-title">Tasks</h2>
-            {tasksError ? (
-              <p className="pp-muted">{tasksError}</p>
-            ) : familyTasks.length === 0 ? (
-              <p className="pp-muted">No tasks for this family.</p>
+          <Panel title="Needs attention">
+            {onTrack ? (
+              <p className="ov-empty">Nothing needs attention right now.</p>
             ) : (
-              <ul className="db-list">
-                {familyTasks.map((t) => (
-                  <li key={t.id} className="db-row">
-                    <span className="db-row-main">{t.title}</span>
-                    <span className="pp-muted db-stamp">
-                      {t.due_at ? formatStamp(t.due_at) : t.status}
-                    </span>
+              <ul className="ov-list">
+                {shownAttention.map((a) => (
+                  <li key={a.key}>
+                    <span className={`ov-tile is-${a.tone}`} aria-hidden="true">{a.icon}</span>
+                    <div className="ov-list-main">
+                      <div className="ov-list-title">
+                        <strong>{a.title}</strong>
+                        <Pill tone={a.tone}>{a.tag}</Pill>
+                      </div>
+                      <span className="pp-muted">{a.detail}</span>
+                      <Link to={a.to}>{a.action} <span aria-hidden="true">→</span></Link>
+                    </div>
+                  </li>
+                ))}
+                {attention.length > shownAttention.length && (
+                  <li className="pp-muted">and {attention.length - shownAttention.length} more</li>
+                )}
+              </ul>
+            )}
+          </Panel>
+        </div>
+
+        <div className="ov-row">
+          <Panel title="Recent family activity" link={{ text: "View all", to: path("/timeline") }}>
+            {data.recent_activity.length === 0 ? (
+              <p className="ov-empty">No activity yet.</p>
+            ) : (
+              <ul className="ov-list">
+                {data.recent_activity.slice(0, 5).map((a) => (
+                  <li key={a.id}>
+                    <span className="ov-tile" aria-hidden="true">{a.text.startsWith("Appointment") ? "▦" : a.text.startsWith("Medicine") ? "▤" : a.text.startsWith("Task") ? "☷" : "♡"}</span>
+                    <strong className="ov-list-main">{a.text}</strong>
+                    <span className="pp-muted ov-stamp">{shortStamp(a.created_at)}</span>
                   </li>
                 ))}
               </ul>
             )}
-          </section>
+          </Panel>
+
+          {team.length > 0 && (
+            <Panel title="Care team" link={{ text: "View all", to: path("/members") }}>
+              <ul className="ov-list">
+                {team.slice(0, 5).map((m, i) => (
+                  <li key={m.membership_id}>
+                    <span className={`pp-avatar ${i % 2 ? "pp-avatar-warm" : "pp-avatar-green"}`} aria-hidden="true">{initials(m.display_name)}</span>
+                    <div className="ov-list-main">
+                      <strong>{m.display_name}</strong>
+                      {m.relationship && <span className="pp-muted">{m.relationship}</span>}
+                    </div>
+                    <Pill tone="green">{m.role_name}</Pill>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+        </div>
+
+        <div className="ov-row">
+          <Panel title="Medicine stock" link={{ text: "View all", to: path("/medicines") }}>
+            {data.medicine_stock.length === 0 ? (
+              <p className="ov-empty">No medicines in stock.</p>
+            ) : (
+              <ul className="ov-list">
+                {data.medicine_stock.map((m) => (
+                  <li key={m.medicine_id}>
+                    <div className="ov-list-main">
+                      <strong>{m.display_name}</strong>
+                      <span className="pp-muted">{[m.instructions_text, m.purpose].filter(Boolean).join(" · ") || "—"}</span>
+                    </div>
+                    <Pill tone={stockTone(m)}>{daysLabel(m)}</Pill>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel title="Open tasks" link={{ text: "View all", to: path("/tasks") }}>
+            {tasksError ? (
+              <p className="ov-empty">{tasksError}</p>
+            ) : openTasks.length === 0 ? (
+              <p className="ov-empty">{familyTasks ? "No open tasks." : "Loading tasks…"}</p>
+            ) : (
+              <ul className="ov-list">
+                {openTasks.slice(0, 5).map((t) => (
+                  <li key={t.id}>
+                    <strong className="ov-list-main">{t.title}</strong>
+                    <span className="pp-muted ov-stamp">{t.due_at ? formatStamp(t.due_at) : "No due date"}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
         </div>
       </>
     );
   }
 
   return (
-    <WorkspaceLayout familyId={familyId} current="overview" title="Dashboard">
-      <div className="pp-content db">
+    <WorkspaceLayout familyId={familyId} current="overview" title="Overview">
+      <div className="pp-content db ov">
         <div className="pp-page-head">
           <div>
-            <h1>{greeting}</h1>
-            <p className="pp-muted">Here's your family care summary for today.</p>
+            <p className="pp-eyebrow">Care circle · Family workspace</p>
+            <h1>{greetingFor(new Date().getHours())}{firstName && `, ${firstName}`}</h1>
+            <p className="pp-muted">
+              {parent ? `Here is the latest care update for ${parent.display_name}.` : "Here is your family care summary for today."}
+            </p>
+          </div>
+          <div className="pp-head-actions">
+            {parent && (
+              <button type="button" className="pp-btn pp-btn-ghost" onClick={() => void shareUpdate()}>
+                <span aria-hidden="true">↗</span> Share update
+              </button>
+            )}
+            {perms.includes("parent_profile.edit") && (
+              <Link to={addProfile} className="pp-btn pp-btn-ghost ov-btn">
+                <span aria-hidden="true">＋</span> Add profile
+              </Link>
+            )}
+            <Link to={path("/tasks?new=1")} className="pp-btn ov-btn">
+              <span aria-hidden="true">＋</span> Add task
+            </Link>
           </div>
         </div>
+        <p role="status" className="ov-share-note">{shareNote}</p>
         {content}
       </div>
     </WorkspaceLayout>

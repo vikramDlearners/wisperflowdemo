@@ -248,6 +248,23 @@ def test_no_missed_alerts_for_a_profile_without_a_chatbot_parent(db_session, wor
     assert db_session.execute(select(MedicineDose)).scalars().all() == []
 
 
+def test_missed_dose_of_a_child_alerts_the_family_once(db_session, world, email):
+    from app.models.parent_onboarding_profile import ParentOnboardingProfile
+
+    world["profile"].linked_user_id = None
+    db_session.add(ParentOnboardingProfile(care_profile_id=world["profile"].id, relationship="son"))
+    db_session.commit()
+    amlodipine, metformin = world["meds"]
+    doses_svc.record_family_dose(db_session, world["profile"], amlodipine.id, "08:00", "taken", world["parent"].id,
+                                 IST_0859)
+    assert alerts.alert_missed_doses(db_session, IST_0900) == 1
+    assert set(MEMBER_EMAILS) <= {to for to, _, _ in email.sent}
+    assert email.sent[0][2] == "Metformin for Amma (due at 08:00) has not been marked as taken today."
+    note = db_session.execute(select(Notification)).scalars().first()
+    assert note.payload["child"] is True
+    assert alerts.alert_missed_doses(db_session, IST_0900) == 0
+
+
 def test_no_missed_alert_for_a_slot_due_before_the_medicine_was_added(db_session, world, email):
     from app.models.prescription_scan import MedicineReminder
 

@@ -2,11 +2,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../parent-profile.css";
 import "../workspace.css";
-import { auth, families, getProfile, type UserOut } from "../api";
+import { auth, families, getProfile, tasks, type UserOut } from "../api";
 import LogoutButton from "./LogoutButton";
 
 // Family workspace shell: sidebar navigation + top bar. Uses the pp- styles
-// from parent-profile.css so it matches the Parent profile page.
+// from parent-profile.css so it matches the Care profile page.
 
 export type WorkspacePage =
   | "overview"
@@ -54,6 +54,7 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
   const [parentName, setParentName] = useState<string | null>(null);
   // A parent who came here from their chat ("Move to Portal") gets a clear way back to it.
   const [isParent, setIsParent] = useState(false);
+  const [openTasks, setOpenTasks] = useState(0);
   // Sidebar drawer state for tablet/mobile widths (always visible on desktop).
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
@@ -92,6 +93,10 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
       .me(familyId)
       .then((access) => active && setIsParent(access.role === "Parent"))
       .catch(() => undefined);
+    tasks
+      .list(familyId)
+      .then((list) => active && setOpenTasks(list.filter((t) => t.status.toUpperCase() !== "DONE").length))
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -102,7 +107,7 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
   const fam = (path: string) => (familyId ? `/family/${familyId}${path}` : null);
   const workspace: NavItem[] = [
     { key: "overview", icon: "⌂", label: "Overview", to: fam("") },
-    { key: "parent-profile", icon: "♡", label: "Parent profile", to: "/parent-profile" },
+    { key: "parent-profile", icon: "♡", label: "Care profile", to: "/parent-profile" },
     { key: "medicines", icon: "▤", label: "Medicines", to: fam("/medicines") },
     { key: "activity", icon: "◉", label: "CareVoice activity", to: fam("/activity") },
     { key: "tasks", icon: "☷", label: "Tasks", to: fam("/tasks") },
@@ -126,6 +131,9 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
         >
           <span className="pp-nav-icon" aria-hidden="true">{item.icon}</span>
           {item.label}
+          {item.key === "tasks" && openTasks > 0 && (
+            <span className="ws-nav-count" aria-label={`${openTasks} open`}>{openTasks}</span>
+          )}
         </Link>
       ) : (
         <span key={item.key} className="pp-nav-item is-disabled" title="Create a family first">

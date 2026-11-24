@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ApiError,
   careProfiles,
@@ -12,31 +12,25 @@ import {
   type ProfileSection,
 } from "../api";
 import { languageCodeFor } from "../careProfileSetup";
-import { RELATIONSHIP_OPTIONS } from "../lib/constants";
+import { CHILD_RELATIONSHIPS, RELATIONSHIP_OPTIONS } from "../lib/constants";
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 
 // Step number (1-based) -> backend section it saves to.
-const STEP_SECTIONS: ProfileSection[] = ["parent", "communication", "care", "medical", "additional"];
+const STEP_SECTIONS: ProfileSection[] = ["parent", "communication", "care", "medical"];
 
-const STEP_TITLES = [
-  "Parent profile",
-  "Communication profile",
-  "Care responsibility",
-  "Medical information",
-  "Additional details",
+const STEPS = [
+  { short: "Parent", title: "About your parent", hint: "Just the basics. You can add more later." },
+  { short: "Contact", title: "How can we reach them?", hint: "Optional. Skip this if you don't have it handy." },
+  { short: "Caregiver", title: "Who looks after them?", hint: "The main caregiver. Everything here is optional." },
+  { short: "Health", title: "Health details", hint: "Optional. Add what you know and update it any time." },
 ];
 
+const CHILD_STEPS: Record<string, { short: string; title: string; hint: string }> = {
+  Parent: { short: "Child", title: "About your child", hint: "Just the basics. You can add more later." },
+};
 
 const LANGUAGE_OPTIONS = ["English", "Tamil", "Hindi", "Telugu", "Malayalam", "Kannada"];
-
-const SECTION_LABELS: Record<ProfileSection, string> = {
-  parent: "Parent",
-  communication: "Communication",
-  care: "Care",
-  medical: "Medical",
-  additional: "Additional",
-};
 
 // Every input is held as a string; empty strings become null when saved.
 interface FormState {
@@ -44,8 +38,6 @@ interface FormState {
   preferred_name: string;
   relationship: string;
   date_of_birth: string;
-  approximate_age: string;
-  profile_picture_url: string;
   preferred_language: string;
   parent_mobile: string;
   caregiver_name: string;
@@ -65,8 +57,6 @@ const EMPTY_FORM: FormState = {
   preferred_name: "",
   relationship: "",
   date_of_birth: "",
-  approximate_age: "",
-  profile_picture_url: "",
   preferred_language: "",
   parent_mobile: "",
   caregiver_name: "",
@@ -92,8 +82,6 @@ function fromProfile(p: ParentProfileOut): FormState {
     preferred_name: p.preferred_name ?? "",
     relationship: p.relationship ?? "",
     date_of_birth: p.date_of_birth ?? "",
-    approximate_age: p.approximate_age == null ? "" : String(p.approximate_age),
-    profile_picture_url: p.profile_picture_url ?? "",
     preferred_language: p.preferred_language ?? "",
     parent_mobile: p.parent_mobile ?? "",
     caregiver_name: p.caregiver_name ?? "",
@@ -113,13 +101,6 @@ const textOrNull = (value: string): string | null => {
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
 };
-
-function numberOrNull(value: string): number | null {
-  const trimmed = value.trim();
-  if (trimmed === "") return null;
-  const n = Number(trimmed);
-  return Number.isFinite(n) ? n : null;
-}
 
 // Age in whole years from a YYYY-MM-DD date of birth, or null if not parseable.
 function ageFromDob(dob: string): number | null {
@@ -145,7 +126,6 @@ function fieldsForStep(step: number, f: FormState): ParentProfileFields {
         preferred_name: textOrNull(f.preferred_name),
         relationship: textOrNull(f.relationship),
         date_of_birth: textOrNull(f.date_of_birth),
-        approximate_age: f.date_of_birth ? null : numberOrNull(f.approximate_age),
         preferred_language: textOrNull(f.preferred_language),
       };
     case 2:
@@ -157,7 +137,7 @@ function fieldsForStep(step: number, f: FormState): ParentProfileFields {
         caregiver_phone: textOrNull(f.caregiver_phone),
         caregiver_email: textOrNull(f.caregiver_email),
       };
-    case 4:
+    default:
       return {
         known_health_conditions: textOrNull(f.known_health_conditions),
         allergies: textOrNull(f.allergies),
@@ -166,33 +146,35 @@ function fieldsForStep(step: number, f: FormState): ParentProfileFields {
         preferred_hospital: textOrNull(f.preferred_hospital),
         care_instructions: textOrNull(f.care_instructions),
       };
-    default:
-      // Step 5: the additional section holds the profile picture URL.
-      return { profile_picture_url: textOrNull(f.profile_picture_url) };
   }
 }
 
 export default function ParentOnboarding() {
   const navigate = useNavigate();
+  // "?add=1&family=<id>" opens the questions for another profile straight away.
+  const [params] = useSearchParams();
+  const addFamilyId = params.get("add") ? params.get("family") : null;
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [profile, setProfile] = useState<ParentProfileOut | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!addFamilyId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Shown after Finish: choose to add more users or open the parent profile.
+  // Shown after Finish: choose to add another profile or open the profile.
   const [finished, setFinished] = useState(false);
   const [nextError, setNextError] = useState<string | null>(null);
-  // "Add more users": the same questions again, saved to a new parent (care profile) in the family.
+  // "Add another profile": the same questions again, saved to a new care profile in the family.
   // careProfileId is created when step 1 is first saved.
-  const [newParent, setNewParent] = useState<{ familyId: string; careProfileId: string | null } | null>(null);
+  const [newParent, setNewParent] = useState<{ familyId: string; careProfileId: string | null } | null>(
+    addFamilyId ? { familyId: addFamilyId, careProfileId: null } : null,
+  );
+  const [child, setChild] = useState(false);
 
   useEffect(() => {
+    if (addFamilyId) return;
     let active = true;
     getProfile()
       .then((p) => {
         if (!active) return;
-        setProfile(p);
         setForm(fromProfile(p));
       })
       .catch((err: unknown) => {
@@ -204,15 +186,28 @@ export default function ParentOnboarding() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [addFamilyId]);
+
+  function chooseKind(isChildProfile: boolean) {
+    setChild(isChildProfile);
+    setForm((prev) => ({ ...prev, relationship: "" }));
+  }
 
   const update = (key: keyof FormState) => (e: FieldChange) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
+  const age = ageFromDob(form.date_of_birth);
   const parentMissing =
     !form.parent_full_name.trim() || !form.preferred_name.trim() || !form.relationship;
 
-  const percent = profile?.completion.overall ?? 0;
+  // Children have no phone of their own, so the contact step is left out.
+  const steps = STEPS.map((s, i) => ({ ...s, ...(child ? CHILD_STEPS[s.short] : undefined), number: i + 1 })).filter(
+    (s) => !(child && s.number === 2),
+  );
+  const current = steps.find((s) => s.number === step) ?? steps[0];
+  const person = child ? "child" : "parent";
+  const move = (by: 1 | -1) => setStep((s) => (child && s + by === 2 ? s + 2 * by : s + by));
+
   const isFinal = step === TOTAL_STEPS;
 
   // Saves the current step's section. Returns the response, or null on failure.
@@ -229,7 +224,6 @@ export default function ParentOnboarding() {
       } else {
         saved = await saveProfileSection(section, fields);
       }
-      setProfile(saved);
       return saved;
     } catch (err) {
       setError(errorText(err));
@@ -242,7 +236,7 @@ export default function ParentOnboarding() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (step === 1 && parentMissing) {
-      setError("Please fill in parent's full name, preferred name and relationship.");
+      setError(`Please fill in your ${person}'s full name, preferred name and relationship.`);
       return;
     }
     const saved = await saveCurrentStep();
@@ -250,7 +244,7 @@ export default function ParentOnboarding() {
     if (isFinal) {
       setFinished(true);
     } else {
-      setStep((s) => s + 1);
+      move(1);
     }
   }
 
@@ -271,18 +265,18 @@ export default function ParentOnboarding() {
     return created.id;
   }
 
-  // "Add more users" starts the same questions again, for another parent in the family.
+  // "Add another profile" starts the same questions again, for another person in the family.
   async function goAddUsers() {
     setNextError(null);
     try {
       const list = await families.list();
       if (list.length === 0) {
-        setNextError("Create a family first, then you can add more users.");
+        setNextError("Create a family first, then you can add another profile.");
         return;
       }
       setNewParent({ familyId: list[0].id, careProfileId: null });
       setForm(EMPTY_FORM);
-      setProfile(null);
+      setChild(false);
       setError(null);
       setStep(1);
       setFinished(false);
@@ -302,240 +296,216 @@ export default function ParentOnboarding() {
 
   function skip() {
     setError(null);
-    setStep((s) => s + 1);
+    if (isFinal) setFinished(true);
+    else move(1);
   }
 
   function back() {
     setError(null);
-    setStep((s) => s - 1);
+    move(-1);
   }
 
   const showBack = step > 1;
-  const showSkip = step > 1 && !isFinal;
+  const showSkip = step > 1;
 
   return (
-    <main className="parent-layout wizard-page">
-      <h1>{newParent ? "Add another parent" : "Set up parent profile"}</h1>
+    <main className="parent-layout wizard-page onboarding-page">
+      <header className="wizard-brand">
+        <img src="/carecircle-logo-full.webp" alt="CareCircle" />
+        <span className="muted">{newParent ? "Add a care profile" : "Set up care profile"}</span>
+      </header>
 
-      <div className="wizard-progress-header">
-        <span className="muted">
-          Step {step} of {TOTAL_STEPS}: {STEP_TITLES[step - 1]}
-        </span>
-        <span className="muted">{percent}% complete</span>
-      </div>
-      <div
-        className="wizard-progress"
-        role="progressbar"
-        aria-label="Profile completion"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-      >
-        <div className="wizard-progress-fill" style={{ width: `${percent}%` }} />
-      </div>
+      <div className="wizard-card">
+        <ol className="wizard-steps" aria-label={`Step ${steps.indexOf(current) + 1} of ${steps.length}`}>
+          {steps.map((s) => (
+            <li
+              key={s.number}
+              className={s.number < step ? "is-done" : s.number === step ? "is-current" : undefined}
+              aria-current={s.number === step ? "step" : undefined}
+            >
+              {s.short}
+            </li>
+          ))}
+        </ol>
 
-      {loading && <p className="muted">Loading your profile…</p>}
-      {error && <p role="alert" className="wizard-error">{error}</p>}
+        <div>
+          <h1>{current.title}</h1>
+          <p className="wizard-hint">{current.hint}</p>
+        </div>
 
-      <form className="wizard-form" onSubmit={handleSubmit}>
-        {step === 1 && (
-          <>
-            <label className="wizard-field">
-              Parent's full name <span className="wizard-required">(required)</span>
-              <input
-                required
-                maxLength={255}
-                value={form.parent_full_name}
-                onChange={update("parent_full_name")}
-              />
-            </label>
-            <label className="wizard-field">
-              Preferred name <span className="wizard-required">(required)</span>
-              <input
-                required
-                maxLength={255}
-                value={form.preferred_name}
-                onChange={update("preferred_name")}
-              />
-            </label>
-            <label className="wizard-field">
-              Relationship <span className="wizard-required">(required)</span>
-              <select required value={form.relationship} onChange={update("relationship")}>
-                <option value="">Choose…</option>
-                {RELATIONSHIP_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt.toLowerCase()}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="wizard-field">
-              Date of birth
-              <input type="date" value={form.date_of_birth} onChange={update("date_of_birth")} />
-            </label>
-            {form.date_of_birth ? (
-              <p className="muted">
-                Age: {ageFromDob(form.date_of_birth) ?? "—"} (calculated from date of birth)
-              </p>
-            ) : (
-              <label className="wizard-field">
-                Approximate age
+        {loading && <p className="muted">Loading your profile…</p>}
+        {error && <p role="alert" className="wizard-error">{error}</p>}
+
+        <form className="wizard-form" onSubmit={handleSubmit}>
+          {step === 1 && (
+            <>
+              {newParent && (
+                <fieldset className="role-fieldset wizard-wide">
+                  <legend>Who is this profile for?</legend>
+                  <div className="wizard-kinds">
+                    {[false, true].map((isChildProfile) => (
+                      <label key={String(isChildProfile)} className="role-option">
+                        <input
+                          type="radio"
+                          name="kind"
+                          checked={child === isChildProfile}
+                          onChange={() => chooseKind(isChildProfile)}
+                        />
+                        {isChildProfile ? "Child" : "Parent"}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+              <label className="wizard-field wizard-wide">
+                {child ? "Child's" : "Parent's"} full name <span className="wizard-required" aria-hidden="true">*</span>
                 <input
-                  type="number"
-                  min={0}
-                  max={130}
-                  inputMode="numeric"
-                  value={form.approximate_age}
-                  onChange={update("approximate_age")}
+                  required
+                  maxLength={255}
+                  value={form.parent_full_name}
+                  onChange={update("parent_full_name")}
                 />
               </label>
-            )}
-            <label className="wizard-field">
-              Profile picture (image link)
-              <input
-                type="url"
-                placeholder="https://…"
-                value={form.profile_picture_url}
-                onChange={update("profile_picture_url")}
-              />
-            </label>
-            <p className="wizard-hint">File upload is coming later. For now, paste a link to a picture.</p>
-            <label className="wizard-field">
-              Preferred language
-              <select value={form.preferred_language} onChange={update("preferred_language")}>
-                <option value="">Choose…</option>
-                {LANGUAGE_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {parentMissing && (
-              <p className="wizard-hint">
-                Fill in parent's full name, preferred name and relationship to save this step.
-              </p>
-            )}
-          </>
-        )}
+              <label className="wizard-field">
+                Preferred name <span className="wizard-required" aria-hidden="true">*</span>
+                <input
+                  required
+                  maxLength={255}
+                  value={form.preferred_name}
+                  onChange={update("preferred_name")}
+                />
+              </label>
+              <label className="wizard-field">
+                Relationship <span className="wizard-required" aria-hidden="true">*</span>
+                <select required value={form.relationship} onChange={update("relationship")}>
+                  <option value="">Choose…</option>
+                  {(child ? CHILD_RELATIONSHIPS : RELATIONSHIP_OPTIONS).map((opt) => (
+                    <option key={opt} value={opt.toLowerCase()}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="wizard-field">
+                Date of birth{age !== null && <span className="wizard-optional"> (age {age})</span>}
+                <input type="date" value={form.date_of_birth} onChange={update("date_of_birth")} />
+              </label>
+              <label className="wizard-field">
+                Preferred language
+                <select value={form.preferred_language} onChange={update("preferred_language")}>
+                  <option value="">Choose…</option>
+                  {LANGUAGE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
 
-        {step === 2 && (
-          <label className="wizard-field">
-            Parent mobile number
-            <input
-              type="tel"
-              inputMode="tel"
-              value={form.parent_mobile}
-              onChange={update("parent_mobile")}
-            />
-          </label>
-        )}
-
-        {step === 3 && (
-          <>
-            <p className="wizard-hint">Primary caregiver for the parent. All optional.</p>
-            <label className="wizard-field">
-              Caregiver name
-              <input maxLength={255} value={form.caregiver_name} onChange={update("caregiver_name")} />
-            </label>
-            <label className="wizard-field">
-              Relationship to parent
-              <input
-                maxLength={255}
-                value={form.caregiver_relationship}
-                onChange={update("caregiver_relationship")}
-              />
-            </label>
-            <label className="wizard-field">
-              Caregiver phone
+          {step === 2 && (
+            <label className="wizard-field wizard-wide">
+              Parent mobile number
               <input
                 type="tel"
                 inputMode="tel"
-                value={form.caregiver_phone}
-                onChange={update("caregiver_phone")}
+                value={form.parent_mobile}
+                onChange={update("parent_mobile")}
               />
             </label>
-            <label className="wizard-field">
-              Caregiver email
-              <input type="email" value={form.caregiver_email} onChange={update("caregiver_email")} />
-            </label>
-          </>
-        )}
-
-        {step === 4 && (
-          <>
-            <label className="wizard-field">
-              Known health conditions
-              <textarea rows={3} value={form.known_health_conditions} onChange={update("known_health_conditions")} />
-            </label>
-            <label className="wizard-field">
-              Allergies
-              <textarea rows={2} value={form.allergies} onChange={update("allergies")} />
-            </label>
-            <label className="wizard-field">
-              Primary doctor name
-              <input value={form.primary_doctor_name} onChange={update("primary_doctor_name")} />
-            </label>
-            <label className="wizard-field">
-              Doctor's contact number
-              <input
-                type="tel"
-                inputMode="tel"
-                value={form.doctor_contact_number}
-                onChange={update("doctor_contact_number")}
-              />
-            </label>
-            <label className="wizard-field">
-              Preferred hospital
-              <input value={form.preferred_hospital} onChange={update("preferred_hospital")} />
-            </label>
-            <label className="wizard-field">
-              Important care instructions
-              <textarea rows={4} value={form.care_instructions} onChange={update("care_instructions")} />
-            </label>
-          </>
-        )}
-
-        {isFinal && (
-          <section className="wizard-summary">
-            <h2>Profile complete: {percent}%</h2>
-            <p className="muted">
-              Review is done. Press Finish to save and choose what to do next. You can update any section later.
-            </p>
-            <div className="wizard-completion">
-              <h3>Completion by section</h3>
-              <ul className="wizard-completion-list">
-                {(Object.keys(SECTION_LABELS) as ProfileSection[]).map((key) => (
-                  <li key={key}>
-                    <span>{SECTION_LABELS[key]}</span>
-                    <span>{profile?.completion.sections[key] ?? 0}%</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        )}
-
-        <div className="wizard-actions">
-          {showBack && (
-            <button type="button" className="btn btn-secondary" onClick={back} disabled={saving}>
-              Back
-            </button>
           )}
-          {showSkip && (
-            <button type="button" className="btn btn-secondary" onClick={skip} disabled={saving}>
-              Skip
-            </button>
+
+          {step === 3 && (
+            <>
+              <label className="wizard-field">
+                Caregiver name
+                <input maxLength={255} value={form.caregiver_name} onChange={update("caregiver_name")} />
+              </label>
+              <label className="wizard-field">
+                Relationship to {person}
+                <input
+                  maxLength={255}
+                  value={form.caregiver_relationship}
+                  onChange={update("caregiver_relationship")}
+                />
+              </label>
+              <label className="wizard-field">
+                Caregiver phone
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={form.caregiver_phone}
+                  onChange={update("caregiver_phone")}
+                />
+              </label>
+              <label className="wizard-field">
+                Caregiver email
+                <input type="email" value={form.caregiver_email} onChange={update("caregiver_email")} />
+              </label>
+            </>
           )}
-          <button
-            type="submit"
-            className="btn"
-            disabled={saving || loading || (step === 1 && parentMissing)}
-          >
-            {saving ? "Saving…" : isFinal ? "Finish" : "Save and continue"}
-          </button>
-        </div>
-      </form>
+
+          {step === 4 && (
+            <>
+              <label className="wizard-field wizard-wide">
+                Known health conditions
+                <textarea rows={2} value={form.known_health_conditions} onChange={update("known_health_conditions")} />
+              </label>
+              <label className="wizard-field wizard-wide">
+                Allergies
+                <textarea rows={2} value={form.allergies} onChange={update("allergies")} />
+              </label>
+              <label className="wizard-field">
+                Primary doctor name
+                <input value={form.primary_doctor_name} onChange={update("primary_doctor_name")} />
+              </label>
+              <label className="wizard-field">
+                Doctor's contact number
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={form.doctor_contact_number}
+                  onChange={update("doctor_contact_number")}
+                />
+              </label>
+              <label className="wizard-field wizard-wide">
+                Preferred hospital
+                <input value={form.preferred_hospital} onChange={update("preferred_hospital")} />
+              </label>
+              <label className="wizard-field wizard-wide">
+                Important care instructions
+                <textarea rows={2} value={form.care_instructions} onChange={update("care_instructions")} />
+              </label>
+            </>
+          )}
+
+          <div className="wizard-actions">
+            {addFamilyId && step === 1 && (
+              <button type="button" className="btn btn-secondary wizard-back" onClick={() => navigate(-1)} disabled={saving}>
+                Cancel
+              </button>
+            )}
+            {showBack && (
+              <button type="button" className="btn btn-secondary wizard-back" onClick={back} disabled={saving}>
+                Back
+              </button>
+            )}
+            {showSkip && (
+              <button type="button" className="wizard-skip" onClick={skip} disabled={saving}>
+                Skip
+              </button>
+            )}
+            <button
+              type="submit"
+              className="btn"
+              disabled={saving || loading || (step === 1 && parentMissing)}
+            >
+              {saving ? "Saving…" : isFinal ? "Finish" : "Continue"}
+            </button>
+          </div>
+        </form>
+      </div>
 
       {finished && (
         <div className="finish-overlay">
@@ -546,18 +516,18 @@ export default function ParentOnboarding() {
             aria-labelledby="finish-title"
           >
             <div className="finish-icon" aria-hidden="true">✓</div>
-            <h2 id="finish-title">Profile complete</h2>
+            <h2 id="finish-title">You're all set</h2>
             <p className="muted">
-              {form.preferred_name.trim() || "Your parent"}'s profile is saved. What would you like
+              {form.preferred_name.trim() || `Your ${person}`}'s profile is saved. What would you like
               to do next?
             </p>
             {nextError && <p role="alert" className="wizard-error">{nextError}</p>}
             <div className="finish-actions">
               <button type="button" className="btn btn-secondary" onClick={goAddUsers}>
-                Add more users
+                Add another profile
               </button>
               <button type="button" className="btn" autoFocus onClick={goToProfile}>
-                Go to parent profile
+                Go to profile
               </button>
             </div>
           </div>

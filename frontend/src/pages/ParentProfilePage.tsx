@@ -4,6 +4,7 @@ import "../parent-profile.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import {
   ApiError,
+  careProfiles,
   deleteFamilyParentProfile,
   families,
   members,
@@ -17,11 +18,11 @@ import {
   type MemberOut,
   type ParentProfileOut,
 } from "../api";
-import { RELATIONSHIP_OPTIONS } from "../lib/constants";
+import { PROFILE_RELATIONSHIPS, isChild } from "../lib/constants";
 import { fetchProfilePhoto, removeProfilePhoto, uploadProfilePhoto } from "../profilePhoto";
 
 
-// Parent profile page in the shared family workspace layout (sidebar + header).
+// Care profile page in the shared family workspace layout (sidebar + header).
 // Reads and saves the signed-in user's parent onboarding profile.
 
 
@@ -177,14 +178,16 @@ export default function ParentProfilePage() {
   // Deletes the selected parent's profile after confirmation, then returns to the own profile.
   async function handleDeleteProfile() {
     if (!familyId || !selectedCareProfileId) return;
-    if (!window.confirm("Delete this parent's profile? This cannot be undone.")) return;
+    if (!window.confirm("Delete this care profile? This cannot be undone.")) return;
     const deletedId = selectedCareProfileId;
     setDeleting(true);
     setError(null);
     setSaved(false);
     setNotice(null);
     try {
-      await deleteFamilyParentProfile(familyId, deletedId);
+      // A child has no account, so the whole care profile goes.
+      if (child) await careProfiles.delete(familyId, deletedId);
+      else await deleteFamilyParentProfile(familyId, deletedId);
       setParentTabs((prev) => prev.filter((t) => t.care_profile_id !== deletedId));
       await handleSelectTab(null);
       setNotice("Profile deleted.");
@@ -256,7 +259,7 @@ export default function ParentProfilePage() {
         display_name: profile?.parent_full_name?.trim() || firstName,
         role_id: parentRole.id,
         relationship:
-          relationship && ["mother", "father", "grandmother", "grandfather", "other"].includes(relationship)
+          relationship && PROFILE_RELATIONSHIPS.some((r) => r.toLowerCase() === relationship)
             ? relationship
             : null,
         care_profile_id: currentCareProfileId(),
@@ -429,6 +432,7 @@ export default function ParentProfilePage() {
     }
   }
 
+  const child = isChild(form?.relationship);
   const parentName = profile?.parent_full_name?.trim() || "Your parent";
   const firstName = parentName.split(/\s+/)[0];
   const photoInitials =
@@ -457,12 +461,12 @@ export default function ParentProfilePage() {
       </div>
     );
   const relationshipLabel =
-    RELATIONSHIP_OPTIONS.find((o) => o.toLowerCase() === form?.relationship) ?? form?.relationship;
+    PROFILE_RELATIONSHIPS.find((o) => o.toLowerCase() === form?.relationship) ?? form?.relationship;
   const languageLabel =
     LANGUAGE_OPTIONS.find((o) => o.value === form?.preferred_language)?.label ?? form?.preferred_language;
 
   return (
-    <WorkspaceLayout familyId={familyId} current="parent-profile" title="Parent profile">
+    <WorkspaceLayout familyId={familyId} current="parent-profile" title="Care profile">
         <form
           className={`pp-content${editing ? " is-editing" : ""}`}
           onSubmit={editing ? handleSave : (e) => e.preventDefault()}
@@ -516,13 +520,18 @@ export default function ParentProfilePage() {
               </div>
             <div>
               <p className="pp-eyebrow">Care circle · Family workspace</p>
-              <h1>Parent profile</h1>
+              <h1>Care profile</h1>
               <p className="pp-muted">
                 Manage {firstName}'s care profile, preferred voice experience and assigned family contacts.
               </p>
             </div>
             </div>
             <div className="pp-head-actions">
+              {familyId && (
+                <Link to={`/onboarding/parent?add=1&family=${familyId}`} className="pp-btn pp-btn-ghost pp-btn-link">
+                  + Add profile
+                </Link>
+              )}
               {familyId ? (
                 <Link to={`/family/${familyId}/members`} className="pp-btn pp-btn-ghost pp-btn-link">
                   + Add users
@@ -585,7 +594,8 @@ export default function ParentProfilePage() {
               >
                 {ownLabel}
               </button>
-              {parentTabs.map((t) => (
+              {/* The first tab already shows the parent described in the own profile. */}
+              {parentTabs.filter((t) => t.display_name.trim() !== ownLabel).map((t) => (
                 <button
                   key={t.care_profile_id}
                   type="button"
@@ -626,7 +636,7 @@ export default function ParentProfilePage() {
                     "Relationship",
                     <select required value={form.relationship} onChange={(e) => set("relationship")(e.target.value)}>
                       <option value="">Choose…</option>
-                      {RELATIONSHIP_OPTIONS.map((opt) => (
+                      {PROFILE_RELATIONSHIPS.map((opt) => (
                         <option key={opt} value={opt.toLowerCase()}>
                           {opt}
                         </option>
@@ -645,7 +655,7 @@ export default function ParentProfilePage() {
                     form.preferred_name,
                   )}
                   {row("Time zone", <input value="Asia / Kolkata (IST)" disabled />, "Asia / Kolkata (IST)")}
-                  {row(
+                  {!child && row(
                     "Mobile number",
                     <input
                       type="tel"
@@ -656,7 +666,7 @@ export default function ParentProfilePage() {
                     />,
                     form.parent_mobile,
                   )}
-                  {row("Parent app account", <input value="Not linked yet" disabled />, "Not linked yet", true)}
+                  {!child && row("Parent app account", <input value="Not linked yet" disabled />, "Not linked yet", true)}
                   {row(
                     "Preferred language",
                     <select value={form.preferred_language} onChange={(e) => set("preferred_language")(e.target.value)}>
@@ -669,7 +679,7 @@ export default function ParentProfilePage() {
                     </select>,
                     languageLabel,
                   )}
-                  {row(
+                  {!child && row(
                     "Voice speed",
                     <select value={voiceSpeed} onChange={(e) => setVoiceSpeed(e.target.value)}>
                       {VOICE_SPEEDS.map((v) => (
@@ -680,7 +690,7 @@ export default function ParentProfilePage() {
                   )}
                 </div>
 
-                <fieldset className="pp-access">
+                {!child && <fieldset className="pp-access">
                   <legend>Accessibility preferences</legend>
                   {editing ? (
                     ACCESSIBILITY.map((item) => (
@@ -704,8 +714,8 @@ export default function ParentProfilePage() {
                       </span>
                     ))
                   )}
-                </fieldset>
-                {editing && (
+                </fieldset>}
+                {editing && !child && (
                   <p className="pp-hint">Voice speed and accessibility preferences are a preview and are not saved yet.</p>
                 )}
 
@@ -753,7 +763,7 @@ export default function ParentProfilePage() {
                 </div>
               </section>
 
-              <div className="pp-side">
+              {!child && <div className="pp-side">
                 <section className="pp-card">
                   <div className="pp-card-head">
                     <h2>Parent experience preview</h2>
@@ -895,7 +905,7 @@ export default function ParentProfilePage() {
                     )}
                   </div>
                 </section>
-              </div>
+              </div>}
             </div>
           )}
 

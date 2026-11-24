@@ -148,3 +148,20 @@
   color: #17584a;
   font-weight: 700;
 }
+
+/* Sidebar icons and the open-task count. */
+.ws .pp-nav-icon {
+  width: 22px;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+.ws-nav-count {
+  margin-left: auto;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e3f1ee;
+  color: #17645a;
+  font-size: 0.75rem;
+  text-align: center;
+}

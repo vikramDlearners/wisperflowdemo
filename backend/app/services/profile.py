@@ -61,6 +61,17 @@ def get_care_profile_onboarding(
     return profile
 
 
+CHILD_RELATIONSHIPS = frozenset({"son", "daughter"})
+
+
+def is_child(db: Session, care_profile: CareProfile) -> bool:
+    """A child has no account of their own: the family gives and records their medicines."""
+    if care_profile.linked_user_id is not None:
+        return False
+    row = get_care_profile_onboarding(db, care_profile)
+    return row is not None and (row.relationship or "").strip().lower() in CHILD_RELATIONSHIPS
+
+
 def _has_value(value: object) -> bool:
     if value is None:
         return False

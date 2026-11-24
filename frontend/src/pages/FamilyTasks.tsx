@@ -68,7 +68,7 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState<boolean>(false);
+  const [showForm, setShowForm] = useState<boolean>(() => new URLSearchParams(window.location.search).has("new"));
   const [notifyState, setNotifyState] = useState<Record<string, "pending" | "sent">>({});
 
   const [title, setTitle] = useState("");

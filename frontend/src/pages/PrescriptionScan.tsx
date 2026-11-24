@@ -118,7 +118,7 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
         if (cancelled) return;
         setProfiles(list);
         setPeople(memberList);
-        const profile = profileParam && list.some((p) => p.id === profileParam) ? profileParam : list[0]?.id ?? "";
+        const profile = profileParam && list.some((p) => p.id === profileParam) ? profileParam : list.length === 1 || scanParam ? list[0]?.id ?? "" : "";
         setCareProfileId(profile);
         if (scanParam && profile) {
           try {
@@ -349,10 +349,13 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
                 </div>
               )}
 
-              {profiles.length > 1 && (
+              {profiles.length > 0 && (
                 <label className="pp-field ps-profile">
-                  For
-                  <select value={careProfileId} onChange={(e) => setCareProfileId(e.target.value)}>
+                  Who are these medicines for?
+                  <select required value={careProfileId} onChange={(e) => setCareProfileId(e.target.value)}>
+                    <option value="" disabled>
+                      Select a profile
+                    </option>
                     {profiles.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.display_name}
@@ -403,7 +406,7 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
 
               <div className="ps-actions">
                 <Link to={medsPath} className="pp-btn pp-btn-ghost md-btn-link">Cancel</Link>
-                <button type="submit" className="pp-btn" disabled={!file || uploading}>
+                <button type="submit" className="pp-btn" disabled={!file || uploading || (profiles.length > 0 && !careProfileId)}>
                   {uploading ? "Reading prescription…" : "Upload and read"}
                 </button>
               </div>

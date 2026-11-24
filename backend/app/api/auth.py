@@ -223,6 +223,7 @@ def update_profile(
     if "preferred_language" in body.model_fields_set:
         # A parent editing their own profile changes their chatbot's language too.
         care_svc.sync_chatbot_language(db, user.id, body.preferred_language)
+    care_svc.sync_own_parent(db, user, profile)
     profile.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(profile)

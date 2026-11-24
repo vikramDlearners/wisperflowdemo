@@ -35,7 +35,12 @@ export function notificationLine(n: Pick<NotificationOut, "type" | "payload">): 
         urgent: true,
       };
     case "medicine.missed":
-      return { text: `${parent} hasn't taken ${medicine}${slotText(str(p, "slot"))}.`, urgent: false };
+      return {
+        text: p?.child
+          ? `${medicine} for ${parent} hasn't been marked as taken${slotText(str(p, "slot"))}.`
+          : `${parent} hasn't taken ${medicine}${slotText(str(p, "slot"))}.`,
+        urgent: false,
+      };
     case "medicine.finished":
       return { text: `${parent} says ${medicine} has run out. Please arrange a refill.`, urgent: false };
     default:

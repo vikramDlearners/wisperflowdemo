@@ -33,8 +33,8 @@ def _field(onboarding: ParentOnboardingProfile | None, name: str) -> Any:
     return getattr(onboarding, name) if onboarding is not None else None
 
 
-_MALE_RELATIONSHIPS = {"father", "dad", "papa", "daddy"}
-_FEMALE_RELATIONSHIPS = {"mother", "mom", "mum", "mama", "mommy"}
+_MALE_RELATIONSHIPS = {"father", "dad", "papa", "daddy", "son"}
+_FEMALE_RELATIONSHIPS = {"mother", "mom", "mum", "mama", "mommy", "daughter"}
 
 
 def _gender_for(explicit_gender: str | None, relationship: str | None) -> str | None:
@@ -103,8 +103,8 @@ ACTIVITY_LABELS: dict[str, str] = {
     "medicine.created": "Medicine added",
     "medicine.deleted": "Medicine removed",
     "medicine.image_uploaded": "Medicine photo uploaded",
-    "care_profile.created": "Parent profile added",
-    "care_profile.deleted": "Parent profile removed",
+    "care_profile.created": "Care profile added",
+    "care_profile.deleted": "Care profile removed",
     "task.notified": "Task notification sent",
 }
 

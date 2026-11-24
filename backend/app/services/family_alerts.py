@@ -3,7 +3,7 @@
 Immediate alerts (notify_family_*) stage notifications; the caller commits.
 Scheduled jobs (send_daily_summaries, alert_missed_doses) commit themselves, then email. Each send is claimed
 first with a conditional UPDATE (or a unique insert), so several workers never send the same thing twice.
-Only care profiles with a linked chatbot parent get scheduled alerts and summaries.
+Only care profiles with a linked chatbot parent get summaries; those and children get missed-dose alerts.
 The parent never alerts themselves.
 """
 
@@ -38,6 +38,7 @@ from app.services.doses import (
 )
 from app.services.notifications import notify
 from app.services.parent_context import ParentContext
+from app.services.profile import is_child
 from app.services.reminders import list_reminder_times
 
 logger = logging.getLogger(__name__)
@@ -394,7 +395,10 @@ def _claim_missed(db: Session, profile: CareProfile, dose: DueDose, row: Medicin
 
 def _alert_profile(db: Session, profile_id: str, now: datetime) -> int:
     profile = db.get(CareProfile, profile_id)
-    if profile is None or profile.linked_user_id is None:
+    if profile is None:
+        return 0
+    child = is_child(db, profile)
+    if profile.linked_user_id is None and not child:
         return 0  # no chatbot parent: nobody is asked, so nothing is "missed"
     logged = logged_today(db, profile, now)
     missed: list[tuple[DueDose, MedicineDose | None]] = []
@@ -426,6 +430,7 @@ def _alert_profile(db: Session, profile_id: str, now: datetime) -> int:
             "medicine_id": dose.medicine_id,
             "medicine_name": dose.name,
             "slot": dose.slot,
+            "child": child,
         }
         for user in users:
             notify(db, user.id, "medicine.missed", family_id=profile.family_id, payload=payload)
@@ -433,9 +438,10 @@ def _alert_profile(db: Session, profile_id: str, now: datetime) -> int:
         db.commit()
         alerted.append(dose)
     for dose in alerted:
-        _email(
-            users,
-            f"Medicine not taken: {name} - {dose.name}",
-            f"{name} has not taken {dose.name} (due at {dose.slot}) today. Please check in with {name}.",
+        body = (
+            f"{dose.name} for {name} (due at {dose.slot}) has not been marked as taken today."
+            if child
+            else f"{name} has not taken {dose.name} (due at {dose.slot}) today. Please check in with {name}."
         )
+        _email(users, f"Medicine not taken: {name} - {dose.name}", body)
     return len(alerted)

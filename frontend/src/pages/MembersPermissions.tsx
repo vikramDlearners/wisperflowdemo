@@ -19,11 +19,11 @@ function messageOf(err: unknown): string {
 // Permissions grouped by area, with plain-language labels (the code stays the stored value).
 const PERMISSION_GROUPS: { title: string; items: { code: string; label: string }[] }[] = [
   {
-    title: "Overview & parent profile",
+    title: "Overview & care profile",
     items: [
       { code: "dashboard.view", label: "See the family dashboard" },
-      { code: "parent_profile.view", label: "View parent profile" },
-      { code: "parent_profile.edit", label: "Edit parent profile" },
+      { code: "parent_profile.view", label: "View care profile" },
+      { code: "parent_profile.edit", label: "Edit care profile" },
     ],
   },
   {

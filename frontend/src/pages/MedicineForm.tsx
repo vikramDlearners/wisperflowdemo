@@ -26,7 +26,7 @@ import {
 
 interface MedicineFormProps {
   familyId: string;
-  /** Preselects the care profile when creating. Otherwise the first profile is used. */
+  /** Preselects the care profile when creating. Otherwise the user must choose, unless there is only one. */
   careProfileId?: string;
   /** Set to edit an existing medicine; omit to create. */
   medicineId?: string;
@@ -52,6 +52,8 @@ export default function MedicineForm({
   const [error, setError] = useState<string | null>(null);
 
   const [profiles, setProfiles] = useState<CareProfileOut[]>([]);
+  // A failed load must not look like "no profiles yet", which would create one on save.
+  const [profilesFailed, setProfilesFailed] = useState(false);
   const [people, setPeople] = useState<MemberOut[]>([]);
 
   const [profileId, setProfileId] = useState(careProfileId ?? "");
@@ -104,7 +106,7 @@ export default function MedicineForm({
     setLoading(true);
     setError(null);
     Promise.all([
-      careProfiles.list(familyId).catch(() => [] as CareProfileOut[]),
+      careProfiles.list(familyId).catch(() => null),
       members.list(familyId).catch(() => [] as MemberOut[]),
       isEdit ? medicines.get(familyId, medicineId) : Promise.resolve(null),
       families.me(familyId).catch(() => null),
@@ -117,7 +119,8 @@ export default function MedicineForm({
     ])
       .then(([profileList, memberList, med, access, reminderTimes]) => {
         if (cancelled) return;
-        setProfiles(profileList);
+        setProfiles(profileList ?? []);
+        setProfilesFailed(profileList === null);
         setPeople(memberList);
         setTimes(reminderTimes ?? []);
         setLoadedTimes(reminderTimes);
@@ -135,7 +138,7 @@ export default function MedicineForm({
           setTotalCount(med.total_medicine_count != null ? String(med.total_medicine_count) : "");
           setLinkedScanId(med.prescription_scan_id ?? null);
         } else {
-          setProfileId((current) => current || profileList[0]?.id || "");
+          setProfileId((current) => current || (profileList?.length === 1 ? profileList[0].id : ""));
         }
       })
       .catch((err: unknown) => {
@@ -151,6 +154,14 @@ export default function MedicineForm({
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!isEdit && !profileId && profilesFailed) {
+      setError("Could not load the family's profiles. Please reload the page and try again.");
+      return;
+    }
+    if (!isEdit && !profileId && profiles.length > 0) {
+      setError("Please select who this medicine is for.");
+      return;
+    }
     if (!displayName.trim()) {
       setError("Please enter the medicine name.");
       return;
@@ -280,6 +291,29 @@ export default function MedicineForm({
               </div>
 
               <div className="mf-fields">
+                {profiles.length > 0 && (
+                  <label className="pp-field mf-span">
+                    <span>
+                      Who is this medicine for? {!isEdit && <span className="mf-req">Required</span>}
+                    </span>
+                    <select
+                      required
+                      disabled={isEdit}
+                      value={profileId}
+                      onChange={(e) => setProfileId(e.target.value)}
+                    >
+                      <option value="" disabled>
+                        Select a profile
+                      </option>
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.display_name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
                 <label className="pp-field mf-span">
                   <span>
                     Medicine name <span className="mf-req">Required</span>
@@ -292,19 +326,6 @@ export default function MedicineForm({
                     onChange={(e) => setDisplayName(e.target.value)}
                   />
                 </label>
-
-                {profiles.length > 1 && !isEdit && (
-                  <label className="pp-field mf-span">
-                    For
-                    <select value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-                      {profiles.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.display_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
 
                 <label className="pp-field mf-span">
                   Schedule & instructions
