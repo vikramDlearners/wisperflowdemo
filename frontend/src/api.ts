@@ -85,6 +85,8 @@ export interface MemberCreate {
   display_name?: string | null;
   role_id: string;
   relationship?: string | null;
+  /** Link the new member to this existing care profile instead of creating a new one. */
+  care_profile_id?: string | null;
 }
 
 export interface MemberRoleChange {

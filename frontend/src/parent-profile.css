@@ -775,3 +775,29 @@
   color: #4a5b57;
 }
 
+
+/* "Give link to parent" when no Parent member exists yet: ask for the parent's email. */
+.pp-dialog .pp-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 42px;
+  margin: 0 0 14px;
+  padding: 0 11px;
+  border: 1px solid var(--pp-line);
+  border-radius: 8px;
+  font: inherit;
+  color: var(--pp-ink);
+  background: #fff;
+}
+.pp-dialog .pp-input:focus-visible {
+  outline: 2px solid var(--pp-teal);
+  outline-offset: 0;
+  border-color: var(--pp-teal);
+}
+.pp-dialog form,
+form.pp-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

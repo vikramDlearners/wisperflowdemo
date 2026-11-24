@@ -7,6 +7,7 @@ import {
   deleteFamilyParentProfile,
   families,
   members,
+  roles,
   getFamilyDashboard,
   getFamilyParentProfile,
   getProfile,
@@ -82,6 +83,9 @@ export default function ParentProfilePage() {
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   const [inviteErr, setInviteErr] = useState<string | null>(null);
+  // No Parent member yet: "Give link to parent" first asks for the parent's email and adds them.
+  const [askEmail, setAskEmail] = useState(false);
+  const [parentEmail, setParentEmail] = useState("");
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -203,15 +207,73 @@ export default function ParentProfilePage() {
     };
   }, [familyId]);
 
-  async function handleGiveLink() {
-    if (!familyId || !parentMember) return;
+  // Always enabled: with a Parent member the link goes straight out; without one, ask for their email first.
+  function handleGiveLink() {
+    if (!familyId) {
+      setInviteErr("Create a family first, then you can send a link.");
+      return;
+    }
+    if (parentMember) {
+      void sendInvite(parentMember);
+    } else {
+      setInviteErr(null);
+      setAskEmail(true);
+    }
+  }
+
+  // The care profile this page is showing: the selected parent tab, or the one matching the own profile's name.
+  function currentCareProfileId(): string | null {
+    if (selectedCareProfileId) return selectedCareProfileId;
+    const name = profile?.parent_full_name?.trim().toLowerCase();
+    const matches = parentTabs.filter((t) => name && t.display_name.trim().toLowerCase() === name);
+    return matches.length === 1 ? matches[0].care_profile_id : null;
+  }
+
+  // Adds the parent as a family member with the Parent role (linked to their care profile), then sends the link.
+  async function handleAddParentAndSend(e: FormEvent) {
+    e.preventDefault();
+    if (!familyId) return;
+    const email = parentEmail.trim();
+    if (!email) {
+      setInviteErr("Please enter your parent's email address.");
+      return;
+    }
+    setInviting(true);
+    setInviteErr(null);
+    try {
+      const roleList = await roles.list(familyId);
+      const parentRole = roleList.find((r) => r.name.toLowerCase() === "parent");
+      if (!parentRole) throw new Error("This family has no Parent role.");
+      const relationship = profile?.relationship?.trim().toLowerCase() || null;
+      const created = await members.create(familyId, {
+        email,
+        display_name: profile?.parent_full_name?.trim() || firstName,
+        role_id: parentRole.id,
+        relationship:
+          relationship && ["mother", "father", "grandmother", "grandfather", "other"].includes(relationship)
+            ? relationship
+            : null,
+        care_profile_id: currentCareProfileId(),
+      });
+      setParentMember(created);
+      setAskEmail(false);
+      setParentEmail("");
+      await sendInvite(created);
+    } catch (err) {
+      setInviteErr(err instanceof Error && !(err instanceof ApiError) ? err.message : errorText(err));
+      setInviting(false);
+    }
+  }
+
+  async function sendInvite(parent: MemberOut) {
+    if (!familyId) return;
     setInviting(true);
     setInviteMsg(null);
     setInviteErr(null);
     setInviteLink(null);
     try {
       // The backend replies { email, invite_link } with the address the sign-in link went to and the link itself.
-      const res = (await members.invite(familyId, parentMember.membership_id)) as unknown as {
+      const res = (await members.invite(familyId, parent.membership_id)) as unknown as {
         email?: string;
         invite_link?: string;
       };
@@ -220,7 +282,7 @@ export default function ParentProfilePage() {
       setInviteMsg(
         mobile
           ? `Invite sent to ${who} via mobile (${mobile}).`
-          : `Invite sent to ${who} via email (${res.email ?? parentMember.email ?? "their email"}).`,
+          : `Invite sent to ${who} via email (${res.email ?? parent.email ?? "their email"}).`,
       );
       setInviteLink(res.invite_link ?? null);
       setShowLinkDialog(true);
@@ -614,7 +676,7 @@ export default function ParentProfilePage() {
                       type="button"
                       className="pp-btn pp-invite-btn"
                       onClick={handleGiveLink}
-                      disabled={!parentMember || inviting}
+                      disabled={inviting}
                     >
                       {inviting ? "Sending link…" : inviteMsg ? "Send link again" : "Give link to parent"}
                     </button>
@@ -674,11 +736,49 @@ export default function ParentProfilePage() {
                     {!familyId && !loading && (
                       <p className="pp-invite-hint">Create a family first to send {firstName} a link.</p>
                     )}
-                    {familyId && membersLoaded && !parentMember && (
-                      <p className="pp-invite-hint">
-                        Add {firstName} as a family member with the Parent role first.{" "}
-                        <Link to={`/family/${familyId}/members`}>Go to Family members</Link>
-                      </p>
+                    {askEmail && (
+                      <div className="pp-dialog-overlay" onClick={() => !inviting && setAskEmail(false)}>
+                        <form
+                          className="pp-dialog"
+                          role="dialog"
+                          aria-modal="true"
+                          aria-labelledby="pp-email-title"
+                          onClick={(e) => e.stopPropagation()}
+                          onSubmit={handleAddParentAndSend}
+                        >
+                          <h3 id="pp-email-title">Send {firstName} a sign-in link</h3>
+                          <p>
+                            Enter {firstName}'s email. We'll add them to your family as a Parent and send the
+                            link.
+                          </p>
+                          <input
+                            type="email"
+                            className="pp-input"
+                            value={parentEmail}
+                            onChange={(e) => setParentEmail(e.target.value)}
+                            placeholder="parent@example.com"
+                            aria-label={`${firstName}'s email`}
+                            autoFocus
+                            required
+                          />
+                          {inviteErr && (
+                            <p role="alert" className="pp-invite-err">
+                              {inviteErr}
+                            </p>
+                          )}
+                          <button type="submit" className="pp-btn" disabled={inviting}>
+                            {inviting ? "Sending link…" : "Add and send link"}
+                          </button>
+                          <button
+                            type="button"
+                            className="pp-btn pp-btn-ghost"
+                            onClick={() => setAskEmail(false)}
+                            disabled={inviting}
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      </div>
                     )}
                   </div>
                 </section>

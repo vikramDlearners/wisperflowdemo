@@ -80,7 +80,7 @@ def add_member(
 ) -> MemberOut:
     membership = svc.add_member(
         db, user.id, family_id, body.email, body.role_id, body.display_name,
-        relationship=body.relationship,
+        relationship=body.relationship, care_profile_id=body.care_profile_id,
     )
     rows = svc.list_members(db, user.id, family_id)
     row = next(r for r in rows if r[0].id == membership.id)

@@ -192,13 +192,23 @@ def add_member(
     role_id: str,
     display_name: str | None = None,
     relationship: str | None = None,
+    care_profile_id: str | None = None,
 ) -> FamilyMember:
     """Add a person to the family. Creates the user record if the email is new.
 
-    A mother or father member also gets a linked Mother/Father care profile.
+    A mother or father member also gets a linked Mother/Father care profile. With care_profile_id
+    the member is linked to that existing care profile instead (no duplicate parent): it must be
+    in this family and not yet linked to another member or account.
     """
     require(db, actor_id, family_id, "members.manage")
     role = _role_in_family(db, family_id, role_id)
+    existing_profile = None
+    if care_profile_id is not None:
+        existing_profile = db.get(CareProfile, care_profile_id)
+        if existing_profile is None or existing_profile.family_id != family_id:
+            raise ValueError("Care profile not found in this family")
+        if existing_profile.linked_member_id is not None:
+            raise ValueError("This care profile already belongs to another member")
     if relationship is not None:
         relationship = relationship.strip().lower() or None
         if relationship is not None and relationship not in {
@@ -225,7 +235,9 @@ def add_member(
     )
     db.add(membership)
     db.flush()
-    if relationship in ("mother", "father") or role.name.strip().lower() == "parent":
+    if existing_profile is not None:
+        existing_profile.linked_member_id = membership.id  # the account is linked when the invite is accepted
+    elif relationship in ("mother", "father") or role.name.strip().lower() == "parent":
         db.add(
             CareProfile(
                 family_id=family_id,

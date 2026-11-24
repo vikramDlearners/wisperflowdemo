@@ -77,6 +77,8 @@ class MemberCreate(BaseModel):
     display_name: str | None = Field(default=None, max_length=255)
     role_id: str
     relationship: RelationshipIn | None = None
+    # Link this member to an existing care profile of the family instead of creating a new one.
+    care_profile_id: str | None = None
 
 
 class MemberRoleChange(BaseModel):

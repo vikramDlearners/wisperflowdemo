@@ -153,3 +153,62 @@ def test_api_get_members_includes_relationship_on_each_item(client, db_session, 
     assert len(items) >= 2
     for item in items:
         assert "relationship" in item
+
+
+# ---------- linking a new Parent member to the parent's existing care profile ----------
+
+def _existing_profile(db, family_id, name="Amma"):
+    p = CareProfile(family_id=family_id, display_name=name, greeting_name=name)
+    db.add(p)
+    db.commit()
+    return p
+
+
+def test_parent_member_links_to_existing_care_profile_instead_of_a_new_one(db_session, family_setup):
+    existing = _existing_profile(db_session, family_setup["family_id"])
+    membership = families_svc.add_member(
+        db_session, family_setup["manager"].id, family_setup["family_id"], "amma@example.com",
+        family_setup["parent_role_id"], "Amma", relationship="mother", care_profile_id=existing.id,
+    )
+    profiles = db_session.execute(
+        select(CareProfile).where(CareProfile.family_id == family_setup["family_id"])
+    ).scalars().all()
+    assert [p.id for p in profiles] == [existing.id]  # no duplicate parent
+    db_session.refresh(existing)
+    assert existing.linked_member_id == membership.id
+
+
+def test_care_profile_from_another_family_is_refused(db_session, family_setup):
+    other_manager = User(email="other@example.com", display_name="Other")
+    db_session.add(other_manager)
+    db_session.commit()
+    other_family = families_svc.create_family(db_session, other_manager, "Other family")
+    foreign = _existing_profile(db_session, other_family.id)
+    with pytest.raises(ValueError):
+        families_svc.add_member(
+            db_session, family_setup["manager"].id, family_setup["family_id"], "amma@example.com",
+            family_setup["parent_role_id"], "Amma", care_profile_id=foreign.id,
+        )
+
+
+def test_care_profile_already_linked_to_a_member_is_refused(db_session, family_setup):
+    first = _add(db_session, family_setup, "appa@example.com", "father")
+    [taken] = _profiles_for(db_session, first.id)
+    with pytest.raises(ValueError):
+        families_svc.add_member(
+            db_session, family_setup["manager"].id, family_setup["family_id"], "amma@example.com",
+            family_setup["parent_role_id"], "Amma", care_profile_id=taken.id,
+        )
+
+
+def test_api_post_member_with_care_profile_id(client, db_session, family_setup):
+    existing = _existing_profile(db_session, family_setup["family_id"])
+    r = client.post(
+        f"/api/families/{family_setup['family_id']}/members",
+        json={"email": "amma@example.com", "display_name": "Amma", "role_id": family_setup["parent_role_id"],
+              "care_profile_id": existing.id},
+        headers=_auth(db_session, family_setup["manager"]),
+    )
+    assert r.status_code == 201, r.text
+    db_session.refresh(existing)
+    assert existing.linked_member_id == r.json()["membership_id"]
