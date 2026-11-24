@@ -796,7 +796,8 @@
   border-color: var(--pp-teal);
 }
 .pp-dialog form,
-form.pp-dialog {
+form.pp-dialog,
+.pp-dialog-stack {
   display: flex;
   flex-direction: column;
   gap: 8px;

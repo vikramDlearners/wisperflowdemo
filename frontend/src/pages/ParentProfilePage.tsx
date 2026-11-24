@@ -239,8 +239,9 @@ export default function ParentProfilePage() {
   }
 
   // Adds the parent as a family member with the Parent role (linked to their care profile), then sends the link.
-  async function handleAddParentAndSend(e: FormEvent) {
-    e.preventDefault();
+  // The email box sits inside the page's own <form>, so it is a plain dialog (no nested form):
+  // the button and the Enter key call this directly.
+  async function handleAddParentAndSend() {
     if (!familyId) return;
     const email = parentEmail.trim();
     if (!email) {
@@ -861,13 +862,12 @@ export default function ParentProfilePage() {
                     )}
                     {askEmail && (
                       <div className="pp-dialog-overlay" onClick={() => !inviting && setAskEmail(false)}>
-                        <form
-                          className="pp-dialog"
+                        <div
+                          className="pp-dialog pp-dialog-stack"
                           role="dialog"
                           aria-modal="true"
                           aria-labelledby="pp-email-title"
                           onClick={(e) => e.stopPropagation()}
-                          onSubmit={handleAddParentAndSend}
                         >
                           <h3 id="pp-email-title">Send {firstName} a sign-in link</h3>
                           <p>
@@ -882,14 +882,24 @@ export default function ParentProfilePage() {
                             placeholder="parent@example.com"
                             aria-label={`${firstName}'s email`}
                             autoFocus
-                            required
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault(); // never submit the page's form
+                                void handleAddParentAndSend();
+                              }
+                            }}
                           />
                           {inviteErr && (
                             <p role="alert" className="pp-invite-err">
                               {inviteErr}
                             </p>
                           )}
-                          <button type="submit" className="pp-btn" disabled={inviting}>
+                          <button
+                            type="button"
+                            className="pp-btn"
+                            disabled={inviting}
+                            onClick={() => void handleAddParentAndSend()}
+                          >
                             {inviting ? "Sending link…" : "Add and send link"}
                           </button>
                           <button
@@ -900,7 +910,7 @@ export default function ParentProfilePage() {
                           >
                             Cancel
                           </button>
-                        </form>
+                        </div>
                       </div>
                     )}
                   </div>
