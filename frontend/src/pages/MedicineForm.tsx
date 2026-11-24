@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { estimateRefill, REFILL_BUFFER_DAYS, toDateInput } from "../refill";
 import { Link, useNavigate } from "react-router-dom";
 import "../medicines.css";
 import "../prescription-scan.css";
@@ -37,6 +38,13 @@ interface MedicineFormProps {
 const errorText = (err: unknown, fallback: string) =>
   err instanceof ApiError ? err.detail : fallback;
 
+// "1 Dec" (adds the year only when it is not this year).
+function shortDate(d: Date): string {
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString(undefined, opts);
+}
+
 export default function MedicineForm({
   familyId,
   careProfileId,
@@ -61,6 +69,8 @@ export default function MedicineForm({
   const [instructions, setInstructions] = useState("");
   const [quantity, setQuantity] = useState("");
   const [refillDate, setRefillDate] = useState("");
+  // The refill date follows the tablets left and the schedule until someone picks a date by hand.
+  const [refillTouched, setRefillTouched] = useState(false);
   const [responsible, setResponsible] = useState("");
   const [active, setActive] = useState(true);
   // Pricing: price per tablet and how many tablets were bought; the server computes the total.
@@ -132,6 +142,7 @@ export default function MedicineForm({
           setInstructions(med.instructions_text ?? "");
           setQuantity(med.quantity_remaining?.toString() ?? "");
           setRefillDate(med.refill_date ?? "");
+          setRefillTouched(Boolean(med.refill_date));
           setResponsible(med.responsible_user_id ?? "");
           setActive(med.active);
           setUnitPrice(med.unit_price != null ? String(Number(med.unit_price)) : "");
@@ -151,6 +162,13 @@ export default function MedicineForm({
       cancelled = true;
     };
   }, [familyId, medicineId, isEdit]);
+
+  // Suggested refill date from today, the tablets left and the schedule (reminder times or the text).
+  const refillEstimate = estimateRefill(quantity, instructions, times);
+  const suggestedRefill = refillEstimate ? toDateInput(refillEstimate.refillBy) : null;
+  useEffect(() => {
+    if (!refillTouched && suggestedRefill) setRefillDate(suggestedRefill);
+  }, [refillTouched, suggestedRefill]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -354,7 +372,33 @@ export default function MedicineForm({
 
                 <label className="pp-field">
                   Refill date
-                  <input type="date" value={refillDate} onChange={(e) => setRefillDate(e.target.value)} />
+                  <input
+                    type="date"
+                    value={refillDate}
+                    onChange={(e) => {
+                      setRefillTouched(true);
+                      setRefillDate(e.target.value);
+                    }}
+                  />
+                  {refillEstimate && (
+                    <span className="mf-refill-hint">
+                      {refillEstimate.days} {refillEstimate.days === 1 ? "day" : "days"} of tablets at{" "}
+                      {refillEstimate.perDay} a day (runs out {shortDate(refillEstimate.runsOut)}). Refill by{" "}
+                      {shortDate(refillEstimate.refillBy)}, {REFILL_BUFFER_DAYS} days early.
+                      {refillDate !== toDateInput(refillEstimate.refillBy) && (
+                        <button
+                          type="button"
+                          className="mf-refill-use"
+                          onClick={() => {
+                            setRefillTouched(false);
+                            setRefillDate(toDateInput(refillEstimate.refillBy));
+                          }}
+                        >
+                          Use this date
+                        </button>
+                      )}
+                    </span>
+                  )}
                 </label>
 
                 <label className={`pp-field${isEdit ? "" : " mf-span"}`}>

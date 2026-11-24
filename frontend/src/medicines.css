@@ -1009,3 +1009,28 @@
   font-size: 0.85rem;
   color: var(--pp-muted);
 }
+
+/* Refill date worked out from today, the tablets left and the schedule. */
+.mf-refill-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.4;
+  color: #5d6f6a;
+}
+.mf-refill-use {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1f7a6e;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mf-refill-use:hover {
+  text-decoration: underline;
+}
