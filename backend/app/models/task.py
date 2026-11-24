@@ -29,7 +29,7 @@ class Task(Base):
         String(36), ForeignKey("users.id"), nullable=True
     )
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # Allowed values: OPEN or DONE.
+    # Allowed values: OPEN, IN_PROGRESS or DONE.
     status: Mapped[str] = mapped_column(String(16), default="OPEN")
     priority: Mapped[str] = mapped_column(String(16), default="normal")
     created_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))

@@ -143,7 +143,7 @@ def _create_tasks(db: Session, checkin: HealthCheckin, important: list[dict]) ->
         for item in important:
             exists = db.execute(select(Task.id).where(
                 Task.care_profile_id == checkin.care_profile_id, Task.assigned_to_user_id == user.id,
-                Task.title == item["title"], Task.status == "OPEN",
+                Task.title == item["title"], Task.status != "DONE",
             )).first()
             if exists is not None:
                 continue  # the same point from a later part of the chat: no duplicate task

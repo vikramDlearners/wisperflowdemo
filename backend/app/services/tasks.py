@@ -12,7 +12,7 @@ from app.services.errors import NotFound
 from app.services.notifications import notify
 from app.services.permissions import PermissionDenied, get_membership, permission_codes_for, require
 
-TASK_STATUSES = frozenset({"OPEN", "DONE"})
+TASK_STATUSES = frozenset({"OPEN", "IN_PROGRESS", "DONE"})
 
 
 def list_tasks(db: Session, actor_id: str, family_id: str) -> list[Task]:
@@ -118,7 +118,7 @@ def update_task_status(
     unless they also hold tasks.assign."""
     require(db, actor_id, family_id, "tasks.update_own")
     if status not in TASK_STATUSES:
-        raise ValueError("status must be OPEN or DONE")
+        raise ValueError("status must be OPEN, IN_PROGRESS or DONE")
     task = _task_in_family(db, family_id, task_id)
     codes = permission_codes_for(db, get_membership(db, actor_id, family_id))
     if "tasks.assign" not in codes and task.assigned_to_user_id != actor_id:
