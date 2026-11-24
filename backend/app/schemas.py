@@ -575,6 +575,7 @@ class DashboardParentOut(BaseModel):
     relationship: str | None
     age: int | None
     photo_url: str | None
+    has_photo: bool = False
     known_health_conditions: str | None
     primary_caregiver_name: str | None
     gender: str | None = None

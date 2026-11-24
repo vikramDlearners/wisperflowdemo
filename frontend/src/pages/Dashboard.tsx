@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { fetchProfilePhoto } from "../profilePhoto";
 import { useNavigate, useParams } from "react-router-dom";
 import "../dashboard.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
@@ -66,8 +67,40 @@ function daysLabel(item: DashboardStockItemOut): string {
   return `${n} day${n === 1 ? "" : "s"} left`;
 }
 
-function Avatar({ name, photoUrl, gender }: { name: string; photoUrl: string | null; gender: string | null }) {
-  if (photoUrl) return <img className="db-avatar" src={photoUrl} alt={name} />;
+interface AvatarProps {
+  name: string;
+  photoUrl: string | null;
+  gender: string | null;
+  familyId: string;
+  careProfileId: string;
+  hasPhoto?: boolean;
+}
+
+// The parent's uploaded photo first (fetched with sign-in), else the image link, else an emoji or initials.
+function Avatar({ name, photoUrl, gender, familyId, careProfileId, hasPhoto }: AvatarProps) {
+  const [uploaded, setUploaded] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hasPhoto) {
+      setUploaded(null);
+      return;
+    }
+    let active = true;
+    let created: string | null = null;
+    fetchProfilePhoto({ familyId, careProfileId })
+      .then((url) => {
+        created = url;
+        if (active) setUploaded(url);
+        else if (url) URL.revokeObjectURL(url);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [hasPhoto, familyId, careProfileId]);
+
+  const src = uploaded ?? photoUrl;
+  if (src) return <img className="db-avatar" src={src} alt={name} />;
   if (gender === "male" || gender === "female") {
     return (
       <span className="db-avatar is-emoji" aria-hidden="true">
@@ -187,7 +220,14 @@ export default function Dashboard() {
                       aria-pressed={active}
                       onClick={() => setSelectedId(p.care_profile_id)}
                     >
-                      <Avatar name={p.display_name} photoUrl={p.photo_url} gender={p.gender} />
+                      <Avatar
+                        name={p.display_name}
+                        photoUrl={p.photo_url}
+                        gender={p.gender}
+                        familyId={familyId}
+                        careProfileId={p.care_profile_id}
+                        hasPhoto={p.has_photo}
+                      />
                       {p.display_name}
                     </button>
                   );
@@ -198,7 +238,14 @@ export default function Dashboard() {
             )}
             {parent && (
               <div className="db-parent">
-                <Avatar name={parent.display_name} photoUrl={parent.photo_url} gender={parent.gender} />
+                <Avatar
+                  name={parent.display_name}
+                  photoUrl={parent.photo_url}
+                  gender={parent.gender}
+                  familyId={familyId}
+                  careProfileId={parent.care_profile_id}
+                  hasPhoto={parent.has_photo}
+                />
                 <div className="db-parent-text">
                   <button
                     type="button"

@@ -125,7 +125,7 @@ def test_response_shape(client, db_session, dashboard_setup):
     parent = body["parents"][0]
     assert set(parent) == {
         "care_profile_id", "display_name", "relationship", "age", "photo_url",
-        "known_health_conditions", "primary_caregiver_name", "all_good", "gender",
+        "known_health_conditions", "primary_caregiver_name", "all_good", "gender", "has_photo",
     }
     assert body["selected_care_profile_id"] == s["appa"].id
     assert body["daily_medicine_count"] == 3
@@ -251,3 +251,18 @@ def test_medicine_without_times_shows_each_part_of_the_day_taken(client, db_sess
     # Amlodipine 08:00 and 20:00, Metformin 08:00, Vitamin D morning and night.
     assert body["medicines_today"] == {"taken": 2, "total": 5}
     assert body["daily_medicine_count"] == 3
+
+
+def test_parent_card_says_when_an_uploaded_photo_exists(client, db_session, dashboard_setup):
+    from app.models.parent_onboarding_profile import ParentOnboardingProfile
+
+    s = dashboard_setup
+    before = _get(client, db_session, s["manager"], s["family"].id).json()["parents"]
+    assert all(p["has_photo"] is False for p in before)
+    db_session.add(ParentOnboardingProfile(
+        care_profile_id=s["appa"].id, profile_photo_data=b"img", profile_photo_content_type="image/png",
+    ))
+    db_session.commit()
+    after = {p["care_profile_id"]: p["has_photo"]
+             for p in _get(client, db_session, s["manager"], s["family"].id).json()["parents"]}
+    assert after[s["appa"].id] is True

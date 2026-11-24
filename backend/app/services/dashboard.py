@@ -85,6 +85,8 @@ def _parent_card(db: Session, profile: CareProfile, day: date) -> dict[str, Any]
         "relationship": relationship,
         "age": age_from(onboarding) if onboarding is not None else None,
         "photo_url": _field(onboarding, "profile_picture_url"),
+        # An uploaded photo (fetched with sign-in from .../parents/{id}/profile/photo) is shown first.
+        "has_photo": onboarding is not None and onboarding.profile_photo_content_type is not None,
         "known_health_conditions": _field(onboarding, "known_health_conditions"),
         "primary_caregiver_name": _field(onboarding, "caregiver_name"),
         "gender": _gender_for(_field(onboarding, "gender"), relationship),

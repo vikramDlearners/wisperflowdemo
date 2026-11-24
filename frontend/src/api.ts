@@ -695,6 +695,8 @@ export interface DashboardParentOut {
   relationship: string | null;
   age: number | null;
   photo_url: string | null;
+  /** An uploaded photo exists: fetch it with fetchProfilePhoto (profilePhoto.ts). */
+  has_photo?: boolean;
   gender: string | null;
   known_health_conditions: string | null;
   primary_caregiver_name: string | null;
