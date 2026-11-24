@@ -162,6 +162,19 @@ class MedicineUpdate(BaseModel):
     total_medicine_count: int | None = Field(default=None, ge=0)
 
 
+class MedicineTextIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class MedicineTextOut(BaseModel):
+    instructions_text: str | None = None
+    reminder_times: list[str] = []
+    quantity_remaining: int | None = None
+    unit_price: Decimal | None = None
+    total_medicine_count: int | None = None
+    source: str
+
+
 class QuantityUpdate(BaseModel):
     quantity: int = Field(ge=0)
 
@@ -179,6 +192,7 @@ class MedicineOut(BaseModel):
     prescription_scan_id: str | None = None
     has_image: bool = False
     image_url: str | None = None
+    has_prescription_image: bool = False
     unit_price: Decimal | None = None
     total_medicine_count: int | None = None
     total_price: Decimal | None = None

@@ -44,3 +44,6 @@ class Medicine(Base):
     unit_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     total_medicine_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    # Photo of the doctor's prescription, separate from the photo of the medicine (image_data).
+    prescription_image_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    prescription_image_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)

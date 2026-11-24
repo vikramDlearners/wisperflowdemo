@@ -1034,3 +1034,138 @@
 .mf-refill-use:hover {
   text-decoration: underline;
 }
+
+/* ---- Voice mode on Add medicine (pages/MedicineForm.tsx) ---- */
+.mv-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 260px));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.mv-mode-btn {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1.5px solid var(--pp-line);
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pp-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.mv-mode-btn small {
+  grid-column: 2;
+  font-weight: 400;
+  font-size: 0.78rem;
+  color: var(--pp-muted);
+}
+.mv-mode-btn:hover {
+  border-color: var(--pp-teal);
+}
+.mv-mode-btn.is-on {
+  border-color: var(--pp-teal);
+  background: var(--pp-teal-soft);
+  box-shadow: 0 0 0 1px var(--pp-teal) inset;
+}
+.mv-mode-btn:focus-visible {
+  outline: 3px solid #9fd3c9;
+  outline-offset: 2px;
+}
+.mv-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 860px;
+}
+.mv-step {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--pp-teal);
+  color: #fff;
+  font-size: 0.8rem;
+  vertical-align: 2px;
+}
+.mv-help {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+}
+.mv-example {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-style: italic;
+  color: var(--pp-teal-dark);
+  text-align: left;
+  cursor: pointer;
+}
+.mv-example:hover {
+  text-decoration: underline;
+}
+.mv-box {
+  width: 100%;
+  min-height: 150px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--pp-line);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--pp-ink);
+  resize: vertical;
+  box-sizing: border-box;
+}
+.mv-box:focus-visible {
+  outline: 3px solid #9fd3c9;
+  outline-offset: 0;
+  border-color: var(--pp-teal);
+}
+.mv-box::placeholder {
+  color: #a3b0ad;
+}
+.mv-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.mv-result {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pp-teal-soft);
+  color: var(--pp-teal-dark);
+  font-size: 0.85rem;
+}
+.mv-result.is-empty {
+  background: #fff6e5;
+  color: #8a5a00;
+}
+.mv-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.mv-photos > .pp-card {
+  margin: 0;
+  box-shadow: none;
+  border: 1px solid var(--pp-line);
+}
+.mv-caretaker {
+  margin-top: 16px;
+}
+@media (max-width: 600px) {
+  .mv-mode,
+  .mv-photos {
+    grid-template-columns: 1fr;
+  }
+}

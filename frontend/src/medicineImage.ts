@@ -9,6 +9,8 @@ import { API_BASE_URL, ApiError, getSessionToken, type MedicineOut } from "./api
 //        Needs medicines.view.
 //
 // There is no delete endpoint, so a saved photo can be replaced but not removed.
+//
+// The prescription photo is separate: PUT / GET / DELETE /{medicine_id}/prescription-image, same rules.
 // The GET needs the Bearer token, so images are fetched and shown as blob: URLs.
 
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -22,8 +24,11 @@ export class ImageUploadUnavailable extends Error {
   }
 }
 
-const imagePath = (familyId: string, medicineId: string) =>
-  `${API_BASE_URL}/api/families/${familyId}/medicines/${medicineId}/image`;
+/** "image" is the photo of the medicine; "prescription-image" the photo of its prescription. */
+export type MedicinePhotoKind = "image" | "prescription-image";
+
+const imagePath = (familyId: string, medicineId: string, kind: MedicinePhotoKind = "image") =>
+  `${API_BASE_URL}/api/families/${familyId}/medicines/${medicineId}/${kind}`;
 
 function authHeaders(): Record<string, string> {
   const token = getSessionToken();
@@ -57,9 +62,25 @@ export async function uploadMedicineImage(familyId: string, medicineId: string, 
   return (await res.json()) as MedicineOut;
 }
 
-/** Fetches the medicine's photo as a blob: URL, or null when it has none (404). */
-export async function fetchMedicineImage(familyId: string, medicineId: string): Promise<string | null> {
-  const res = await fetch(imagePath(familyId, medicineId), { headers: authHeaders() });
+export async function uploadPrescriptionImage(familyId: string, medicineId: string, file: File): Promise<MedicineOut> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(imagePath(familyId, medicineId, "prescription-image"), {
+    method: "PUT",
+    headers: { Accept: "application/json", ...authHeaders() },
+    body: form,
+  });
+  if (!res.ok) throw new ApiError(res.status, (await detailOf(res)) || res.statusText || "Upload failed");
+  return (await res.json()) as MedicineOut;
+}
+
+/** Fetches the medicine's photo (or prescription photo) as a blob: URL, or null when it has none (404). */
+export async function fetchMedicineImage(
+  familyId: string,
+  medicineId: string,
+  kind: MedicinePhotoKind = "image",
+): Promise<string | null> {
+  const res = await fetch(imagePath(familyId, medicineId, kind), { headers: authHeaders() });
   if (res.status === 404 || res.status === 405) return null;
   if (!res.ok) throw new ApiError(res.status, (await detailOf(res)) || res.statusText);
   const blob = await res.blob();
@@ -70,7 +91,12 @@ export async function fetchMedicineImage(familyId: string, medicineId: string): 
  * React hook: the photo for one medicine as a blob: URL (null while loading or when there is
  * none). Pass a changing `version` to refetch after an upload. Frees the URL on unmount.
  */
-export function useMedicineImage(familyId: string, medicineId: string | null, version = 0): string | null {
+export function useMedicineImage(
+  familyId: string,
+  medicineId: string | null,
+  version = 0,
+  kind: MedicinePhotoKind = "image",
+): string | null {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!medicineId) {
@@ -79,7 +105,7 @@ export function useMedicineImage(familyId: string, medicineId: string | null, ve
     }
     let active = true;
     let created: string | null = null;
-    fetchMedicineImage(familyId, medicineId)
+    fetchMedicineImage(familyId, medicineId, kind)
       .then((u) => {
         created = u;
         if (active) setUrl(u);
@@ -92,7 +118,7 @@ export function useMedicineImage(familyId: string, medicineId: string | null, ve
       active = false;
       if (created) URL.revokeObjectURL(created);
     };
-  }, [familyId, medicineId, version]);
+  }, [familyId, medicineId, version, kind]);
   return url;
 }
 

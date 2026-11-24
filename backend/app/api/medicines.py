@@ -15,6 +15,8 @@ from app.schemas import (
     MedicineCreate,
     MedicineLastTakenOut,
     MedicineOut,
+    MedicineTextIn,
+    MedicineTextOut,
     MedicineUpdate,
     QuantityUpdate,
     ReminderTimesIn,
@@ -23,6 +25,7 @@ from app.schemas import (
 from app.services import care as svc
 from app.services import doses as doses_svc
 from app.services import reminders as reminders_svc
+from app.services.medicine_text import parse_medicine_text
 from app.services.permissions import require
 from app.services.prescription_scan import MAX_IMAGE_BYTES
 
@@ -47,6 +50,7 @@ def _out(db: Session, family_id: str, medicine: Medicine) -> MedicineOut:
         unit_price=medicine.unit_price,
         total_medicine_count=medicine.total_medicine_count,
         total_price=medicine.total_price,
+        has_prescription_image=medicine.prescription_image_content_type is not None,
     )
 
 
@@ -91,6 +95,15 @@ def record_dose(
         "status": row.status,
         "recorded_at": row.recorded_at,
     }
+
+
+@router.post("/parse-text", response_model=MedicineTextOut)
+def parse_text(
+    family_id: str, body: MedicineTextIn, db: Session = DbSession, user: User = CurrentUser
+) -> MedicineTextOut:
+    """Voice mode: read a spoken description (schedule, tablets left, pricing) into the form's fields."""
+    require(db, user.id, family_id, "medicines.edit")
+    return MedicineTextOut(**parse_medicine_text(body.text))
 
 
 @router.post("", response_model=MedicineOut, status_code=201)
@@ -180,6 +193,36 @@ def upload_medicine_image(
         db, user.id, family_id, medicine_id, image_bytes, file.content_type or ""
     )
     return _out(db, family_id, medicine)
+
+
+@router.put("/{medicine_id}/prescription-image", response_model=MedicineOut)
+def upload_prescription_image(
+    family_id: str,
+    medicine_id: str,
+    file: UploadFile = File(...),
+    db: Session = DbSession,
+    user: User = CurrentUser,
+) -> MedicineOut:
+    image_bytes = file.file.read(MAX_IMAGE_BYTES + 1)
+    medicine = svc.set_prescription_image(
+        db, user.id, family_id, medicine_id, image_bytes, file.content_type or ""
+    )
+    return _out(db, family_id, medicine)
+
+
+@router.delete("/{medicine_id}/prescription-image", response_model=MedicineOut)
+def delete_prescription_image(
+    family_id: str, medicine_id: str, db: Session = DbSession, user: User = CurrentUser
+) -> MedicineOut:
+    return _out(db, family_id, svc.set_prescription_image(db, user.id, family_id, medicine_id, None, None))
+
+
+@router.get("/{medicine_id}/prescription-image")
+def get_prescription_image(
+    family_id: str, medicine_id: str, db: Session = DbSession, user: User = CurrentUser
+) -> Response:
+    data, content_type = svc.get_prescription_image(db, user.id, family_id, medicine_id)
+    return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, no-store"})
 
 
 @router.get("/{medicine_id}/image")

@@ -178,6 +178,18 @@ export interface MedicineOut {
   unit_price?: string | number | null;
   total_medicine_count?: number | null;
   total_price?: string | number | null;
+  /** True when a photo of the prescription is saved (GET .../prescription-image). */
+  has_prescription_image?: boolean;
+}
+
+/** Voice mode: what POST .../medicines/parse-text read from the spoken sentence. Unknown fields are null. */
+export interface MedicineTextOut {
+  instructions_text: string | null;
+  reminder_times: string[]; // "HH:MM", 24-hour
+  quantity_remaining: number | null;
+  unit_price: string | number | null;
+  total_medicine_count: number | null;
+  source: "gemini" | "rules";
 }
 
 export interface TaskCreate {
@@ -459,6 +471,8 @@ export const medicines = {
     get<{ times: string[] }>(`/api/families/${familyId}/medicines/${medicineId}/reminders`),
   setReminders: (familyId: string, medicineId: string, times: string[]) =>
     put<{ times: string[] }>(`/api/families/${familyId}/medicines/${medicineId}/reminders`, { times }),
+  parseText: (familyId: string, text: string) =>
+    post<MedicineTextOut>(`/api/families/${familyId}/medicines/parse-text`, { text }),
 };
 
 // ---- tasks (verified against api/tasks.py) ----

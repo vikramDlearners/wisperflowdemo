@@ -326,6 +326,42 @@ def _linked_scan(db: Session, medicine: Medicine) -> PrescriptionScan | None:
     return db.get(PrescriptionScan, medicine.prescription_scan_id)
 
 
+def _check_image(image_bytes: bytes, mime_type: str) -> None:
+    if mime_type not in ALLOWED_MIME_TYPES:
+        raise ValueError("Upload a JPEG, PNG or WebP image")
+    if not image_bytes:
+        raise ValueError("Uploaded image is empty")
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        raise ValueError("Uploaded image must be 10 MB or smaller")
+
+
+def set_prescription_image(
+    db: Session, actor_id: str, family_id: str, medicine_id: str, image_bytes: bytes | None, mime_type: str | None
+) -> Medicine:
+    """Store (or, with image_bytes=None, remove) the photo of a medicine's prescription."""
+    require(db, actor_id, family_id, "medicines.edit")
+    medicine = _medicine_in_family(db, family_id, medicine_id)
+    if image_bytes is None:
+        medicine.prescription_image_data = None
+        medicine.prescription_image_content_type = None
+        log_activity(db, family_id, actor_id, "medicine.prescription_image_removed", "medicine", medicine.id)
+    else:
+        _check_image(image_bytes, mime_type or "")
+        medicine.prescription_image_data = image_bytes
+        medicine.prescription_image_content_type = mime_type
+        log_activity(db, family_id, actor_id, "medicine.prescription_image_uploaded", "medicine", medicine.id)
+    db.commit()
+    return medicine
+
+
+def get_prescription_image(db: Session, actor_id: str, family_id: str, medicine_id: str) -> tuple[bytes, str]:
+    require(db, actor_id, family_id, "medicines.view")
+    medicine = _medicine_in_family(db, family_id, medicine_id)
+    if medicine.prescription_image_content_type is None or medicine.prescription_image_data is None:
+        raise NotFound("Prescription photo not found")
+    return medicine.prescription_image_data, medicine.prescription_image_content_type
+
+
 def medicine_has_image(db: Session, medicine: Medicine) -> bool:
     """True if the medicine has its own image or its linked prescription scan has one."""
     if medicine.image_data is not None:
