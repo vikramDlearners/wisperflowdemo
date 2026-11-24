@@ -790,7 +790,7 @@ export default function MedicineForm({
     <PhotoCard
       title="Medicine photo"
       addLabel="Add a photo of the medicine"
-      hint="Strip or box · JPG, PNG or WebP · up to 10 MB"
+      hint="Strip or box · JPG, PNG or WebP · up to 10 MB. Your parent can ask for this photo in the chat."
       icon="📷"
       alt={`Photo of ${displayName || "the medicine"}`}
       current={currentImage}

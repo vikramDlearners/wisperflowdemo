@@ -14,6 +14,8 @@ import { API_BASE_URL, ApiError, getSessionToken } from "./api";
 
 export interface ChatMessage {
   sender: "bot" | "parent";
+  /** Show the photos of the medicines this message names. */
+  photos?: boolean;
   text: string;
   created_at?: string;
 }
@@ -38,6 +40,8 @@ export interface CheckinOut {
   /** The family's phone for the Help button, urgent or not. */
   help_number: string | null;
   language: string;
+  /** The language on the parent's profile, kept when the parent switches the chat to another one. */
+  recommended_language: string;
   reminders_due: ReminderDue[];
   /** Speech for the bot messages this request added (greeting / re-asked question), else null. */
   audio: string | null;
@@ -45,7 +49,7 @@ export interface CheckinOut {
 }
 
 export interface TurnOut {
-  messages: { sender: "bot" | "parent"; text: string }[];
+  messages: { sender: "bot" | "parent"; text: string; photos?: boolean }[];
   step: string;
   /** The parent's current language: it can change mid-conversation from the Edit parent page. */
   language?: string;
@@ -59,9 +63,19 @@ export interface TurnOut {
 
 export const MAX_VOICE_BYTES = 2 * 1024 * 1024;
 
+// The profile being used in the chat; sent with every call, so everything is saved to it. null = the account's own.
+let careProfileId: string | null = null;
+
+export function setParentProfile(id: string | null): void {
+  careProfileId = id;
+}
+
 function authHeaders(): Record<string, string> {
   const token = getSessionToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(careProfileId ? { "X-Care-Profile-Id": careProfileId } : {}),
+  };
 }
 
 // Mirrors api.ts: FastAPI errors carry {"detail": ...}.
@@ -85,13 +99,57 @@ async function send<T>(path: string, init: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** newSession: the chat page just opened, so start a new conversation on screen (fresh greeting). */
-export function getCheckin(newSession = false): Promise<CheckinOut> {
-  return send<CheckinOut>(`/api/parent/checkin${newSession ? "?new_session=true" : ""}`, { method: "GET" });
+// The profiles this account can use the chat as (father, mother...).
+//   GET /profiles             -> [{id, name, relationship, has_photo, photo_url, own}]
+//   GET /profiles/{id}/photo  -> the uploaded picture's bytes
+export interface ParentProfile {
+  id: string;
+  name: string;
+  relationship: string | null;
+  has_photo: boolean;
+  photo_url: string | null;
+  own: boolean;
 }
 
-export function sendText(text: string): Promise<TurnOut> {
-  return send<TurnOut>("/api/parent/checkin/text", {
+export function getParentProfiles(): Promise<ParentProfile[]> {
+  return send<ParentProfile[]>("/api/parent/profiles", { method: "GET" });
+}
+
+/** The profile picture as a blob: URL (the request needs the Bearer token), or null if there is none. */
+export async function fetchParentProfilePhoto(id: string): Promise<string | null> {
+  const res = await fetch(`${API_BASE_URL}/api/parent/profiles/${encodeURIComponent(id)}/photo`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) return null;
+  return URL.createObjectURL(await res.blob());
+}
+
+/** newSession: the chat page just opened, so start a new conversation on screen (fresh greeting). */
+export function getCheckin(newSession: boolean, speak: boolean): Promise<CheckinOut> {
+  return send<CheckinOut>(`/api/parent/checkin?new_session=${newSession}&speak=${speak}`, { method: "GET" });
+}
+
+/** Switch the chat's language: greets again and repeats the open question in it. */
+export function setParentLanguage(language: string, speak: boolean): Promise<CheckinOut> {
+  return send<CheckinOut>(`/api/parent/language?speak=${speak}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language }),
+  });
+}
+
+/** Speech for a bot message on screen; audio is null when the server has no voice. */
+export function speakMessage(text: string): Promise<{ audio: string | null; audio_type: string | null }> {
+  return send("/api/parent/speak", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+}
+
+/** speak: false when voice is off in the chat, so the server makes no speech. */
+export function sendText(text: string, speak: boolean): Promise<TurnOut> {
+  return send<TurnOut>(`/api/parent/checkin/text?speak=${speak}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),

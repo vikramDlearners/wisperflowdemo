@@ -45,9 +45,31 @@ export interface ParentStrings {
   emergencyCall: string;
   emergencyFailed: string;
   signingOut: string;
+  language: string;
+  recommended: string;
+  voice: string;
+  switchProfile: string;
+  whoIsUsing: string;
+  goodMorning: string;
+  goodAfternoon: string;
+  goodEvening: string;
+  audio: string;
+  tapToListen: string;
+  cannotPlay: string;
 }
 
 const en: ParentStrings = {
+  voice: "Voice",
+  switchProfile: "Switch profile",
+  whoIsUsing: "Who is using CareCircle right now?",
+  goodMorning: "Good morning",
+  goodAfternoon: "Good afternoon",
+  goodEvening: "Good evening",
+  audio: "Audio",
+  tapToListen: "Tap to listen",
+  cannotPlay: "This message can't be played right now.",
+  language: "Language",
+  recommended: "recommended",
   logOut: "Log out",
   photoOf: "Photo",
   closePhoto: "Close",
@@ -65,7 +87,7 @@ const en: ParentStrings = {
   pleaseWait: "Please wait",
   stopAndSend: "Stop and send",
   typeInstead: "Type instead",
-  typeYourAnswer: "Type your answer",
+  typeYourAnswer: "Type your answer or use Wispr Flow to speak out your answer",
   send: "Send",
   help: "Help",
   callFamily: "Call family",
@@ -91,6 +113,17 @@ const en: ParentStrings = {
 };
 
 const hi: ParentStrings = {
+  voice: "आवाज़",
+  switchProfile: "प्रोफ़ाइल बदलें",
+  whoIsUsing: "अभी CareCircle कौन इस्तेमाल कर रहा है?",
+  goodMorning: "सुप्रभात",
+  goodAfternoon: "नमस्ते",
+  goodEvening: "शुभ संध्या",
+  audio: "ऑडियो",
+  tapToListen: "सुनने के लिए दबाएँ",
+  cannotPlay: "यह संदेश अभी सुनाया नहीं जा सकता।",
+  language: "भाषा",
+  recommended: "सुझाई गई",
   logOut: "लॉग आउट",
   photoOf: "फ़ोटो",
   closePhoto: "बंद करें",
@@ -108,7 +141,7 @@ const hi: ParentStrings = {
   pleaseWait: "कृपया रुकें",
   stopAndSend: "रोकें और भेजें",
   typeInstead: "लिखकर बताएं",
-  typeYourAnswer: "अपना जवाब लिखें",
+  typeYourAnswer: "अपना जवाब लिखें या Wispr Flow से बोलकर बताएँ",
   send: "भेजें",
   help: "मदद",
   callFamily: "परिवार को फ़ोन करें",
@@ -134,6 +167,17 @@ const hi: ParentStrings = {
 };
 
 const ta: ParentStrings = {
+  voice: "குரல்",
+  switchProfile: "சுயவிவரத்தை மாற்று",
+  whoIsUsing: "இப்போது CareCircle-ஐப் பயன்படுத்துவது யார்?",
+  goodMorning: "காலை வணக்கம்",
+  goodAfternoon: "மதிய வணக்கம்",
+  goodEvening: "மாலை வணக்கம்",
+  audio: "ஆடியோ",
+  tapToListen: "கேட்கத் தட்டவும்",
+  cannotPlay: "இந்தச் செய்தியை இப்போது ஒலிக்க முடியவில்லை.",
+  language: "மொழி",
+  recommended: "பரிந்துரை",
   logOut: "வெளியேறு",
   photoOf: "படம்",
   closePhoto: "மூடு",
@@ -151,7 +195,7 @@ const ta: ParentStrings = {
   pleaseWait: "காத்திருக்கவும்",
   stopAndSend: "நிறுத்தி அனுப்பு",
   typeInstead: "தட்டச்சு செய்யவும்",
-  typeYourAnswer: "உங்கள் பதிலை தட்டச்சு செய்யவும்",
+  typeYourAnswer: "உங்கள் பதிலை தட்டச்சு செய்யவும் அல்லது Wispr Flow மூலம் பேசிச் சொல்லவும்",
   send: "அனுப்பு",
   help: "உதவி",
   callFamily: "குடும்பத்தை அழைக்கவும்",
@@ -177,6 +221,17 @@ const ta: ParentStrings = {
 };
 
 const te: ParentStrings = {
+  voice: "వాయిస్",
+  switchProfile: "ప్రొఫైల్ మార్చండి",
+  whoIsUsing: "ఇప్పుడు CareCircle ఎవరు వాడుతున్నారు?",
+  goodMorning: "శుభోదయం",
+  goodAfternoon: "శుభ మధ్యాహ్నం",
+  goodEvening: "శుభ సాయంత్రం",
+  audio: "ఆడియో",
+  tapToListen: "వినడానికి నొక్కండి",
+  cannotPlay: "ఈ సందేశాన్ని ఇప్పుడు వినిపించలేము.",
+  language: "భాష",
+  recommended: "సూచించినది",
   logOut: "లాగ్ అవుట్",
   photoOf: "ఫోటో",
   closePhoto: "మూసివేయి",
@@ -194,7 +249,7 @@ const te: ParentStrings = {
   pleaseWait: "దయచేసి వేచి ఉండండి",
   stopAndSend: "ఆపి పంపండి",
   typeInstead: "టైప్ చేయండి",
-  typeYourAnswer: "మీ సమాధానం టైప్ చేయండి",
+  typeYourAnswer: "మీ సమాధానం టైప్ చేయండి లేదా Wispr Flow తో మాట్లాడి చెప్పండి",
   send: "పంపండి",
   help: "సహాయం",
   callFamily: "కుటుంబానికి కాల్ చేయండి",
@@ -220,6 +275,17 @@ const te: ParentStrings = {
 };
 
 const ml: ParentStrings = {
+  voice: "ശബ്ദം",
+  switchProfile: "പ്രൊഫൈൽ മാറ്റുക",
+  whoIsUsing: "ഇപ്പോൾ CareCircle ഉപയോഗിക്കുന്നത് ആരാണ്?",
+  goodMorning: "സുപ്രഭാതം",
+  goodAfternoon: "ശുഭ ഉച്ചനേരം",
+  goodEvening: "ശുഭ സായാഹ്നം",
+  audio: "ഓഡിയോ",
+  tapToListen: "കേൾക്കാൻ അമർത്തുക",
+  cannotPlay: "ഈ സന്ദേശം ഇപ്പോൾ കേൾപ്പിക്കാനാവില്ല.",
+  language: "ഭാഷ",
+  recommended: "ശുപാർശ ചെയ്തത്",
   logOut: "ലോഗ് ഔട്ട്",
   photoOf: "ഫോട്ടോ",
   closePhoto: "അടയ്ക്കുക",
@@ -237,7 +303,7 @@ const ml: ParentStrings = {
   pleaseWait: "ദയവായി കാത്തിരിക്കൂ",
   stopAndSend: "നിർത്തി അയയ്ക്കുക",
   typeInstead: "ടൈപ്പ് ചെയ്യുക",
-  typeYourAnswer: "നിങ്ങളുടെ മറുപടി ടൈപ്പ് ചെയ്യുക",
+  typeYourAnswer: "നിങ്ങളുടെ മറുപടി ടൈപ്പ് ചെയ്യുക അല്ലെങ്കിൽ Wispr Flow ഉപയോഗിച്ച് പറയുക",
   send: "അയയ്ക്കുക",
   help: "സഹായം",
   callFamily: "കുടുംബത്തെ വിളിക്കുക",
@@ -263,6 +329,17 @@ const ml: ParentStrings = {
 };
 
 const kn: ParentStrings = {
+  voice: "ಧ್ವನಿ",
+  switchProfile: "ಪ್ರೊಫೈಲ್ ಬದಲಿಸಿ",
+  whoIsUsing: "ಈಗ CareCircle ಬಳಸುತ್ತಿರುವವರು ಯಾರು?",
+  goodMorning: "ಶುಭೋದಯ",
+  goodAfternoon: "ಶುಭ ಮಧ್ಯಾಹ್ನ",
+  goodEvening: "ಶುಭ ಸಂಜೆ",
+  audio: "ಆಡಿಯೋ",
+  tapToListen: "ಕೇಳಲು ಒತ್ತಿ",
+  cannotPlay: "ಈ ಸಂದೇಶವನ್ನು ಈಗ ಕೇಳಿಸಲು ಆಗುತ್ತಿಲ್ಲ.",
+  language: "ಭಾಷೆ",
+  recommended: "ಶಿಫಾರಸು",
   logOut: "ಲಾಗ್ ಔಟ್",
   photoOf: "ಫೋಟೋ",
   closePhoto: "ಮುಚ್ಚಿ",
@@ -280,7 +357,7 @@ const kn: ParentStrings = {
   pleaseWait: "ದಯವಿಟ್ಟು ಕಾಯಿರಿ",
   stopAndSend: "ನಿಲ್ಲಿಸಿ ಕಳುಹಿಸಿ",
   typeInstead: "ಟೈಪ್ ಮಾಡಿ",
-  typeYourAnswer: "ನಿಮ್ಮ ಉತ್ತರವನ್ನು ಟೈಪ್ ಮಾಡಿ",
+  typeYourAnswer: "ನಿಮ್ಮ ಉತ್ತರವನ್ನು ಟೈಪ್ ಮಾಡಿ ಅಥವಾ Wispr Flow ಬಳಸಿ ಮಾತನಾಡಿ ಹೇಳಿ",
   send: "ಕಳುಹಿಸಿ",
   help: "ಸಹಾಯ",
   callFamily: "ಕುಟುಂಬಕ್ಕೆ ಕರೆ ಮಾಡಿ",
@@ -303,6 +380,16 @@ const kn: ParentStrings = {
   conversation: "ಸಂಭಾಷಣೆ",
   botSays: "ಕೇರ್‌ಸರ್ಕಲ್ ಹೇಳುತ್ತದೆ:",
   youSaid: "ನೀವು ಹೇಳಿದ್ದು:",
+};
+
+/** Each language under its own name, so a parent can find theirs whatever the page shows now. */
+export const PARENT_LANGUAGES: Record<ParentLang, string> = {
+  en: "English",
+  hi: "हिन्दी",
+  ta: "தமிழ்",
+  te: "తెలుగు",
+  ml: "മലയാളം",
+  kn: "ಕನ್ನಡ",
 };
 
 const TABLE: Record<ParentLang, ParentStrings> = { en, hi, ta, te, ml, kn };

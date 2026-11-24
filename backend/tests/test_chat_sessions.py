@@ -42,7 +42,7 @@ def test_reopening_starts_a_new_conversation_without_the_old_messages(client, db
     _at(monkeypatch, NOW + timedelta(minutes=5))
     texts = _open(client, headers)
     # A fresh greeting, then the open question (medicines) - not the health question again, no old messages.
-    assert texts == ["Good morning, Amma!", "You have 2 medicine(s) now: Amlodipine, Metformin. Did you take them?"]
+    assert texts == ["Good morning, Amma!", "You have 2 medicine(s) now:\n• Amlodipine\n• Metformin\nDid you take them?"]
 
 
 def test_finished_day_reopens_with_a_greeting_and_anything_else(client, db_session, world, monkeypatch):
@@ -52,7 +52,7 @@ def test_finished_day_reopens_with_a_greeting_and_anything_else(client, db_sessi
     _say(client, headers, "I am fine")
     _say(client, headers, "yes")
     _at(monkeypatch, NOW + timedelta(hours=1))
-    assert _open(client, headers) == ["Good morning, Amma!", "Is there anything else you'd like to tell me?"]
+    assert _open(client, headers) == ["Good morning, Amma!", "Is there anything you would like to tell me or note down?"]
 
 
 def test_answers_continue_in_the_new_conversation(client, db_session, world, monkeypatch):

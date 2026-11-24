@@ -579,6 +579,8 @@ class ChatMessageOut(BaseModel):
     sender: Literal["bot", "parent"]
     text: str
     created_at: datetime
+    # True for "Here is the photo of ...": the chat shows the photos of the medicines it names.
+    photos: bool = False
 
 
 class ReminderDueOut(BaseModel):
@@ -600,10 +602,26 @@ class CheckinOut(BaseModel):
     # The family's phone for the Help button, whether or not anything urgent was reported.
     help_number: str | None
     language: str
+    # The language on the parent's profile, kept when the parent switches the chat to another one.
+    recommended_language: str
     reminders_due: list[ReminderDueOut]
     # Speech for the bot messages this request stored (greeting / re-asked question), else null.
     audio: str | None = None
     audio_type: str | None = None
+
+
+class ParentLanguageIn(BaseModel):
+    language: Literal["en", "ta", "hi", "te", "ml", "kn"]
+
+
+class ParentSpeakIn(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class SpeechOut(BaseModel):
+    # None when speech is unavailable: the page then uses the device's own voice.
+    audio: str | None
+    audio_type: str | None
 
 
 class ParentMedicineOut(BaseModel):
@@ -622,7 +640,19 @@ class ParentTextIn(BaseModel):
     text: str = Field(max_length=2000)
 
 
+class ParentProfileOut(BaseModel):
+    """A profile the signed-in parent can use the chat as."""
+
+    id: str
+    name: str
+    relationship: str | None
+    has_photo: bool
+    photo_url: str | None
+    own: bool
+
+
 class TurnMessageOut(BaseModel):
+    photos: bool = False
     sender: Literal["bot", "parent"]
     text: str
 
@@ -699,6 +729,15 @@ class DashboardActivityOut(BaseModel):
     created_at: datetime
 
 
+class DashboardEmergencyItemOut(BaseModel):
+    id: str
+    care_profile_id: str
+    parent_name: str
+    text: str
+    source: str
+    created_at: datetime
+
+
 class DashboardResponse(BaseModel):
     parents: list[DashboardParentOut]
     selected_care_profile_id: str | None
@@ -710,4 +749,5 @@ class DashboardResponse(BaseModel):
     next_appointment: DashboardAppointmentOut | None
     emergency: DashboardEmergencyOut
     recent_activity: list[DashboardActivityOut]
+    emergencies: list[DashboardEmergencyItemOut]
 

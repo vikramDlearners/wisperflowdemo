@@ -29,7 +29,7 @@ interface Props {
 
 export default function ParentMedicinePhotos({ text, medicines, photoUrls, photoLabel, closeLabel }: Props) {
   const [open, setOpen] = useState<ParentMedicine | null>(null);
-  const shown = medicinesNamedIn(text, medicines).filter((m) => photoUrls[m.id]);
+  const shown = medicinesNamedIn(text, medicines).filter((m) => m.has_image && photoUrls[m.id]);
 
   useEffect(() => {
     if (!open) return;

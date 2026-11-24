@@ -382,6 +382,37 @@ def get_medicine_image(db: Session, actor_id: str, family_id: str, medicine_id: 
     raise NotFound("Medicine image not found")
 
 
+def _recommended_language_name(db: Session, profile: CareProfile) -> str | None:
+    """The language on the parent's profile page. Before the parent has a row of their own it is on the
+    row the family filled in for this care profile."""
+    own = get_care_profile_onboarding(db, profile)
+    if own is not None and own.preferred_language:
+        return own.preferred_language
+    return db.scalar(
+        select(ParentOnboardingProfile.preferred_language)
+        .where(
+            ParentOnboardingProfile.care_profile_id == profile.id,
+            ParentOnboardingProfile.preferred_language.is_not(None),
+        )
+        .order_by(ParentOnboardingProfile.id)
+        .limit(1)
+    )
+
+
+def recommended_language(db: Session, profile: CareProfile) -> str:
+    return language_code(_recommended_language_name(db, profile) or profile.preferred_language)
+
+
+def switch_chat_language(db: Session, profile: CareProfile, code: str) -> None:
+    """The parent picked a chat language. Only the chat changes; the recommended language is kept (and
+    written down first when it was only ever the chat's own setting)."""
+    if _recommended_language_name(db, profile) is None:
+        row = get_care_profile_onboarding(db, profile, create=True)
+        row.preferred_language = language_name(profile.preferred_language)
+    profile.preferred_language = code
+    db.commit()
+
+
 def sync_chatbot_language(db: Session, parent_user_id: str, language: str | None) -> None:
     """The parent profile's language ("Hindi") is the chatbot's language: copy it, as a code, to every care
     profile linked to this parent. The caller commits."""

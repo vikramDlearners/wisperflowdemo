@@ -24,6 +24,7 @@ EXPECTED_KEYS = {
     "medicine_stock",
     "next_appointment",
     "emergency",
+    "emergencies",
     "recent_activity",
 }
 

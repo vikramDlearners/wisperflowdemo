@@ -3,29 +3,75 @@ import { Link, useNavigate } from "react-router-dom";
 import "../parent-chat.css";
 import { ApiError } from "../api";
 import LogoutButton from "../components/LogoutButton";
+import ParentAvatar from "../components/ParentAvatar";
 import ParentMedicinePhotos from "../components/ParentMedicinePhotos";
-import { parentLangCode, parentStrings } from "../parentChatStrings";
+import { PARENT_LANGUAGES, parentLangCode, parentStrings, type ParentLang } from "../parentChatStrings";
 import {
   fetchParentMedicinePhoto,
   getCheckin,
   getParentMedicines,
+  getParentProfiles,
   sendEmergency,
   sendText,
   sendVoice,
+  setParentLanguage,
+  setParentProfile,
+  speakMessage,
   type ChatMessage,
+  type CheckinOut,
   type EmergencyOut,
   type ParentMedicine,
+  type ParentProfile,
   type ReminderDue,
   type TurnOut,
 } from "../parentApi";
 
-// The parent's check-in chat: tap the big mic, speak, and see/hear the reply.
-// Bot bubbles sit on the left, the parent's on the right. Text input is always one tap away.
+// The parent's check-in chat. Bot bubbles sit on the left (tap one to hear it), the parent's on the right.
+// Typing is the default; the Voice switch at the top right adds the big mic. The Audio switch beside Send
+// (on by default) reads each new bot message aloud.
 
 const MAX_RECORD_MS = 15_000;
+const VOICE_KEY = "carecircle.parentVoice";
+const AUDIO_KEY = "carecircle.parentAudio";
+
+function savedAudioOn(): boolean {
+  try {
+    return localStorage.getItem(AUDIO_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+/** The text for a voice to read: bullet points become a plain sentence. */
+function spokenText(message: string): string {
+  return message.replace(/([:?])\n• /g, "$1 ").replace(/\n• /g, ", ").replace(/\n/g, ". ");
+}
+
+/** The device's voice for a language. Browsers load the list late, so wait a moment for it. */
+async function deviceVoice(code: string): Promise<SpeechSynthesisVoice | undefined> {
+  const synth = window.speechSynthesis;
+  if (!synth) return undefined;
+  if (synth.getVoices().length === 0) {
+    await new Promise<void>((resolve) => {
+      synth.addEventListener("voiceschanged", () => resolve(), { once: true });
+      window.setTimeout(resolve, 1500);
+    });
+  }
+  const voices = synth.getVoices().filter((v) => v.lang.toLowerCase().split(/[-_]/)[0] === code);
+  return voices.find((v) => /[-_]in$/i.test(v.lang)) ?? voices[0];
+}
+
+function savedVoiceOn(): boolean {
+  try {
+    return localStorage.getItem(VOICE_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
 
 type LoadState =
   | { kind: "loading" }
+  | { kind: "choose" } // several profiles in this account: ask who is here
   | { kind: "ready" }
   | { kind: "unlinked" }
   | { kind: "forbidden" }
@@ -36,6 +82,7 @@ type Phase = "idle" | "recording" | "sending";
 interface Bubble {
   sender: "bot" | "parent";
   text: string;
+  photos?: boolean;
 }
 
 function voiceSupported(): boolean {
@@ -70,12 +117,30 @@ function reminderKey(r: ReminderDue): string {
   return `${r.medicine_id}|${r.slot}|${r.remind_at}`;
 }
 
+/** The Wispr Flow mark: five bars. */
+function WisprFlowIcon() {
+  return (
+    <svg className="pc-wispr" viewBox="0 0 344 337" width="26" height="26" aria-hidden="true">
+      <path
+        d="M24.5 24.5v288M98.5 176v102M172.5 81v175M246 179v99M319.5 24.5v288"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="49"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export default function ParentChat() {
   const navigate = useNavigate();
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
+  const [profiles, setProfiles] = useState<ParentProfile[]>([]);
+  const [profile, setProfile] = useState<ParentProfile | null>(null);
   const [messages, setMessages] = useState<Bubble[]>([]);
   // "" until the first load: strings then follow the browser locale.
   const [language, setLanguage] = useState("");
+  const [recommended, setRecommended] = useState("");
   const t = parentStrings(language);
   const [callNumber, setCallNumber] = useState<string | null>(null);
   const [helpNumber, setHelpNumber] = useState<string | null>(null);
@@ -84,7 +149,21 @@ export default function ParentChat() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [notice, setNotice] = useState<string | null>(null);
   const [canUseVoice] = useState(voiceSupported);
-  const [showText, setShowText] = useState(() => !voiceSupported());
+  const [voiceOn, setVoiceOn] = useState(savedVoiceOn);
+  // The Audio switch: read each new bot message aloud.
+  const [audioOn, setAudioOn] = useState(savedAudioOn);
+  const audioOnRef = useRef(audioOn);
+  // Speech the browser refused to play before the first tap; that tap plays it.
+  const blockedSpeechRef = useRef<(() => void) | null>(null);
+  // How many messages are already on screen, so a refresh reads only the new ones.
+  const shownCountRef = useRef(0);
+  const useMic = canUseVoice && voiceOn;
+  const [textOpen, setTextOpen] = useState(false);
+  const showText = textOpen || !useMic;
+  // The bubble being read aloud.
+  const [playing, setPlaying] = useState<number | null>(null);
+  // Bumped whenever playback stops, so speech that arrives late is not played.
+  const playSeqRef = useRef(0);
   const [text, setText] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   // Help -> "Is this an emergency?" -> alert the family and show the number to call.
@@ -138,6 +217,11 @@ export default function ParentChat() {
   // ---------- audio playback ----------
 
   const stopAudio = useCallback(() => {
+    playSeqRef.current++;
+    blockedSpeechRef.current = null;
+    setPlaying(null);
+    window.speechSynthesis?.cancel();
+    window.speechSynthesis?.getVoices(); // browsers load the voice list on the first ask
     const current = audioRef.current;
     if (!current) return;
     current.audio.pause();
@@ -146,7 +230,7 @@ export default function ParentChat() {
   }, []);
 
   const playAudio = useCallback(
-    (base64: string | null, type: string | null) => {
+    (base64: string | null, type: string | null, onEnd?: (failed: boolean, blocked?: boolean) => void) => {
       if (!base64) return;
       stopAudio();
       let url: string;
@@ -156,47 +240,168 @@ export default function ParentChat() {
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
         url = URL.createObjectURL(new Blob([bytes], { type: type || "audio/mpeg" }));
       } catch {
+        onEnd?.(true);
         return; // Bad audio: the text is already on screen.
       }
       const audio = new Audio(url);
       const entry = { audio, url };
       audioRef.current = entry;
-      const release = () => {
+      const release = (failed: boolean, blocked = false) => {
         URL.revokeObjectURL(url);
-        if (audioRef.current === entry) audioRef.current = null;
+        if (audioRef.current !== entry) return; // stopped, or replaced by newer audio
+        audioRef.current = null;
+        onEnd?.(failed, blocked);
       };
-      audio.addEventListener("ended", release);
-      audio.addEventListener("error", release);
-      audio.play().catch(() => {
-        // Autoplay blocked or unsupported: the text is already shown.
-        release();
-      });
+      audio.addEventListener("ended", () => release(false));
+      audio.addEventListener("error", () => release(true));
+      // Autoplay blocked or unsupported: the text is already shown.
+      audio.play().catch((err) => release(true, err instanceof DOMException && err.name === "NotAllowedError"));
     },
     [stopAudio],
   );
 
+  /** Reads a message in the device's own voice for the language, if it has one. */
+  const speakOnDevice = useCallback(
+    async (message: string, lang: string, onEnd: (failed: boolean, blocked?: boolean) => void) => {
+      const seq = playSeqRef.current;
+      const voice = await deviceVoice(parentLangCode(lang));
+      if (seq !== playSeqRef.current) return;
+      if (!voice) {
+        onEnd(true);
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(spokenText(message));
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+      utterance.rate = 0.9;
+      utterance.onend = () => {
+        if (seq === playSeqRef.current) onEnd(false);
+      };
+      utterance.onerror = (ev) => {
+        if (seq === playSeqRef.current) onEnd(true, ev.error === "not-allowed");
+      };
+      window.speechSynthesis.speak(utterance);
+    },
+    [],
+  );
+
+  /** Reads new bot messages aloud when the Audio switch is on. The text is on screen, so failures stay quiet. */
+  const speakNew = useCallback(
+    (audio: string | null, type: string | null, texts: string[], lang: string) => {
+      if (!audioOnRef.current || texts.length === 0) return;
+      stopAudio();
+      const start = () => {
+        const onEnd = (_failed: boolean, blocked?: boolean) => {
+          if (blocked && audioOnRef.current) blockedSpeechRef.current = start;
+        };
+        if (audio) playAudio(audio, type, onEnd);
+        else void speakOnDevice(texts.join("\n"), lang, onEnd);
+      };
+      start();
+    },
+    [playAudio, speakOnDevice, stopAudio],
+  );
+
+  useEffect(() => {
+    function onFirstTap(e: MouseEvent) {
+      const start = blockedSpeechRef.current;
+      if (!start) return;
+      blockedSpeechRef.current = null;
+      // A tap on a control does that control's job instead.
+      if (e.target instanceof Element && e.target.closest("button, a, select")) return;
+      start();
+    }
+    document.addEventListener("click", onFirstTap);
+    return () => document.removeEventListener("click", onFirstTap);
+  }, []);
+
+  /** Tap a bot message to hear it; tap it again to stop. */
+  async function handleListen(index: number, message: string) {
+    if (phase !== "idle" || startingRef.current) return;
+    const wasPlaying = playing === index;
+    stopAudio();
+    if (wasPlaying) return;
+    setNotice(null);
+    setPlaying(index);
+    const seq = playSeqRef.current;
+    let speech: { audio: string | null; audio_type: string | null } = { audio: null, audio_type: null };
+    try {
+      speech = await speakMessage(message);
+    } catch (err) {
+      if (!mountedRef.current || handleAuthError(err)) return;
+    }
+    if (!mountedRef.current || seq !== playSeqRef.current) return;
+    const finish = (failed: boolean) => {
+      if (!mountedRef.current) return;
+      setPlaying(null);
+      if (failed) setNotice(t.cannotPlay);
+    };
+    if (speech.audio) {
+      let ended = false;
+      playAudio(speech.audio, speech.audio_type, (failed) => {
+        ended = true;
+        finish(failed);
+      });
+      if (!ended) setPlaying(index); // starting playback cleared the mark
+      return;
+    }
+    // No server voice: use the device's own voice.
+    void speakOnDevice(message, language, finish);
+  }
+
+  function toggleVoice() {
+    if (phase !== "idle" || startingRef.current) return;
+    stopAudio();
+    setNotice(null);
+    const on = !voiceOn;
+    setVoiceOn(on);
+    setTextOpen(false);
+    try {
+      localStorage.setItem(VOICE_KEY, on ? "on" : "off");
+    } catch {
+      // Not remembered; still applies until the page closes.
+    }
+  }
+
+  function toggleAudio() {
+    stopAudio();
+    const on = !audioOn;
+    audioOnRef.current = on;
+    setAudioOn(on);
+    try {
+      localStorage.setItem(AUDIO_KEY, on ? "on" : "off");
+    } catch {
+      // Not remembered; still applies until the page closes.
+    }
+  }
+
   // ---------- medicine photos ----------
-  // Loaded once; a bot message that names a medicine shows its photo underneath.
+  // A bot message that names a medicine shows its photo underneath. Checked again after every bot
+  // reply, so a photo the family has just added appears; each photo is downloaded once.
 
   const [medicines, setMedicines] = useState<ParentMedicine[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const loadedPhotosRef = useRef(new Map<string, string>());
+  const botCount = messages.filter((m) => m.sender === "bot").length;
+  const profileId = profile?.id ?? null;
 
   useEffect(() => {
+    if (!profileId) return;
     let cancelled = false;
-    const created: string[] = [];
     (async () => {
       try {
         const meds = await getParentMedicines();
         if (cancelled) return;
         setMedicines(meds);
-        for (const med of meds.filter((m) => m.has_image)) {
+        for (const med of meds) {
+          if (!med.has_image || loadedPhotosRef.current.has(med.id)) continue;
           const url = await fetchParentMedicinePhoto(med.id);
           if (!url) continue;
           if (cancelled) {
             URL.revokeObjectURL(url);
             return;
           }
-          created.push(url);
+          loadedPhotosRef.current.set(med.id, url);
           setPhotoUrls((prev) => ({ ...prev, [med.id]: url }));
         }
       } catch {
@@ -205,7 +410,14 @@ export default function ParentChat() {
     })();
     return () => {
       cancelled = true;
-      created.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [botCount, profileId]);
+
+  useEffect(() => {
+    const loaded = loadedPhotosRef.current;
+    return () => {
+      loaded.forEach((u) => URL.revokeObjectURL(u));
+      loaded.clear();
     };
   }, []);
 
@@ -233,21 +445,31 @@ export default function ParentChat() {
 
   // ---------- loading the conversation ----------
 
-  const refresh = useCallback(async (newSession = false) => {
-    const seq = ++seqRef.current;
-    try {
-      const data = await getCheckin(newSession);
-      // Ignore a snapshot that a newer turn or refresh has overtaken.
-      if (!mountedRef.current || seq !== seqRef.current) return;
-      setMessages(data.messages.map((m: ChatMessage) => ({ sender: m.sender, text: m.text })));
+  const showCheckin = useCallback(
+    (data: CheckinOut, fresh: boolean) => {
+      setMessages(data.messages.map((m: ChatMessage) => ({ sender: m.sender, text: m.text, photos: m.photos })));
       setLanguage(data.language || "");
+      setRecommended(data.recommended_language || "");
       setCallNumber(data.call_number);
       setHelpNumber(data.help_number);
       setFamilyId(data.can_open_portal && data.family_id ? data.family_id : null);
       setReminders(data.reminders_due);
       setLoad({ kind: "ready" });
-      // Speaks the greeting / newly asked question (null on a plain reload).
-      playAudio(data.audio, data.audio_type);
+      // Reads the greeting or a newly asked question, never what is already on screen.
+      const added = fresh ? data.messages : data.messages.slice(shownCountRef.current);
+      const texts = added.filter((m) => m.sender === "bot").map((m) => m.text);
+      speakNew(data.audio, data.audio_type, texts, data.language || "");
+    },
+    [speakNew],
+  );
+
+  const refresh = useCallback(async (newSession = false) => {
+    const seq = ++seqRef.current;
+    try {
+      const data = await getCheckin(newSession, audioOnRef.current);
+      // Ignore a snapshot that a newer turn or refresh has overtaken.
+      if (!mountedRef.current || seq !== seqRef.current) return;
+      showCheckin(data, newSession);
     } catch (err) {
       if (!mountedRef.current || seq !== seqRef.current) return;
       if (handleAuthError(err)) return;
@@ -255,16 +477,65 @@ export default function ParentChat() {
     } finally {
       if (mountedRef.current) setResponseTick((t) => t + 1);
     }
-  }, [handleAuthError, playAudio]);
+  }, [handleAuthError, showCheckin]);
+
+  /** Starts a new conversation on screen for this profile; everything said is saved to it. */
+  const startWith = useCallback(
+    (p: ParentProfile | null) => {
+      setParentProfile(p?.id ?? null);
+      setProfile(p);
+      setMessages([]);
+      setMedicines([]);
+      setReminders([]);
+      firedRef.current.clear();
+      shownCountRef.current = 0;
+      setCallNumber(null);
+      setHelpNumber(null);
+      setHelpOpen(false);
+      setEmergency("closed");
+      setEmergencyInfo(null);
+      setNotice(null);
+      setText("");
+      setLoad({ kind: "loading" });
+      void refresh(true);
+    },
+    [refresh],
+  );
+
+  const open = useCallback(async () => {
+    const seq = ++seqRef.current;
+    setParentProfile(null);
+    setLoad({ kind: "loading" });
+    try {
+      const list = await getParentProfiles();
+      if (!mountedRef.current || seq !== seqRef.current) return;
+      setProfiles(list);
+      if (list.length > 1) setLoad({ kind: "choose" });
+      else startWith(list[0] ?? null);
+    } catch (err) {
+      if (!mountedRef.current || seq !== seqRef.current) return;
+      if (!handleAuthError(err)) setLoad({ kind: "error" });
+    }
+  }, [handleAuthError, startWith]);
+
+  /** Back to "Who is using CareCircle right now?". */
+  function switchProfile() {
+    if (phase !== "idle" || startingRef.current) return;
+    stopAudio();
+    seqRef.current++; // a refresh still on its way is ignored
+    setProfile(null);
+    setParentProfile(null);
+    setLoad({ kind: "choose" });
+  }
 
   useEffect(() => {
     mountedRef.current = true;
     // Every opening (or reload) of the chat starts a new conversation on screen.
-    void refresh(true);
+    void open();
     return () => {
       mountedRef.current = false;
     };
-  }, [refresh]);
+  }, [open]);
 
   // Clean up the mic, timers and audio when leaving the page.
   useEffect(() => {
@@ -307,6 +578,7 @@ export default function ParentChat() {
 
   // Keep the newest message in view.
   useEffect(() => {
+    shownCountRef.current = messages.length;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     endRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
   }, [messages, phase]);
@@ -315,16 +587,37 @@ export default function ParentChat() {
 
   function applyTurn(turn: TurnOut) {
     seqRef.current++;
-    setMessages((prev) => [...prev, ...turn.messages.map((m) => ({ sender: m.sender, text: m.text }))]);
+    setMessages((prev) => [...prev, ...turn.messages.map((m) => ({ sender: m.sender, text: m.text, photos: m.photos }))]);
     if (turn.language) setLanguage(turn.language);
     if (turn.call_number) setCallNumber(turn.call_number);
     setHelpNumber(turn.help_number);
-    playAudio(turn.audio, turn.audio_type);
+    const texts = turn.messages.filter((m) => m.sender === "bot").map((m) => m.text);
+    speakNew(turn.audio, turn.audio_type, texts, turn.language || language);
     setResponseTick((t) => t + 1);
   }
 
+  async function handleLanguage(code: string) {
+    if (phase !== "idle" || startingRef.current || code === parentLangCode(language)) return;
+    stopAudio();
+    setNotice(null);
+    seqRef.current++;
+    setPhase("sending");
+    try {
+      const data = await setParentLanguage(code, audioOn);
+      if (!mountedRef.current) return;
+      seqRef.current++;
+      showCheckin(data, true);
+      setResponseTick((n) => n + 1);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      if (!handleAuthError(err)) setNotice(t.genericError);
+    } finally {
+      if (mountedRef.current) setPhase("idle");
+    }
+  }
+
   function openTextInput() {
-    setShowText(true);
+    setTextOpen(true);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
 
@@ -339,7 +632,7 @@ export default function ParentChat() {
     setText("");
     setMessages((prev) => [...prev, { sender: "parent", text: value }]);
     try {
-      const turn = await sendText(value);
+      const turn = await sendText(value, audioOn);
       if (!mountedRef.current) return;
       applyTurn(turn);
     } catch (err) {
@@ -471,12 +764,74 @@ export default function ParentChat() {
 
   // ---------- render ----------
 
+  // English and the recommended language. When that is English too, every language is offered.
+  const recommendedCode = parentLangCode(recommended || language);
+  const languageCodes = [
+    ...new Set([
+      recommendedCode,
+      "en",
+      ...(recommendedCode === "en" ? Object.keys(PARENT_LANGUAGES) : [parentLangCode(language)]),
+    ]),
+  ] as ParentLang[];
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? t.goodMorning : hour < 17 ? t.goodAfternoon : t.goodEvening;
+
   const header = (
     <header className="pc-header">
       <h1 className="pc-brand">
         <img src="/carecircle-mark.png" alt="" className="pc-brand-img" width="34" height="34" />
         CareCircle
       </h1>
+      {load.kind === "ready" && (
+        <label className="pc-lang">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path
+              d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.5 3.8 5.6 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.6-3.8-9S9.5 5.5 12 3z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            />
+          </svg>
+          <span className="pc-sr">{t.language}</span>
+          <select
+            value={parentLangCode(language)}
+            disabled={phase !== "idle"}
+            onChange={(e) => void handleLanguage(e.target.value)}
+          >
+            {languageCodes.map((code) => (
+              <option key={code} value={code} lang={code}>
+                {PARENT_LANGUAGES[code]}
+                {code === recommended ? ` (${t.recommended})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {load.kind === "ready" && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={voiceOn}
+          className="pc-voice"
+          onClick={toggleVoice}
+          disabled={phase !== "idle"}
+          title={t.voice}
+        >
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+            <path
+              d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="pc-voice-track" aria-hidden="true" />
+          <span className="pc-sr">{t.voice}</span>
+        </button>
+      )}
       <div className="pc-header-actions">
         {load.kind === "ready" && familyId && (
           <Link to={`/family/${familyId}`} className="pc-portal-btn">
@@ -496,6 +851,17 @@ export default function ParentChat() {
         )}
         <LogoutButton className="pc-logout" label={t.logOut} busyLabel={t.signingOut} />
       </div>
+      {load.kind === "ready" && profile && (
+        <div className="pc-profile">
+          <ParentAvatar profile={profile} />
+          <span className="pc-profile-name">{profile.name}</span>
+          {profiles.length > 1 && (
+            <button type="button" className="pc-switch" onClick={switchProfile} disabled={phase !== "idle"}>
+              {t.switchProfile}
+            </button>
+          )}
+        </div>
+      )}
     </header>
   );
 
@@ -508,6 +874,22 @@ export default function ParentChat() {
             <p className="pc-status" role="status">
               {t.gettingReady}
             </p>
+          )}
+          {load.kind === "choose" && (
+            <div className="pc-card pc-who">
+              <p className="pc-who-greeting">{greeting}</p>
+              <h2>{t.whoIsUsing}</h2>
+              <ul className="pc-who-list">
+                {profiles.map((p) => (
+                  <li key={p.id}>
+                    <button type="button" className="pc-who-btn" onClick={() => startWith(p)}>
+                      <ParentAvatar profile={p} large />
+                      <span className="pc-who-name">{p.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           {load.kind === "unlinked" && (
             <div className="pc-card" role="alert">
@@ -534,10 +916,7 @@ export default function ParentChat() {
               <button
                 type="button"
                 className="pc-primary-btn"
-                onClick={() => {
-                  setLoad({ kind: "loading" });
-                  void refresh(true);
-                }}
+                onClick={() => void open()}
               >
                 {t.tryAgain}
               </button>
@@ -547,6 +926,30 @@ export default function ParentChat() {
       </div>
     );
   }
+
+  const audioSwitch = (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={audioOn}
+      className="pc-voice pc-audio"
+      onClick={toggleAudio}
+      title={t.audio}
+    >
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+        <path
+          d={`M4 9.5v5h3.5l4.5 4v-13l-4.5 4z${audioOn ? "M15.5 9a4 4 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11" : "M16 9.5l5 5M21 9.5l-5 5"}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span className="pc-voice-track" aria-hidden="true" />
+      <span className="pc-sr">{t.audio}</span>
+    </button>
+  );
 
   const statusText = phase === "recording" ? t.listening : phase === "sending" ? t.thinking : "";
 
@@ -627,8 +1030,25 @@ export default function ParentChat() {
           {messages.map((m, i) => (
             <li key={i} className={`pc-bubble pc-bubble--${m.sender}`}>
               <span className="pc-sr">{m.sender === "bot" ? t.botSays : t.youSaid}</span>
-              {m.text}
-              {m.sender === "bot" && (
+              {m.sender === "bot" ? (
+                <button
+                  type="button"
+                  className={`pc-listen${playing === i ? " is-playing" : ""}`}
+                  aria-pressed={playing === i}
+                  title={t.tapToListen}
+                  onClick={() => void handleListen(i, m.text)}
+                >
+                  <span className="pc-listen-text">{m.text}</span>
+                  <span className="pc-play" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                      <path d={playing === i ? "M7 6h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z" : "M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"} />
+                    </svg>
+                  </span>
+                </button>
+              ) : (
+                m.text
+              )}
+              {m.sender === "bot" && m.photos && (
                 <ParentMedicinePhotos
                   text={m.text}
                   medicines={medicines}
@@ -655,7 +1075,7 @@ export default function ParentChat() {
           </p>
         )}
 
-        {canUseVoice && (
+        {useMic && (
           <button
             type="button"
             className={`pc-mic${phase === "recording" ? " is-recording" : ""}`}
@@ -680,7 +1100,7 @@ export default function ParentChat() {
             </svg>
           </button>
         )}
-        {canUseVoice && (
+        {useMic && (
           <p className="pc-mic-hint" aria-hidden="true">
             {phase === "recording" ? t.tapAgainToSend : phase === "sending" ? t.pleaseWait : t.tapToSpeak}
           </p>
@@ -691,26 +1111,38 @@ export default function ParentChat() {
             <label htmlFor="pc-text" className="pc-sr">
               {t.typeYourAnswer}
             </label>
-            <input
-              id="pc-text"
-              ref={inputRef}
-              className="pc-text-input"
-              type="text"
-              lang={parentLangCode(language)}
-              value={text}
-              maxLength={2000}
-              autoComplete="off"
-              placeholder={t.typeYourAnswer}
-              onChange={(e) => setText(e.target.value)}
-            />
+            <div className="pc-text-wrap">
+              <WisprFlowIcon />
+              <input
+                id="pc-text"
+                ref={inputRef}
+                className="pc-text-input"
+                type="text"
+                lang={parentLangCode(language)}
+                value={text}
+                maxLength={2000}
+                autoComplete="off"
+                onChange={(e) => setText(e.target.value)}
+              />
+              {/* Not a placeholder: this line is long and has to wrap on a phone. */}
+              {!text && (
+                <span className="pc-text-hint" aria-hidden="true">
+                  {t.typeYourAnswer}
+                </span>
+              )}
+            </div>
+            {audioSwitch}
             <button type="submit" className="pc-primary-btn" disabled={phase !== "idle" || !text.trim()}>
               {t.send}
             </button>
           </form>
         ) : (
-          <button type="button" className="pc-type-btn" onClick={openTextInput}>
-            {t.typeInstead}
-          </button>
+          <div className="pc-type-row">
+            <button type="button" className="pc-type-btn" onClick={openTextInput}>
+              {t.typeInstead}
+            </button>
+            {audioSwitch}
+          </div>
         )}
       </footer>
     </div>

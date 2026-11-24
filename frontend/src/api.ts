@@ -822,6 +822,21 @@ export interface DashboardResponse {
   next_appointment: DashboardAppointmentOut | null;
   emergency: DashboardEmergencyOut;
   recent_activity: DashboardActivityOut[];
+  /** The whole family's emergencies that nobody has marked as completed yet. */
+  emergencies: DashboardEmergencyItemOut[];
+}
+
+export interface DashboardEmergencyItemOut {
+  id: string;
+  care_profile_id: string;
+  parent_name: string;
+  text: string;
+  source: "chat" | "button";
+  created_at: string;
+}
+
+export function completeEmergency(familyId: string, id: string): Promise<void> {
+  return post<void>(`/api/families/${familyId}/emergencies/${id}/complete`);
 }
 
 export interface DashboardParams {

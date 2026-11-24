@@ -11,6 +11,7 @@ from app.models.care_profile import CareProfile
 from app.models.user import User
 from app.services import doses as doses_svc
 from app.services.adapters.speech import SpeechUnavailable
+from app.services.replies import spoken
 
 from tests.test_checkin_engine import offline, world, no_meal_questions  # noqa: F401
 from tests.test_parent_invites import _auth, email, family_setup  # noqa: F401
@@ -74,7 +75,7 @@ def test_get_checkin_starts_today(client, db_session, world):
     body = r.json()
     assert set(body) == {
         "checkin_id", "family_id", "can_open_portal", "step", "messages", "call_number", "help_number",
-        "language", "reminders_due",
+        "language", "recommended_language", "reminders_due",
         "audio", "audio_type",
     }
     assert body["step"] == "health"
@@ -109,13 +110,14 @@ def test_text_turn_returns_messages_and_audio(client, db_session, world, tts):
     assert body["messages"][0] == {
         "sender": "bot",
         "text": "Thank you for telling me. I've shared it with Carer Doe, Manager and Viewer Doe.",
+        "photos": False,
     }
     assert body["step"] == "medicines"
     assert body["urgent"] is False and body["call_number"] is None
     assert base64.b64decode(body["audio"]) == b"MP3DATA"
     assert body["audio_type"] == "audio/mpeg"
     # calls[0] is the greeting spoken by the GET; the turn's reply is spoken last.
-    assert tts.calls[-1] == (" ".join(m["text"] for m in body["messages"]), "en")
+    assert tts.calls[-1] == (" ".join(spoken(m["text"]) for m in body["messages"]), "en")
 
 
 def test_text_turn_audio_null_when_tts_fails(client, db_session, world, monkeypatch):
@@ -402,3 +404,48 @@ def test_portal_link_only_when_the_parent_can_open_the_overview(client, db_sessi
     db_session.add(RolePermission(role_id=membership.role_id, permission="dashboard.view"))
     db_session.commit()
     assert client.get("/api/parent/checkin", headers=headers).json()["can_open_portal"] is True
+
+
+def test_parent_switches_chat_language_and_keeps_the_recommended_one(client, db_session, world, tts):
+    h = _auth(db_session, world["parent"])
+    world["profile"].preferred_language = "hi"
+    db_session.commit()
+    first = client.get("/api/parent/checkin?new_session=true", headers=h).json()
+    assert (first["language"], first["recommended_language"]) == ("hi", "hi")
+    body = client.put("/api/parent/language", json={"language": "en"}, headers=h).json()
+    assert (body["language"], body["recommended_language"]) == ("en", "hi")
+    assert tts.calls[-1][1] == "en"
+    assert all(m["text"].isascii() for m in body["messages"])
+    assert body["messages"] and body["messages"][0]["text"] != first["messages"][0]["text"]
+    # Saving the profile with the same language keeps the parent's choice; a new one changes the chat.
+    client.patch("/api/auth/me/profile", json={"section": "communication", "preferred_language": "Hindi"}, headers=h)
+    assert client.get("/api/parent/checkin", headers=h).json()["language"] == "en"
+    client.patch("/api/auth/me/profile", json={"section": "communication", "preferred_language": "Tamil"}, headers=h)
+    body = client.get("/api/parent/checkin", headers=h).json()
+    assert (body["language"], body["recommended_language"]) == ("ta", "ta")
+
+
+def test_switching_language_rejects_unknown_codes_and_non_parents(client, db_session, world):
+    h = _auth(db_session, world["parent"])
+    assert client.put("/api/parent/language", json={"language": "fr"}, headers=h).status_code == 422
+    assert client.put("/api/parent/language", json={"language": "en"}).status_code == 401
+
+
+def test_voice_off_makes_no_speech(client, db_session, world, tts):
+    h = _auth(db_session, world["parent"])
+    assert client.get("/api/parent/checkin?new_session=true&speak=false", headers=h).json()["audio"] is None
+    assert client.post("/api/parent/checkin/text?speak=false", json={"text": "I am fine"}, headers=h).json()["audio"] is None
+    assert client.put("/api/parent/language?speak=false", json={"language": "hi"}, headers=h).json()["audio"] is None
+    assert tts.calls == []
+
+
+def test_tapping_a_bot_message_speaks_it(client, db_session, world, tts):
+    h = _auth(db_session, world["parent"])
+    assert client.post("/api/parent/speak", json={"text": "hello"}, headers=h).status_code == 404
+    text = client.get("/api/parent/checkin?speak=false", headers=h).json()["messages"][0]["text"]
+    body = client.post("/api/parent/speak", json={"text": text}, headers=h).json()
+    assert base64.b64decode(body["audio"]) == b"MP3DATA"
+    assert tts.calls == [(text, "en")]
+    assert client.post("/api/parent/speak", json={"text": "Say anything"}, headers=h).status_code == 404
+    tts.fail = True
+    assert client.post("/api/parent/speak", json={"text": text}, headers=h).json() == {"audio": None, "audio_type": None}

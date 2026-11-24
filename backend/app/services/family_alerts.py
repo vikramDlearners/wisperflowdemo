@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 MISSED_AFTER = timedelta(minutes=60)
 SUMMARY_LOCAL_HOUR = 20  # a finished ("done") check-in is summarised from 20:00 local time
 END_OF_DAY = time(23, 30)  # any other day is summarised at the first run on or after 23:30 local time
-DONE_STEP = "done"
+FINISHED_STEPS = ("note", "done")  # only the closing "anything to note down?" may be unanswered
 UPCOMING_STATUSES = ("scheduled", "rescheduled")
 
 
@@ -318,7 +318,7 @@ def _summarise(db: Session, checkin_id: str, now: datetime) -> int:
     if checkin.checkin_date > local.date():
         return 0
     if checkin.checkin_date == local.date():
-        finished = checkin.step == DONE_STEP and local.hour >= SUMMARY_LOCAL_HOUR
+        finished = checkin.step in FINISHED_STEPS and local.hour >= SUMMARY_LOCAL_HOUR
         if not finished and local.time() < END_OF_DAY:
             return 0
     name = profile.display_name

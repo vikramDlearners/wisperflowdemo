@@ -27,7 +27,7 @@ from app.services.permissions import role_name_for
 
 logger = logging.getLogger(__name__)
 
-DONE_STEP = "done"
+FINISHED_STEPS = ("note", "done")  # a quiet chat may end with "anything to note down?" unanswered
 QUIET_AFTER_DONE = timedelta(minutes=1)
 QUIET_ANY_STEP = timedelta(minutes=30)
 LOOK_BACK = timedelta(days=2)
@@ -59,7 +59,7 @@ def _new_messages(db: Session, checkin: HealthCheckin) -> list[ChatMessage]:
 
 def _finished(checkin: HealthCheckin, now: datetime) -> bool:
     quiet = now - (_aware(checkin.updated_at) or now)
-    return (checkin.step == DONE_STEP and quiet >= QUIET_AFTER_DONE) or quiet >= QUIET_ANY_STEP
+    return (checkin.step in FINISHED_STEPS and quiet >= QUIET_AFTER_DONE) or quiet >= QUIET_ANY_STEP
 
 
 def _transcript(messages: list[ChatMessage]) -> str:

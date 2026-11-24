@@ -1,5 +1,6 @@
 """Short, warm chatbot replies in every parent language. A missing translation falls back to English."""
 
+import re
 from string import Formatter
 
 TEMPLATES: dict[str, dict[str, str]] = {
@@ -8,6 +9,7 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "greet_afternoon": "Good afternoon, {name}!",
         "greet_evening": "Good evening, {name}!",
         "ask_health": "How are you feeling today?",
+        "health_ok": "Thank you for telling me.",
         "health_noted": "Thank you for telling me. I've shared it with {family}.",
         "health_urgent": "I've alerted {family} right now. You can also call them using the button below.",
         "health_urgent_no_phone": "I've alerted {family} right now. If you need help immediately, please call someone near you.",
@@ -25,6 +27,8 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "appt_tomorrow": "Tomorrow at {time} you have {reason} with {provider}.",
         "goodbye": "Take care, {name}. Talk to you soon!",
         "anything_else": "Is there anything else you'd like to tell me?",
+        "note_ask": "Is there anything you would like to tell me or note down?",
+        "note_listening": "Please tell me. I am listening.",
         "not_understood": "Sorry, I didn't catch that. Could you say it again?",
         "your_family": "your family",
         "emergency_logged": "I've alerted your family because you pressed the emergency button.",
@@ -53,12 +57,18 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "sched_taken": "Already taken today: {names}.",
         "sched_all_done": "You've taken all your medicines for today.",
         "sched_none": "You don't have any medicines on your list.",
+        "photo_here": "Here is the photo of {names}.",
+        "photo_offer": "Do you want to see the images of the medicines for reference?",
+        "photo_missing": "There is no photo of {names} yet. Please ask your family to add one.",
+        "photo_which": "I'm not sure which medicine you mean. Here are today's medicines.",
+        "confused_help": "Let me help. Here are today's medicines.",
     },
     "ta": {
         "greet_morning": "காலை வணக்கம், {name}!",
         "greet_afternoon": "மதிய வணக்கம், {name}!",
         "greet_evening": "மாலை வணக்கம், {name}!",
         "ask_health": "இன்று உங்கள் உடல்நிலை எப்படி இருக்கிறது?",
+        "health_ok": "சொன்னதற்கு நன்றி.",
         "health_noted": "சொன்னதற்கு நன்றி. இதை {family} அவர்களிடம் பகிர்ந்துவிட்டேன்.",
         "health_urgent": "இப்போதே {family} அவர்களுக்குத் தெரிவித்துவிட்டேன். கீழே உள்ள பொத்தானை அழுத்தி நீங்களும் அவர்களை அழைக்கலாம்.",
         "health_urgent_no_phone": "இப்போதே {family} அவர்களுக்குத் தெரிவித்துவிட்டேன். உடனே உதவி தேவைப்பட்டால், அருகில் உள்ள ஒருவரை அழையுங்கள்.",
@@ -76,6 +86,8 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "appt_tomorrow": "நாளை {time} மணிக்கு {provider} அவர்களிடம் {reason} இருக்கிறது.",
         "goodbye": "உடம்பைப் பார்த்துக்கொள்ளுங்கள், {name}. மீண்டும் பேசுவோம்!",
         "anything_else": "வேறு ஏதாவது என்னிடம் சொல்ல விரும்புகிறீர்களா?",
+        "note_ask": "என்னிடம் ஏதாவது சொல்லவோ குறித்து வைக்கவோ விரும்புகிறீர்களா?",
+        "note_listening": "சொல்லுங்கள், நான் கேட்கிறேன்.",
         "not_understood": "மன்னிக்கவும், சரியாகக் கேட்கவில்லை. மீண்டும் சொல்ல முடியுமா?",
         "your_family": "உங்கள் குடும்பத்தினர்",
         "emergency_logged": "நீங்கள் அவசர பொத்தானை அழுத்தியதால், உங்கள் குடும்பத்தினருக்குத் தெரிவித்துவிட்டேன்.",
@@ -104,12 +116,18 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "sched_taken": "இன்று ஏற்கனவே எடுத்தவை: {names}.",
         "sched_all_done": "இன்றைய மருந்துகள் அனைத்தையும் எடுத்துவிட்டீர்கள்.",
         "sched_none": "உங்கள் பட்டியலில் மருந்துகள் எதுவும் இல்லை.",
+        "photo_here": "இதோ {names} புகைப்படம்.",
+        "photo_offer": "அடையாளத்திற்காக மருந்துகளின் படங்களைப் பார்க்க விரும்புகிறீர்களா?",
+        "photo_missing": "{names} புகைப்படம் இன்னும் இல்லை. உங்கள் குடும்பத்தினரிடம் சேர்க்கச் சொல்லுங்கள்.",
+        "photo_which": "நீங்கள் எந்த மருந்தைச் சொல்கிறீர்கள் என்று தெரியவில்லை. இன்றைய மருந்துகள் இதோ.",
+        "confused_help": "நான் உதவுகிறேன். இன்றைய மருந்துகள் இதோ.",
     },
     "hi": {
         "greet_morning": "सुप्रभात, {name}!",
         "greet_afternoon": "शुभ दोपहर, {name}!",
         "greet_evening": "शुभ संध्या, {name}!",
         "ask_health": "आज आपकी तबीयत कैसी है?",
+        "health_ok": "बताने के लिए धन्यवाद।",
         "health_noted": "बताने के लिए धन्यवाद। मैंने यह {family} को बता दिया है।",
         "health_urgent": "मैंने अभी {family} को सूचना दे दी है। आप नीचे दिए बटन से उन्हें कॉल भी कर सकते हैं।",
         "health_urgent_no_phone": "मैंने अभी {family} को सूचना दे दी है। अगर तुरंत मदद चाहिए, तो कृपया पास के किसी व्यक्ति को बुलाइए।",
@@ -127,6 +145,8 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "appt_tomorrow": "कल {time} बजे {provider} के साथ आपका {reason} है।",
         "goodbye": "अपना ध्यान रखिए, {name}। फिर बात करेंगे!",
         "anything_else": "क्या आप मुझे कुछ और बताना चाहेंगे?",
+        "note_ask": "क्या आप मुझे कुछ बताना या लिखवाना चाहेंगे?",
+        "note_listening": "बताइए, मैं सुन रहा हूँ।",
         "not_understood": "माफ़ कीजिए, ठीक से सुनाई नहीं दिया। क्या आप फिर से कहेंगे?",
         "your_family": "आपके परिवार",
         "emergency_logged": "आपने आपातकालीन बटन दबाया, इसलिए मैंने आपके परिवार को सूचित कर दिया है।",
@@ -155,12 +175,18 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "sched_taken": "आज पहले ही ले चुके हैं: {names}.",
         "sched_all_done": "आपने आज की सभी दवाइयाँ ले ली हैं।",
         "sched_none": "आपकी सूची में कोई दवा नहीं है।",
+        "photo_here": "यह {names} की फोटो है।",
+        "photo_offer": "क्या आप पहचान के लिए दवाओं की तस्वीरें देखना चाहेंगे?",
+        "photo_missing": "{names} की फोटो अभी नहीं है। कृपया अपने परिवार से जोड़ने को कहें।",
+        "photo_which": "मुझे समझ नहीं आया कि आप किस दवा की बात कर रहे हैं। ये आज की दवाएं हैं।",
+        "confused_help": "मैं मदद करता हूँ। ये आज की दवाएं हैं।",
     },
     "te": {
         "greet_morning": "శుభోదయం, {name}!",
         "greet_afternoon": "శుభ మధ్యాహ్నం, {name}!",
         "greet_evening": "శుభ సాయంత్రం, {name}!",
         "ask_health": "ఈరోజు మీ ఆరోగ్యం ఎలా ఉంది?",
+        "health_ok": "చెప్పినందుకు ధన్యవాదాలు.",
         "health_noted": "చెప్పినందుకు ధన్యవాదాలు. ఈ విషయం {family}కి తెలియజేశాను.",
         "health_urgent": "నేను ఇప్పుడే {family}కి తెలియజేశాను. కింద ఉన్న బటన్‌తో మీరు కూడా వారికి కాల్ చేయవచ్చు.",
         "health_urgent_no_phone": "నేను ఇప్పుడే {family}కి తెలియజేశాను. వెంటనే సహాయం కావాలంటే, దగ్గరలో ఉన్న ఎవరినైనా పిలవండి.",
@@ -178,6 +204,8 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "appt_tomorrow": "రేపు {time}కి {provider} దగ్గర మీకు {reason} ఉంది.",
         "goodbye": "జాగ్రత్తగా ఉండండి, {name}. మళ్ళీ మాట్లాడుకుందాం!",
         "anything_else": "ఇంకా ఏమైనా నాతో చెప్పాలనుకుంటున్నారా?",
+        "note_ask": "నాకు ఏదైనా చెప్పాలనుకుంటున్నారా లేదా రాయించాలనుకుంటున్నారా?",
+        "note_listening": "చెప్పండి, నేను వింటున్నాను.",
         "not_understood": "క్షమించండి, నాకు సరిగ్గా వినిపించలేదు. మళ్ళీ చెప్పగలరా?",
         "your_family": "మీ కుటుంబ సభ్యుల",
         "emergency_logged": "మీరు అత్యవసర బటన్ నొక్కారు కాబట్టి, మీ కుటుంబానికి తెలియజేశాను.",
@@ -206,12 +234,18 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "sched_taken": "ఈ రోజు ఇప్పటికే వేసుకున్నవి: {names}.",
         "sched_all_done": "ఈ రోజు మందులన్నీ వేసుకున్నారు.",
         "sched_none": "మీ జాబితాలో మందులు ఏవీ లేవు.",
+        "photo_here": "ఇదిగో {names} ఫోటో.",
+        "photo_offer": "గుర్తు కోసం మందుల ఫోటోలు చూడాలనుకుంటున్నారా?",
+        "photo_missing": "{names} ఫోటో ఇంకా లేదు. దయచేసి మీ కుటుంబ సభ్యులను జోడించమని అడగండి.",
+        "photo_which": "మీరు ఏ మందు గురించి అడుగుతున్నారో నాకు అర్థం కాలేదు. ఇవి ఈ రోజు మందులు.",
+        "confused_help": "నేను సహాయం చేస్తాను. ఇవి ఈ రోజు మందులు.",
     },
     "ml": {
         "greet_morning": "സുപ്രഭാതം, {name}!",
         "greet_afternoon": "ശുഭ മധ്യാഹ്നം, {name}!",
         "greet_evening": "ശുഭ സായാഹ്നം, {name}!",
         "ask_health": "ഇന്ന് നിങ്ങൾക്ക് എങ്ങനെയുണ്ട്?",
+        "health_ok": "പറഞ്ഞതിന് നന്ദി.",
         "health_noted": "പറഞ്ഞതിന് നന്ദി. ഞാൻ ഇത് {family} എന്നിവരെ അറിയിച്ചു.",
         "health_urgent": "ഞാൻ ഇപ്പോൾ തന്നെ {family} എന്നിവരെ അറിയിച്ചു. താഴെയുള്ള ബട്ടൺ അമർത്തി നിങ്ങൾക്കും അവരെ വിളിക്കാം.",
         "health_urgent_no_phone": "ഞാൻ ഇപ്പോൾ തന്നെ {family} എന്നിവരെ അറിയിച്ചു. ഉടനെ സഹായം വേണമെങ്കിൽ, അടുത്തുള്ള ആരെയെങ്കിലും വിളിക്കൂ.",
@@ -229,6 +263,8 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "appt_tomorrow": "നാളെ {time}-ന് {provider}-നൊപ്പം {reason} ഉണ്ട്.",
         "goodbye": "ശ്രദ്ധിക്കണേ, {name}. പിന്നെ സംസാരിക്കാം!",
         "anything_else": "മറ്റെന്തെങ്കിലും എന്നോട് പറയാനുണ്ടോ?",
+        "note_ask": "എന്നോട് എന്തെങ്കിലും പറയാനോ കുറിച്ചുവെക്കാനോ ഉണ്ടോ?",
+        "note_listening": "പറയൂ, ഞാൻ കേൾക്കുന്നുണ്ട്.",
         "not_understood": "ക്ഷമിക്കണം, എനിക്ക് മനസ്സിലായില്ല. ഒന്നുകൂടി പറയാമോ?",
         "your_family": "കുടുംബാംഗങ്ങൾ",
         "emergency_logged": "നിങ്ങൾ അടിയന്തര ബട്ടൺ അമർത്തിയതിനാൽ, നിങ്ങളുടെ കുടുംബത്തെ അറിയിച്ചു.",
@@ -257,12 +293,18 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "sched_taken": "ഇന്ന് ഇതിനകം കഴിച്ചവ: {names}.",
         "sched_all_done": "ഇന്നത്തെ എല്ലാ മരുന്നുകളും കഴിച്ചു.",
         "sched_none": "നിങ്ങളുടെ പട്ടികയിൽ മരുന്നുകളൊന്നുമില്ല.",
+        "photo_here": "ഇതാ {names} ഫോട്ടോ.",
+        "photo_offer": "തിരിച്ചറിയാൻ മരുന്നുകളുടെ ചിത്രങ്ങൾ കാണണോ?",
+        "photo_missing": "{names} ഫോട്ടോ ഇതുവരെ ഇല്ല. ചേർക്കാൻ കുടുംബാംഗങ്ങളോട് പറയൂ.",
+        "photo_which": "ഏത് മരുന്നാണ് നിങ്ങൾ ഉദ്ദേശിച്ചതെന്ന് മനസ്സിലായില്ല. ഇതാ ഇന്നത്തെ മരുന്നുകൾ.",
+        "confused_help": "ഞാൻ സഹായിക്കാം. ഇതാ ഇന്നത്തെ മരുന്നുകൾ.",
     },
     "kn": {
         "greet_morning": "ಶುಭೋದಯ, {name}!",
         "greet_afternoon": "ಶುಭ ಮಧ್ಯಾಹ್ನ, {name}!",
         "greet_evening": "ಶುಭ ಸಂಜೆ, {name}!",
         "ask_health": "ಇಂದು ನಿಮ್ಮ ಆರೋಗ್ಯ ಹೇಗಿದೆ?",
+        "health_ok": "ಹೇಳಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು.",
         "health_noted": "ಹೇಳಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು. ಇದನ್ನು {family} ಅವರಿಗೆ ತಿಳಿಸಿದ್ದೇನೆ.",
         "health_urgent": "ನಾನು ಈಗಲೇ {family} ಅವರಿಗೆ ತಿಳಿಸಿದ್ದೇನೆ. ಕೆಳಗಿನ ಬಟನ್ ಒತ್ತಿ ನೀವೂ ಅವರಿಗೆ ಕರೆ ಮಾಡಬಹುದು.",
         "health_urgent_no_phone": "ನಾನು ಈಗಲೇ {family} ಅವರಿಗೆ ತಿಳಿಸಿದ್ದೇನೆ. ತಕ್ಷಣ ಸಹಾಯ ಬೇಕಿದ್ದರೆ, ಹತ್ತಿರದಲ್ಲಿರುವ ಯಾರನ್ನಾದರೂ ಕರೆಯಿರಿ.",
@@ -280,6 +322,8 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "appt_tomorrow": "ನಾಳೆ {time}ಕ್ಕೆ {provider} ಅವರೊಂದಿಗೆ ನಿಮ್ಮ {reason} ಇದೆ.",
         "goodbye": "ಆರೋಗ್ಯ ಜೋಪಾನ, {name}. ಮತ್ತೆ ಮಾತನಾಡೋಣ!",
         "anything_else": "ಇನ್ನೇನಾದರೂ ನನಗೆ ಹೇಳಲು ಬಯಸುತ್ತೀರಾ?",
+        "note_ask": "ನನಗೆ ಏನಾದರೂ ಹೇಳಲು ಅಥವಾ ಬರೆಸಲು ಬಯಸುತ್ತೀರಾ?",
+        "note_listening": "ಹೇಳಿ, ನಾನು ಕೇಳುತ್ತಿದ್ದೇನೆ.",
         "not_understood": "ಕ್ಷಮಿಸಿ, ನನಗೆ ಸರಿಯಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ಮತ್ತೊಮ್ಮೆ ಹೇಳುತ್ತೀರಾ?",
         "your_family": "ನಿಮ್ಮ ಕುಟುಂಬದವರು",
         "emergency_logged": "ನೀವು ತುರ್ತು ಬಟನ್ ಒತ್ತಿದ್ದರಿಂದ, ನಿಮ್ಮ ಕುಟುಂಬಕ್ಕೆ ತಿಳಿಸಿದ್ದೇನೆ.",
@@ -308,6 +352,11 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "sched_taken": "ಇಂದು ಈಗಾಗಲೇ ತೆಗೆದುಕೊಂಡವು: {names}.",
         "sched_all_done": "ಇಂದಿನ ಎಲ್ಲಾ ಔಷಧಗಳನ್ನು ತೆಗೆದುಕೊಂಡಿದ್ದೀರಿ.",
         "sched_none": "ನಿಮ್ಮ ಪಟ್ಟಿಯಲ್ಲಿ ಯಾವುದೇ ಔಷಧಗಳಿಲ್ಲ.",
+        "photo_here": "ಇದು {names} ಫೋಟೋ.",
+        "photo_offer": "ಗುರುತಿಗಾಗಿ ಔಷಧಗಳ ಚಿತ್ರಗಳನ್ನು ನೋಡಲು ಬಯಸುತ್ತೀರಾ?",
+        "photo_missing": "{names} ಫೋಟೋ ಇನ್ನೂ ಇಲ್ಲ. ದಯವಿಟ್ಟು ಸೇರಿಸಲು ನಿಮ್ಮ ಕುಟುಂಬದವರಿಗೆ ಹೇಳಿ.",
+        "photo_which": "ನೀವು ಯಾವ ಔಷಧದ ಬಗ್ಗೆ ಕೇಳುತ್ತಿದ್ದೀರಿ ಎಂದು ತಿಳಿಯಲಿಲ್ಲ. ಇವು ಇಂದಿನ ಔಷಧಗಳು.",
+        "confused_help": "ನಾನು ಸಹಾಯ ಮಾಡುತ್ತೇನೆ. ಇವು ಇಂದಿನ ಔಷಧಗಳು.",
     },
 }
 
@@ -319,3 +368,32 @@ def _fields(template: str) -> list[str]:
 def reply(key: str, language: str, **values) -> str:
     template = TEMPLATES.get(language, {}).get(key) or TEMPLATES["en"][key]
     return template.format(**values)
+
+
+_NAMES_SLOT = re.compile(r": \{names\}([.।?]) ?")
+
+
+def reply_list(key: str, language: str, names: list[str], **values) -> str:
+    """Like reply(), with the names as bullet points, one per line. A single name stays in the sentence."""
+    names = list(dict.fromkeys(names))  # unique, in order
+    if len(names) < 2:
+        return reply(key, language, names=", ".join(names), **values)
+    template = TEMPLATES.get(language, {}).get(key) or TEMPLATES["en"][key]
+    template = _NAMES_SLOT.sub(lambda m: ("?" if m[1] == "?" else ":") + "\n{names}\n", template).rstrip("\n")
+    return template.format(names="\n".join(f"• {n}" for n in names), **values)
+
+
+def is_photo_offer(text: str) -> bool:
+    return any(text == t["photo_offer"] for t in TEMPLATES.values())
+
+
+def shows_photos(text: str) -> bool:
+    """True for a "Here is the photo of ..." message: the chat shows the photos of the medicines it names."""
+    parts = (t["photo_here"].split("{names}") for t in TEMPLATES.values())
+    return any(text.startswith(before) and after in text for before, after in parts)
+
+
+def spoken(text: str) -> str:
+    """The text for a voice to read: bullet points become a plain sentence."""
+    text = re.sub(r"([:?])\n• ", r"\1 ", text).replace("\n• ", ", ")
+    return text.replace("\n", ". ")
