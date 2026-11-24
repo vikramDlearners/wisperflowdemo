@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { estimateRefill, REFILL_BUFFER_DAYS, toDateInput } from "../refill";
 import TimeSelect from "../components/TimeSelect";
 import { Link, useNavigate } from "react-router-dom";
@@ -70,6 +70,24 @@ const VOICE_EXAMPLE =
   "Pricing is 10 tablets for ₹55.";
 
 type FormMode = "form" | "voice";
+
+// One-tap reminder times.
+const QUICK_TIMES: { label: string; time: string }[] = [
+  { label: "Morning 8 AM", time: "08:00" },
+  { label: "Afternoon 2 PM", time: "14:00" },
+  { label: "Night 8 PM", time: "20:00" },
+];
+const FOOD_OPTIONS = ["before food", "after food", "with food"] as const;
+const FOOD_RE = /,?\s*\b(before|after|with)\s+(food|meals?)\b/i;
+
+/** Put "after food" (etc.) at the end of the schedule text, replacing any food note already there. */
+function withFood(text: string, food: string | null): string {
+  const base = text.replace(FOOD_RE, "").trim().replace(/,$/, "");
+  if (!food) return base;
+  return base ? `${base}, ${food}` : food.charAt(0).toUpperCase() + food.slice(1);
+}
+
+type FieldKey = "profile" | "name" | "price" | "count" | "times";
 
 interface PhotoCardProps {
   title: string;
@@ -240,6 +258,37 @@ export default function MedicineForm({
   const [readResult, setReadResult] = useState<{ source: string; filled: string[] } | null>(null);
   const [nameSuggestions, setNameSuggestions] = useState<string[]>(COMMON_MEDICINES);
   const voice = mode === "voice" && !isEdit;
+  // Fields "Fill the form" just set, highlighted for a few seconds so you can see what changed.
+  const [justFilled, setJustFilled] = useState<string[]>([]);
+  const checkRef = useRef<HTMLElement | null>(null);
+  // A problem shown under the field it is about.
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
+  // While someone types into "Total paid", keep their text; otherwise it shows price × tablets.
+  const [totalTyped, setTotalTyped] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (justFilled.length === 0) return;
+    const t = window.setTimeout(() => setJustFilled([]), 6000);
+    return () => window.clearTimeout(t);
+  }, [justFilled]);
+
+  // The summary message came from field problems: drop it once they are all fixed.
+  const errorFromFields = useRef(false);
+  useEffect(() => {
+    if (errorFromFields.current && Object.keys(fieldErrors).length === 0) {
+      errorFromFields.current = false;
+      setError(null);
+    }
+  }, [fieldErrors]);
+
+  const clearFieldError = (key: FieldKey) =>
+    setFieldErrors((cur) => {
+      if (!cur[key]) return cur;
+      const next = { ...cur };
+      delete next[key];
+      return next;
+    });
+  const filledClass = (key: string) => (justFilled.includes(key) ? " mf-filled" : "");
 
   useEffect(() => {
     let cancelled = false;
@@ -334,7 +383,12 @@ export default function MedicineForm({
         filled.push("tablets bought");
       }
       // The refill date follows the new tablets left and schedule.
-      if (filled.length > 0) setRefillTouched(false);
+      if (filled.length > 0) {
+        setRefillTouched(false);
+        setTotalTyped(null);
+        setJustFilled(filled);
+        window.setTimeout(() => checkRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+      }
       setReadResult({ source: r.source, filled });
     } catch (err) {
       setReadError(errorText(err, "Could not read that. Please try again or fill the fields by hand."));
@@ -349,26 +403,25 @@ export default function MedicineForm({
       setError("Could not load the family's profiles. Please reload the page and try again.");
       return;
     }
-    if (!isEdit && !profileId && profiles.length > 0) {
-      setError("Please select who this medicine is for.");
+    const problems: Partial<Record<FieldKey, string>> = {};
+    if (!isEdit && !profileId && profiles.length > 0) problems.profile = "Choose who this medicine is for.";
+    if (!displayName.trim()) problems.name = "Enter the medicine name.";
+    if (unitPrice.trim() !== "" && !(Number(unitPrice) >= 0)) problems.price = "Price per tablet must be 0 or more.";
+    if (totalCount.trim() !== "" && !(Number.isInteger(Number(totalCount)) && Number(totalCount) >= 0))
+      problems.count = "Tablets bought must be a whole number.";
+    if (times.some((t) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t)))
+      problems.times = "Fill in every reminder time, or remove the empty ones.";
+    const keys = Object.keys(problems) as FieldKey[];
+    if (keys.length > 0) {
+      setFieldErrors(problems);
+      errorFromFields.current = true;
+      setError(keys.length === 1 ? problems[keys[0]]! : `Please fix the ${keys.length} highlighted fields.`);
+      const first = document.getElementById(`mf-${keys[0]}`);
+      first?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (first instanceof HTMLInputElement || first instanceof HTMLSelectElement) first.focus({ preventScroll: true });
       return;
     }
-    if (!displayName.trim()) {
-      setError("Please enter the medicine name.");
-      return;
-    }
-    if (unitPrice.trim() !== "" && !(Number(unitPrice) >= 0)) {
-      setError("Price per tablet must be 0 or more.");
-      return;
-    }
-    if (totalCount.trim() !== "" && !(Number.isInteger(Number(totalCount)) && Number(totalCount) >= 0)) {
-      setError("Tablets bought must be a whole number, 0 or more.");
-      return;
-    }
-    if (times.some((t) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) {
-      setError("Please fill in every reminder time, or remove the empty ones.");
-      return;
-    }
+    setFieldErrors({});
     setSaving(true);
     setError(null);
     try {
@@ -458,7 +511,17 @@ export default function MedicineForm({
       <span>
         Who is this medicine for? {!isEdit && <span className="mf-req">Required</span>}
       </span>
-      <select required disabled={isEdit} value={profileId} onChange={(e) => setProfileId(e.target.value)}>
+      <select
+        id="mf-profile"
+        required
+        disabled={isEdit}
+        value={profileId}
+        aria-invalid={Boolean(fieldErrors.profile)}
+        onChange={(e) => {
+          setProfileId(e.target.value);
+          clearFieldError("profile");
+        }}
+      >
         <option value="" disabled>
           Select a profile
         </option>
@@ -468,6 +531,7 @@ export default function MedicineForm({
           </option>
         ))}
       </select>
+      {fieldErrors.profile && <span className="mf-field-error">{fieldErrors.profile}</span>}
     </label>
   );
 
@@ -477,14 +541,20 @@ export default function MedicineForm({
         Medicine name <span className="mf-req">Required</span>
       </span>
       <input
+        id="mf-name"
         required
         maxLength={255}
         placeholder="Start typing, e.g. Amlodipine 5 mg"
         list="mf-name-suggestions"
         autoComplete="off"
         value={displayName}
-        onChange={(e) => setDisplayName(e.target.value)}
+        aria-invalid={Boolean(fieldErrors.name)}
+        onChange={(e) => {
+          setDisplayName(e.target.value);
+          clearFieldError("name");
+        }}
       />
+      {fieldErrors.name && <span className="mf-field-error">{fieldErrors.name}</span>}
       <datalist id="mf-name-suggestions">
         {nameSuggestions.map((n) => (
           <option key={n} value={n} />
@@ -493,20 +563,39 @@ export default function MedicineForm({
     </label>
   );
 
+  const currentFood = (FOOD_RE.exec(instructions)?.[1] ?? "").toLowerCase();
   const instructionsField = (
-    <label className="pp-field mf-span">
-      Schedule & instructions
+    <div className={`pp-field mf-span${filledClass("schedule")}`}>
+      <label htmlFor="mf-instructions">Schedule & instructions</label>
       <textarea
+        id="mf-instructions"
         rows={3}
         placeholder="e.g. 1 tablet at 9:00 AM and 8:00 PM, after food"
         value={instructions}
         onChange={(e) => setInstructions(e.target.value)}
       />
-    </label>
+      <div className="mf-chips" role="group" aria-label="When to take it">
+        {FOOD_OPTIONS.map((f) => {
+          const on = currentFood === f.split(" ")[0];
+          return (
+            <button
+              key={f}
+              type="button"
+              className={`mf-chip${on ? " is-on" : ""}`}
+              aria-pressed={on}
+              onClick={() => setInstructions(withFood(instructions, on ? null : f))}
+            >
+              {on ? "✓ " : ""}
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 
   const quantityField = !isEdit && (
-    <label className="pp-field">
+    <label className={`pp-field${filledClass("tablets left")}`}>
       Quantity remaining
       <input
         type="number"
@@ -521,7 +610,7 @@ export default function MedicineForm({
   );
 
   const refillField = (
-    <label className="pp-field">
+    <label className={`pp-field${justFilled.length ? " mf-filled" : ""}`}>
       Refill date
       <input
         type="date"
@@ -567,8 +656,12 @@ export default function MedicineForm({
     </label>
   );
 
+  const computedTotal =
+    unitPrice !== "" && totalCount !== "" && Number(unitPrice) >= 0 && Number(totalCount) >= 0
+      ? String(Math.round(Number(unitPrice) * Number(totalCount) * 100) / 100)
+      : "";
   const pricingField = (
-    <div className="mf-span mf-price">
+    <div className={`mf-span mf-price${filledClass("price per tablet") || filledClass("tablets bought")}`}>
       <div className="mf-price-head">
         <strong>Pricing</strong>
         <span className="md-sub">Optional · for tracking medicine costs</span>
@@ -577,14 +670,21 @@ export default function MedicineForm({
         <label className="pp-field">
           Price per tablet (₹)
           <input
+            id="mf-price"
+            aria-invalid={Boolean(fieldErrors.price)}
+            className={filledClass("price per tablet").trim()}
             type="number"
             min={0}
             step="0.01"
             inputMode="decimal"
             placeholder="e.g. 4.50"
             value={unitPrice}
-            onChange={(e) => setUnitPrice(e.target.value)}
+            onChange={(e) => {
+              setUnitPrice(e.target.value);
+              clearFieldError("price");
+            }}
           />
+          {fieldErrors.price && <span className="mf-field-error">{fieldErrors.price}</span>}
         </label>
         <span className="mf-price-x" aria-hidden="true">
           ×
@@ -592,32 +692,53 @@ export default function MedicineForm({
         <label className="pp-field">
           Tablets bought
           <input
+            id="mf-count"
+            aria-invalid={Boolean(fieldErrors.count)}
+            className={filledClass("tablets bought").trim()}
             type="number"
             min={0}
             step={1}
             inputMode="numeric"
             placeholder="e.g. 30"
             value={totalCount}
-            onChange={(e) => setTotalCount(e.target.value)}
+            onChange={(e) => {
+              setTotalCount(e.target.value);
+              clearFieldError("count");
+            }}
           />
+          {fieldErrors.count && <span className="mf-field-error">{fieldErrors.count}</span>}
         </label>
         <span className="mf-price-x" aria-hidden="true">
           =
         </span>
-        <div className="mf-price-total">
-          <span>Total</span>
-          <strong>
-            {unitPrice !== "" && totalCount !== "" && Number(unitPrice) >= 0 && Number(totalCount) >= 0
-              ? formatPrice(Number(unitPrice) * Number(totalCount))
-              : "—"}
-          </strong>
-        </div>
+        <label className="pp-field mf-price-total">
+          Total paid (₹)
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            inputMode="decimal"
+            placeholder="Pack price"
+            value={totalTyped ?? computedTotal}
+            onChange={(e) => {
+              const v = e.target.value;
+              setTotalTyped(v);
+              const count = Number(totalCount);
+              if (v.trim() !== "" && Number(v) >= 0 && count > 0) setUnitPrice((Number(v) / count).toFixed(2));
+            }}
+            onBlur={() => setTotalTyped(null)}
+          />
+        </label>
       </div>
+      <span className="md-sub mf-price-tip">
+        Know the strip price? Enter the tablets bought, then type the price in Total paid and we'll work out the price
+        per tablet.
+      </span>
     </div>
   );
 
   const timesField = (
-    <div className="pp-field mf-span">
+    <div id="mf-times" className={`pp-field mf-span${filledClass("reminder times")}`}>
       <span id="mf-times-label">Reminder times</span>
       <div className="ps-times" role="group" aria-labelledby="mf-times-label">
         {times.map((t, ti) => (
@@ -636,16 +757,32 @@ export default function MedicineForm({
             </button>
           </span>
         ))}
-        <button type="button" className="ps-add-time" onClick={() => setTimes([...times, "12:00"])}>
-          + Add time
+      </div>
+      <div className="mf-chips" role="group" aria-label="Add a reminder time">
+        {QUICK_TIMES.filter((q) => !times.includes(q.time)).map((q) => (
+          <button
+            key={q.time}
+            type="button"
+            className="mf-chip"
+            onClick={() => {
+              setTimes([...times, q.time].sort());
+              clearFieldError("times");
+            }}
+          >
+            + {q.label}
+          </button>
+        ))}
+        <button type="button" className="mf-chip" onClick={() => setTimes([...times, "12:00"])}>
+          + Other time
         </button>
       </div>
+      {fieldErrors.times && <span className="mf-field-error">{fieldErrors.times}</span>}
       {loadedTimes === null && (
         <span role="alert" className="pp-alert">
           Could not load the current reminder times, so they will be left unchanged on save.
         </span>
       )}
-      <span className="md-sub">Optional · leave empty for a once-a-day medicine.</span>
+      <span className="md-sub">Optional · we remind the family at these times.</span>
     </div>
   );
 
@@ -681,6 +818,18 @@ export default function MedicineForm({
       onPick={rxPhoto.pick}
       onClear={rxPhoto.clear}
     />
+  );
+
+  const stepDone = [
+    Boolean((profileId || profiles.length === 0) && displayName.trim()),
+    Boolean(readResult && readResult.filled.length > 0),
+    Boolean(instructions.trim() || times.length > 0),
+    Boolean(medPhoto.file || rxPhoto.file || responsible),
+  ];
+  const stepBadge = (n: number) => (
+    <span className={`mv-step${stepDone[n - 1] ? " is-done" : ""}`} aria-label={stepDone[n - 1] ? `Step ${n}, done` : `Step ${n}`}>
+      {stepDone[n - 1] ? "✓" : n}
+    </span>
   );
 
   const sourceNote = (
@@ -764,7 +913,7 @@ export default function MedicineForm({
             <section className="pp-card">
               <div className="pp-card-head">
                 <h2>
-                  <span className="mv-step">1</span> Which medicine?
+                  {stepBadge(1)} Which medicine?
                 </h2>
               </div>
               <div className="mf-fields">
@@ -776,7 +925,7 @@ export default function MedicineForm({
             <section className="pp-card mv-speak">
               <div className="pp-card-head">
                 <h2>
-                  <span className="mv-step">2</span> Say the details
+                  {stepBadge(2)} Say the details
                 </h2>
                 <span className="md-sub">Schedule · tablets left · price</span>
               </div>
@@ -824,10 +973,10 @@ export default function MedicineForm({
               )}
             </section>
 
-            <section className="pp-card">
+            <section className="pp-card" ref={checkRef}>
               <div className="pp-card-head">
                 <h2>
-                  <span className="mv-step">3</span> Check the details
+                  {stepBadge(3)} Check the details
                 </h2>
                 <span className="md-sub">Change anything that's wrong</span>
               </div>
@@ -843,7 +992,7 @@ export default function MedicineForm({
             <section className="pp-card">
               <div className="pp-card-head">
                 <h2>
-                  <span className="mv-step">4</span> Photos and caregiver
+                  {stepBadge(4)} Photos and caregiver
                 </h2>
               </div>
               <div className="mv-photos">
@@ -919,6 +1068,7 @@ export default function MedicineForm({
 
         {!loading && (
           <div className="mf-bottom-actions">
+            {error && <span className="mf-bar-error">{error}</span>}
             <Link to={listPath} className="pp-btn pp-btn-ghost md-btn-link">
               Cancel
             </Link>
