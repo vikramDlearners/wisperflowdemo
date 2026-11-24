@@ -2,12 +2,21 @@
 venv/
 __pycache__/
 *.pyc
+# Secrets and local settings: never commit (passwords, database URLs, API keys).
 .env
+.env.*
+*.env
+!.env.example
+# Local databases and their journal files.
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
+*.sqlite3
 carecircle_dev.db
 .pytest_cache/
 node_modules/
 .codebenders/
 .vscode/
-dist/
+dist/
