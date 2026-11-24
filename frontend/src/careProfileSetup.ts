@@ -14,6 +14,11 @@ const LANGUAGE_CODES: Record<string, string> = {
   kannada: "kn",
 };
 
+/** "Tamil" -> "ta"; unknown or empty -> "en". */
+export function languageCodeFor(name: string | null | undefined): string {
+  return LANGUAGE_CODES[(name ?? "").trim().toLowerCase()] ?? "en";
+}
+
 export async function createCareProfileFromOnboarding(familyId: string): Promise<CareProfileOut> {
   const parent = await getProfile().catch(() => null);
   const fullName = parent?.parent_full_name?.trim() || "My parent";

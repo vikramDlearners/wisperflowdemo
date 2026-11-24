@@ -2,13 +2,16 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ApiError,
+  careProfiles,
   families,
   getProfile,
+  saveFamilyParentProfileSection,
   saveProfileSection,
   type ParentProfileFields,
   type ParentProfileOut,
   type ProfileSection,
 } from "../api";
+import { languageCodeFor } from "../careProfileSetup";
 import { RELATIONSHIP_OPTIONS } from "../lib/constants";
 
 const TOTAL_STEPS = 5;
@@ -180,6 +183,9 @@ export default function ParentOnboarding() {
   // Shown after Finish: choose to add more users or open the parent profile.
   const [finished, setFinished] = useState(false);
   const [nextError, setNextError] = useState<string | null>(null);
+  // "Add more users": the same questions again, saved to a new parent (care profile) in the family.
+  // careProfileId is created when step 1 is first saved.
+  const [newParent, setNewParent] = useState<{ familyId: string; careProfileId: string | null } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -214,10 +220,15 @@ export default function ParentOnboarding() {
     setSaving(true);
     setError(null);
     try {
-      const saved = await saveProfileSection(
-        STEP_SECTIONS[step - 1],
-        fieldsForStep(step, form),
-      );
+      const section = STEP_SECTIONS[step - 1];
+      const fields = fieldsForStep(step, form);
+      let saved: ParentProfileOut;
+      if (newParent) {
+        const careProfileId = await ensureNewParentProfile(newParent.familyId, newParent.careProfileId);
+        saved = await saveFamilyParentProfileSection(newParent.familyId, careProfileId, section, fields);
+      } else {
+        saved = await saveProfileSection(section, fields);
+      }
       setProfile(saved);
       return saved;
     } catch (err) {
@@ -243,7 +254,24 @@ export default function ParentOnboarding() {
     }
   }
 
-  // "Add more users" goes to the members page of the user's first family.
+  // The new parent's care profile: created on the first save of step 1, and kept in step with the
+  // name, greeting and language if step 1 is saved again.
+  async function ensureNewParentProfile(familyId: string, careProfileId: string | null): Promise<string> {
+    const names = {
+      display_name: form.parent_full_name.trim(),
+      greeting_name: form.preferred_name.trim() || form.parent_full_name.trim().split(/\s+/)[0],
+      preferred_language: languageCodeFor(form.preferred_language),
+    };
+    if (careProfileId) {
+      if (step === 1) await careProfiles.update(familyId, careProfileId, names);
+      return careProfileId;
+    }
+    const created = await careProfiles.create(familyId, names);
+    setNewParent({ familyId, careProfileId: created.id });
+    return created.id;
+  }
+
+  // "Add more users" starts the same questions again, for another parent in the family.
   async function goAddUsers() {
     setNextError(null);
     try {
@@ -252,9 +280,23 @@ export default function ParentOnboarding() {
         setNextError("Create a family first, then you can add more users.");
         return;
       }
-      navigate(`/family/${list[0].id}/members`);
+      setNewParent({ familyId: list[0].id, careProfileId: null });
+      setForm(EMPTY_FORM);
+      setProfile(null);
+      setError(null);
+      setStep(1);
+      setFinished(false);
+      window.scrollTo({ top: 0 });
     } catch (err) {
       setNextError(errorText(err));
+    }
+  }
+
+  function goToProfile() {
+    if (newParent?.careProfileId) {
+      navigate(`/family/${newParent.familyId}/parents/${newParent.careProfileId}`);
+    } else {
+      navigate("/parent-profile");
     }
   }
 
@@ -273,7 +315,7 @@ export default function ParentOnboarding() {
 
   return (
     <main className="parent-layout wizard-page">
-      <h1>Set up parent profile</h1>
+      <h1>{newParent ? "Add another parent" : "Set up parent profile"}</h1>
 
       <div className="wizard-progress-header">
         <span className="muted">
@@ -514,7 +556,7 @@ export default function ParentOnboarding() {
               <button type="button" className="btn btn-secondary" onClick={goAddUsers}>
                 Add more users
               </button>
-              <button type="button" className="btn" autoFocus onClick={() => navigate("/parent-profile")}>
+              <button type="button" className="btn" autoFocus onClick={goToProfile}>
                 Go to parent profile
               </button>
             </div>
