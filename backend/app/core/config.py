@@ -1,10 +1,21 @@
 from typing import Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     database_url: str = "sqlite:///./carecircle_dev.db"
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_psycopg3(cls, value: str) -> str:
+        """The installed PostgreSQL driver is psycopg (v3); psycopg2 is not a dependency. Read postgresql://,
+        postgres:// and postgresql+psycopg2:// URLs with psycopg."""
+        for prefix in ("postgresql+psycopg2://", "postgresql://", "postgres://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg://" + value[len(prefix):]
+        return value
     secret_key: str = "dev-only-change-me"
     login_link_base_url: str = "http://localhost:5173/auth/verify"
     parent_invite_base_url: str = "http://localhost:5173/parent/accept-invite"
