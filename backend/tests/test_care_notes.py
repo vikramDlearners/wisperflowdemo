@@ -95,7 +95,7 @@ def test_note_comes_softly_before_goodbye(db_session, world):
         "Before you go, Amma, a small note from your family: "
         "Please remember to drink about 3 litres of water today. "
         "Did you check your sugar today? Please go easy on sweets.",
-        "Take care, Amma. Talk to you soon!",
+        "Is there anything you would like to tell me or note down?",
     ]
 
 
@@ -109,7 +109,7 @@ def test_note_is_said_once_a_day(db_session, world):
 
 def test_no_note_without_profile_information(db_session, world):
     turn = _finish(db_session, world)
-    assert turn.bot_messages[-1] == "Take care, Amma. Talk to you soon!"
+    assert turn.bot_messages[-1] == "Is there anything you would like to tell me or note down?"
     assert not any("small note" in m for m in turn.bot_messages)
 
 

@@ -217,10 +217,12 @@ def update_profile(
     if profile is None:
         profile = ParentOnboardingProfile(user_id=user.id)
         db.add(profile)
+    old_language = profile.preferred_language
     # Only touch the fields the client actually sent; the section name is not stored.
     for name in body.model_fields_set - {"section"}:
         setattr(profile, name, getattr(body, name))
-    if "preferred_language" in body.model_fields_set:
+    # Saving the form with the same language keeps the one the parent picked in the chat.
+    if "preferred_language" in body.model_fields_set and body.preferred_language != old_language:
         # A parent editing their own profile changes their chatbot's language too.
         care_svc.sync_chatbot_language(db, user.id, body.preferred_language)
     care_svc.sync_own_parent(db, user, profile)

@@ -65,22 +65,106 @@
   color: var(--pc-teal-dark);
 }
 
+.pc-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 1px solid var(--pc-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--pc-teal-dark);
+}
+.pc-lang:focus-within {
+  outline: 3px solid var(--pc-teal);
+  outline-offset: 2px;
+}
+.pc-lang svg { flex: none; }
+.pc-lang select {
+  width: 112px;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
 .pc-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-/* Narrow phones: the brand on its own row, the three buttons on the row below. */
+/* Voice on/off, top right. Off by default: then there is no mic and nothing is spoken unasked. */
+.pc-voice {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--pc-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--pc-muted);
+  cursor: pointer;
+}
+.pc-voice-track {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: #b4c0bd;
+}
+.pc-voice-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+.pc-type-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.pc-audio {
+  flex: none;
+  min-height: 56px;
+}
+.pc-voice[aria-checked="true"] {
+  border-color: var(--pc-teal);
+  color: var(--pc-teal-dark);
+}
+.pc-voice[aria-checked="true"] .pc-voice-track { background: var(--pc-teal); }
+.pc-voice[aria-checked="true"] .pc-voice-track::after { transform: translateX(16px); }
+
+/* Brand, language and voice on the first row, the buttons on the second. */
+.pc-header {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.pc-header .pc-lang { margin-left: auto; }
+.pc-header-actions {
+  width: 100%;
+  justify-content: space-between;
+}
+
 @media (max-width: 480px) {
-  .pc-header {
-    flex-wrap: wrap;
-    row-gap: 6px;
-  }
-  .pc-header-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
+  .pc-lang svg { display: none; }
+  .pc-lang select { width: 78px; }
+  .pc-header .pc-brand { gap: 4px; font-size: 19px; }
+  .pc-header .pc-brand-img { width: 28px; height: 28px; }
+  .pc-voice { gap: 4px; padding: 0 8px; }
   .pc-portal-btn {
     padding: 8px 12px;
     font-size: 17px;
@@ -207,6 +291,42 @@
   border: 1px solid var(--pc-line);
   border-bottom-left-radius: 6px;
 }
+/* The whole bot bubble is the button: tap to hear it. */
+.pc-listen {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% + 32px);
+  margin: -12px -16px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  cursor: pointer;
+}
+.pc-listen-text { flex: 1; min-width: 0; white-space: pre-line; }
+.pc-play {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--pc-teal);
+  color: #fff;
+}
+.pc-listen:hover { background: #f3f8f7; }
+.pc-listen.is-playing {
+  background: var(--pc-teal-soft);
+  box-shadow: inset 0 0 0 2px var(--pc-teal);
+}
+.pc-listen + .pc-med-photos { margin-top: 22px; }
 .pc-bubble--parent {
   align-self: flex-end;
   background: var(--pc-teal);
@@ -335,20 +455,45 @@
   width: 100%;
 }
 
-.pc-text-input {
+.pc-text-wrap {
+  position: relative;
   flex: 1;
   min-width: 0;
-  min-height: 56px;
-  padding: 10px 14px;
+}
+.pc-wispr {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  color: #1a1a1a;
+  pointer-events: none;
+}
+.pc-text-hint {
+  position: absolute;
+  inset: 0 12px 0 54px;
+  display: flex;
+  align-items: center;
+  color: var(--pc-muted);
+  font-size: 17px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+/* On a phone the box takes the whole row; the switch and Send go under it. */
+@media (max-width: 600px) {
+  .pc-text-form { flex-wrap: wrap; justify-content: space-between; }
+  .pc-text-wrap { flex-basis: 100%; }
+}
+.pc-text-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 64px;
+  padding: 10px 14px 10px 54px;
   border: 2px solid var(--pc-line);
   border-radius: 14px;
   background: #fff;
   color: var(--pc-ink);
   font: inherit;
   font-size: 20px;
-}
-.pc-text-input::placeholder {
-  color: var(--pc-muted);
 }
 .pc-text-input:focus {
   border-color: var(--pc-teal);
@@ -539,3 +684,78 @@
   object-fit: contain;
   flex: none;
 }
+
+/* ---------- whose profile ---------- */
+
+.pc-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.pc-profile-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-switch {
+  flex: none;
+  min-height: 48px;
+  margin-left: auto;
+  padding: 8px 16px;
+  border: 2px solid var(--pc-teal);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--pc-teal-dark);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pc-switch:disabled { opacity: 0.5; cursor: default; }
+.pc-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border: 2px solid var(--pc-teal);
+  border-radius: 50%;
+  background: var(--pc-teal-soft);
+  color: var(--pc-teal-dark);
+  font-size: 22px;
+  font-weight: 700;
+}
+.pc-avatar.is-large { width: 72px; height: 72px; font-size: 32px; }
+.pc-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.pc-who-greeting { margin: 0; font-size: 22px; }
+.pc-who-list {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.pc-who-btn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid var(--pc-line);
+  border-radius: 18px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pc-who-btn:hover { border-color: var(--pc-teal); }
+.pc-who-btn:focus-visible, .pc-switch:focus-visible { outline: 3px solid var(--pc-teal); outline-offset: 2px; }
+.pc-who-name { min-width: 0; font-size: 24px; font-weight: 700; overflow-wrap: anywhere; }

@@ -21,7 +21,7 @@ from app.services import checkin as engine
 from app.services import doses as doses_svc
 from app.services import families as families_svc
 from app.services.parent_context import resolve_parent
-from app.services.replies import reply
+from app.services.replies import TEMPLATES, reply, reply_list, shows_photos, spoken
 
 from tests.test_parent_invites import email, family_setup  # noqa: F401
 
@@ -30,7 +30,7 @@ NOW = datetime(2026, 11, 22, 3, 0, tzinfo=timezone.utc)
 SETUP_AT = datetime(2026, 11, 1, tzinfo=timezone.utc)
 # The profile exists from the start of the test day (00:00 IST), so no "No check-in" summary for the day before.
 PROFILE_AT = datetime(2026, 11, 21, 18, 30, tzinfo=timezone.utc)
-MEDS_LIST = "You have 2 medicine(s) now: Amlodipine, Metformin. Did you take them?"
+MEDS_LIST = "You have 2 medicine(s) now:\n• Amlodipine\n• Metformin\nDid you take them?"
 
 
 @pytest.fixture(autouse=True)
@@ -107,6 +107,14 @@ def test_greeting_by_local_hour(db_session, world):
     assert t.bot_messages[0] == "Good evening, Amma!"
 
 
+def test_feeling_well_gets_only_a_thank_you(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = engine.handle_parent_text(db_session, world["ctx"], "I am feeling good.", NOW)
+    assert turn.bot_messages[0] == "Thank you for telling me."
+    # The family still gets the update.
+    assert db_session.execute(select(Notification).where(Notification.type == "checkin.update")).scalars().all()
+
+
 def test_health_answer_saved_and_medicines_listed(db_session, world):
     engine.start_or_resume(db_session, world["ctx"], NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "my knee hurts", NOW)
@@ -173,8 +181,8 @@ def test_full_flow_medicines_then_appointment_then_goodbye(db_session, world):
     assert turn.bot_messages[0] == "Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM."
     assert any(m.startswith("Tomorrow at 10:00 AM you have Doctor follow-up with Dr. Rao") for m in turn.bot_messages)
     assert not any("Cancelled visit" in m for m in turn.bot_messages)
-    assert turn.checkin.step == "done"
-    assert turn.bot_messages[-1] == "Take care, Amma. Talk to you soon!"
+    assert turn.checkin.step == "note"
+    assert turn.bot_messages[-1] == "Is there anything you would like to tell me or note down?"
 
 
 def test_done_step_appends_and_shares(db_session, world):
@@ -184,7 +192,7 @@ def test_done_step_appends_and_shares(db_session, world):
     turn = engine.handle_parent_text(db_session, world["ctx"], "I slept badly", NOW)
     assert turn.checkin.step == "done"
     assert "my knee hurts" in turn.checkin.health_text and "I slept badly" in turn.checkin.health_text
-    assert turn.bot_messages[-1] == "Is there anything else you'd like to tell me?"
+    assert turn.bot_messages[-1] == "Take care, Amma. Talk to you soon!"
     updates = db_session.execute(select(Notification).where(Notification.type == "checkin.update")).scalars().all()
     assert len(updates) == 6
 
@@ -210,7 +218,7 @@ def test_unclear_asks_first_medicine_then_answer_applies_to_it(db_session, world
     turn = engine.handle_parent_text(db_session, world["ctx"], "remind me in 10 minutes", NOW)
     assert turn.bot_messages == ["I'll remind you in 10 minutes.", "Did you take Metformin?"]
     turn = engine.handle_parent_text(db_session, world["ctx"], "yes", NOW)
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
     rows = {d.medicine_id: d for d in db_session.execute(select(MedicineDose)).scalars()}
     assert rows[world["meds"][0].id].remind_at is not None
     assert rows[world["meds"][1].id].status == "taken"
@@ -226,7 +234,7 @@ def test_finished_alerts_family(db_session, world, email):
     rows = db_session.execute(select(Notification).where(Notification.type == "medicine.finished")).scalars().all()
     assert {n.recipient_user_id for n in rows} == world["member_ids"]
     assert len(email.sent) == 3
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
     dose = db_session.execute(select(MedicineDose)).scalar_one()
     assert dose.status == "skipped"
     # Later the same day it is never asked again and the family is not alerted twice.
@@ -244,7 +252,7 @@ def test_no_medicines_due_says_none_and_skips_skipped(db_session, world):
     engine.start_or_resume(db_session, world["ctx"], NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
     assert "You have no medicines due right now." in turn.bot_messages
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
 
 
 def test_resume_in_medicines_step_recomputes(db_session, world):
@@ -257,7 +265,7 @@ def test_resume_in_medicines_step_recomputes(db_session, world):
     assert turn.bot_messages == []
     assert turn.checkin.step == "medicines"
     turn = engine.handle_parent_text(db_session, world["ctx"], "yes", NOW)
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
 
 
 def test_tamil_profile_greets_in_tamil(db_session, world):
@@ -301,7 +309,7 @@ def test_remind_later_dose_asked_again_after_done(db_session, world):
     engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "remind me in 10 minutes", NOW)
     assert turn.bot_messages[0] == "I'll remind you in 10 minutes."
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
     # Before the reminder time nothing is due.
     early = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=5))
     assert early.bot_messages == []
@@ -312,7 +320,7 @@ def test_remind_later_dose_asked_again_after_done(db_session, world):
     again = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=11))
     assert again.bot_messages == []
     turn = engine.handle_parent_text(db_session, world["ctx"], "yes", NOW + timedelta(minutes=12))
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
     assert db_session.execute(select(MedicineDose)).scalar_one().status == "taken"
 
 
@@ -325,7 +333,7 @@ def test_evening_dose_asked_after_morning_done(db_session, world):
     engine.start_or_resume(db_session, world["ctx"], NOW)
     engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "yes took both", NOW)
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
     # 20:30 IST == 15:00 UTC
     turn = engine.start_or_resume(db_session, world["ctx"], datetime(2026, 11, 22, 15, 0, tzinfo=timezone.utc))
     assert turn.bot_messages == ["Did you take Atorvastatin?"]
@@ -356,9 +364,9 @@ def test_not_taken_not_reasked_same_exchange_but_after_30_minutes(db_session, wo
     turn = engine.handle_parent_text(db_session, world["ctx"], "not yet", NOW)
     assert turn.bot_messages[0] == "Okay, I've noted it."
     assert not any("Amlodipine" in m for m in turn.bot_messages)
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
     turn = engine.handle_parent_text(db_session, world["ctx"], "I slept well", NOW + timedelta(minutes=5))
-    assert turn.bot_messages[-1] == "Is there anything else you'd like to tell me?"
+    assert turn.bot_messages[-1] == "Take care, Amma. Talk to you soon!"
     turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=29))
     assert turn.bot_messages == []
     turn = engine.start_or_resume(db_session, world["ctx"], NOW + timedelta(minutes=30))
@@ -414,7 +422,7 @@ def test_urgent_during_medicines_still_records_the_answer(db_session, world):
     assert turn.bot_messages[0] == URGENT_EN
     assert "Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM." in turn.bot_messages
     assert {d.status for d in db_session.execute(select(MedicineDose)).scalars()} == {"taken"}
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
     assert len(_urgent_notes(db_session)) == 3
 
 
@@ -581,7 +589,7 @@ def test_meds_finished_without_family_does_not_claim_telling(db_session, world):
 def test_alone_variants_translated(language):
     from app.services.replies import TEMPLATES
 
-    for key in ("health_noted_alone", "meds_finished_alone"):
+    for key in ("health_ok", "health_noted_alone", "meds_finished_alone"):
         assert key in TEMPLATES[language], (language, key)
 
 
@@ -599,7 +607,7 @@ def test_medicine_question_in_health_step_answers_schedule_and_is_not_shared(db_
         db_session, world["ctx"], "What medicine do I need to take now or in the night?", NOW
     )
     assert turn.bot_messages == [
-        "Now: Amlodipine, Metformin.",
+        "Now:\n• Amlodipine\n• Metformin",
         "At 8:00 PM: Metformin.",
         "How are you feeling today?",
     ]
@@ -614,7 +622,7 @@ def test_medicine_question_in_medicines_step_records_nothing_and_asks_again(db_s
     engine.start_or_resume(db_session, world["ctx"], NOW)
     engine.handle_parent_text(db_session, world["ctx"], "I am fine", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "which tablets should I take?", NOW)
-    assert turn.bot_messages == ["Now: Amlodipine, Metformin.", MEDS_LIST]
+    assert turn.bot_messages == ["Now:\n• Amlodipine\n• Metformin", MEDS_LIST]
     assert turn.checkin.step == "medicines"
     assert db_session.execute(select(MedicineDose)).scalars().all() == []
 
@@ -626,11 +634,11 @@ def test_medicine_question_after_done_lists_taken_and_later(db_session, world):
     engine.handle_parent_text(db_session, world["ctx"], "yes I took both", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "when is my next medicine?", NOW)
     assert turn.bot_messages == [
-        "Already taken today: Amlodipine, Metformin.",
+        "Already taken today:\n• Amlodipine\n• Metformin",
         "At 8:00 PM: Metformin.",
-        "Is there anything else you'd like to tell me?",
+        "Is there anything you would like to tell me or note down?",
     ]
-    assert turn.checkin.step == "done"
+    assert turn.checkin.step == "note"
     assert "next medicine" not in (turn.checkin.health_text or "")
 
 
@@ -639,7 +647,7 @@ def test_medicine_question_with_everything_taken(db_session, world):
     engine.handle_parent_text(db_session, world["ctx"], "I am fine", NOW)
     engine.handle_parent_text(db_session, world["ctx"], "yes I took both", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "what medicines do I have today?", NOW)
-    assert turn.bot_messages[0] == "Already taken today: Amlodipine, Metformin."
+    assert turn.bot_messages[0] == "Already taken today:\n• Amlodipine\n• Metformin"
     assert turn.bot_messages[1] == "You've taken all your medicines for today."
 
 
@@ -657,7 +665,7 @@ def test_medicine_question_shows_instructions(db_session, world):
     db_session.commit()
     engine.start_or_resume(db_session, world["ctx"], NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "which medicine now?", NOW)
-    assert turn.bot_messages[0] == "Now: Amlodipine (After breakfast), Metformin."
+    assert turn.bot_messages[0] == "Now:\n• Amlodipine (After breakfast)\n• Metformin"
 
 
 def test_urgent_question_is_still_urgent(db_session, world):
@@ -675,7 +683,16 @@ def test_schedule_replies_translated(language):
 
 # ---------- "I took my medicine": how many, which dose, and when ----------
 
-HOW_MANY_Q = ("How many of your 2 medicines did you take: Amlodipine, Metformin? "
+def test_medicine_lists_are_bulleted_in_every_language_and_read_as_a_sentence():
+    for lang in TEMPLATES:
+        for key in ("meds_list", "meds_how_many", "meds_which", "sched_now", "sched_at", "sched_anytime", "sched_taken"):
+            text = reply_list(key, lang, ["A", "B"], count=2, time="8:00 PM")
+            assert "\n• A\n• B" in text, (lang, key)
+            assert "•" not in spoken(text) and "\n" not in spoken(text)
+    assert spoken(MEDS_LIST) == "You have 2 medicine(s) now: Amlodipine, Metformin. Did you take them?"
+
+
+HOW_MANY_Q = ("How many of your 2 medicines did you take?\n• Amlodipine\n• Metformin\n"
               "You can say all of them, or tell me which ones.")
 # 19:45 IST == 14:15 UTC
 EVENING_NOW = datetime(2026, 11, 22, 14, 15, tzinfo=timezone.utc)
@@ -710,7 +727,7 @@ def test_how_many_one_then_which(db_session, world):
     _to_medicines_step(db_session, world)
     engine.handle_parent_text(db_session, world["ctx"], "I took my medicine", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "only one", NOW)
-    assert turn.bot_messages == ["Which ones did you take: Amlodipine, Metformin?"]
+    assert turn.bot_messages == ["Which ones did you take?\n• Amlodipine\n• Metformin"]
     turn = engine.handle_parent_text(db_session, world["ctx"], "Metformin", NOW)
     assert turn.bot_messages == ["Okay, I've noted that you took Metformin at 8:30 AM.", "Did you take Amlodipine?"]
     a, m = world["meds"]
@@ -779,3 +796,131 @@ def test_timed_evening_report_leaves_the_missed_morning_dose_alone(db_session, w
     engine.handle_parent_text(db_session, world["ctx"], "I took both", EVENING_NOW)
     # 19:45: the 20:00 doses are current (within an hour); the unanswered 08:00 doses stay unanswered.
     assert _doses(db_session) == {(a.id, "20:00"): "taken", (m.id, "20:00"): "taken"}
+
+
+# ---------- medicine photos ----------
+
+def _ask(db, world, text):
+    return engine.handle_parent_text(db, world["ctx"], text, NOW)
+
+
+def _to_medicines(db, world):
+    engine.start_or_resume(db, world["ctx"], NOW)
+    _ask(db, world, "I am feeling good.")
+
+
+def test_photo_of_a_named_medicine(db_session, world):
+    world["meds"][1].display_name = "Vitamin D3 60000 IU"
+    world["meds"][1].image_data = b"x"
+    world["meds"][1].image_content_type = "image/png"
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    before = len(db_session.execute(select(Notification)).scalars().all())
+    turn = _ask(db_session, world, "Which medicine do I need to take for vitamin D3? Can you send me the photo?")
+    assert turn.bot_messages == [
+        "Here is the photo of Vitamin D3 60000 IU. Now: Vitamin D3 60000 IU.", "How are you feeling today?",
+    ]
+    # Nothing is recorded or shared.
+    assert turn.checkin.step == "health" and not turn.checkin.health_text
+    assert len(db_session.execute(select(Notification)).scalars().all()) == before
+    assert db_session.execute(select(MedicineDose)).scalars().all() == []
+
+
+OFFER = "Do you want to see the images of the medicines for reference?"
+
+
+def _with_offer(db_session, world):
+    world["meds"][0].image_data = b"x"
+    world["meds"][0].image_content_type = "image/png"
+    db_session.commit()
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = _ask(db_session, world, "I am fine")
+    assert turn.bot_messages[-2:] == [MEDS_LIST, OFFER]
+
+
+@pytest.mark.parametrize("answer", ["Yes", "yes please", "show me the images", "Okay", "ஆமா", "हाँ"])
+def test_yes_to_the_images_shows_them_and_records_no_dose(db_session, world, answer):
+    _with_offer(db_session, world)
+    turn = _ask(db_session, world, answer)
+    assert turn.bot_messages == [
+        "Here is the photo of Amlodipine.",
+        "There is no photo of Metformin yet. Please ask your family to add one.",
+        MEDS_LIST,
+    ]
+    assert db_session.execute(select(MedicineDose)).scalars().all() == []
+    # The next "yes" answers "Did you take them?".
+    _ask(db_session, world, "Yes")
+    assert {d.status for d in db_session.execute(select(MedicineDose)).scalars()} == {"taken"}
+
+
+@pytest.mark.parametrize("answer", ["No", "no thanks", "don't show", "വേണ്ട"])
+def test_no_to_the_images_records_nothing_and_asks_about_the_doses(db_session, world, answer):
+    _with_offer(db_session, world)
+    assert _ask(db_session, world, answer).bot_messages == [MEDS_LIST]
+    assert db_session.execute(select(MedicineDose)).scalars().all() == []
+
+
+@pytest.mark.parametrize("answer,status", [("Yes I took them all", "taken"), ("yes i did", "taken"),
+                                           ("I did not take them", "not_taken")])
+def test_a_dose_answer_to_the_images_question_is_recorded(db_session, world, answer, status):
+    _with_offer(db_session, world)
+    _ask(db_session, world, answer)
+    assert {d.status for d in db_session.execute(select(MedicineDose)).scalars()} == {status}
+
+
+def test_images_are_not_offered_without_photos_and_only_once(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    assert _ask(db_session, world, "I am fine").bot_messages[-1] == MEDS_LIST
+    world["meds"][0].image_data = b"x"
+    db_session.commit()
+    assert OFFER in _ask(db_session, world, "Which medicines do I take?").bot_messages
+    assert OFFER not in _ask(db_session, world, "Which medicines do I take?").bot_messages
+
+
+def test_only_photo_here_messages_show_photos():
+    for lang in TEMPLATES:
+        assert shows_photos(reply("photo_here", lang, names="Dolo"))
+        for key in ("photo_missing", "photo_which", "photo_offer", "meds_one", "meds_list"):
+            assert not shows_photos(reply(key, lang, names="Dolo", name="Dolo", count=1)), (lang, key)
+
+
+def test_photo_not_added_yet_is_said_plainly(db_session, world):
+    _to_medicines(db_session, world)
+    turn = _ask(db_session, world, "send me the metformin photo")
+    assert turn.bot_messages[0].startswith("There is no photo of Metformin yet.")
+    assert turn.bot_messages[-1] == MEDS_LIST
+    assert db_session.execute(select(MedicineDose)).scalars().all() == []
+
+
+def test_confused_while_asked_about_medicines_lists_them(db_session, world):
+    _to_medicines(db_session, world)
+    turn = _ask(db_session, world, "I'm confused")
+    assert turn.bot_messages == [
+        "Let me help. Here are today's medicines.", "Now:\n• Amlodipine\n• Metformin", MEDS_LIST,
+    ]
+
+
+def test_photo_of_a_medicine_not_on_the_list_does_not_guess(db_session, world):
+    _to_medicines(db_session, world)
+    turn = _ask(db_session, world, "Show me the photo of vitamin B12")
+    assert turn.bot_messages[0] == "I'm not sure which medicine you mean. Here are today's medicines."
+
+
+def test_confused_as_a_health_answer_reaches_the_family(db_session, world):
+    engine.start_or_resume(db_session, world["ctx"], NOW)
+    turn = _ask(db_session, world, "I'm confused")
+    assert turn.checkin.health_text == "I'm confused"
+    assert "shared" in turn.bot_messages[0]
+    assert turn.bot_messages[-1] == MEDS_LIST
+
+
+def test_urgent_words_win_over_a_photo_request(db_session, world):
+    _to_medicines(db_session, world)
+    turn = _ask(db_session, world, "I fell down, send me the metformin photo")
+    assert turn.urgent
+
+
+@pytest.mark.parametrize("key", ["photo_here", "photo_missing"])
+def test_photo_replies_name_the_medicine_in_every_language(key):
+    for lang in ("en", "ta", "hi", "te", "ml", "kn"):
+        assert "Dolo 650" in reply(key, lang, names="Dolo 650")

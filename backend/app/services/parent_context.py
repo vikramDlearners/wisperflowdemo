@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from app.models.care_profile import CareProfile
 from app.models.membership import FamilyMember
 from app.models.user import User
+from app.services.errors import NotFound
 from app.services.languages import language_code
 from app.services.permissions import require, role_name_for
+from app.services.profile import is_child
 
 PARENT_ROLE = "Parent"
 PARENT_PERMISSION = "voice.use_parent_mode"
@@ -38,26 +40,34 @@ def _context(user: User, profile: CareProfile) -> ParentContext:
     )
 
 
-def resolve_parent(db: Session, user: User) -> ParentContext:
-    profile = db.execute(
-        select(CareProfile)
-        .where(CareProfile.linked_user_id == user.id)
-        .order_by(CareProfile.created_at, CareProfile.id)  # PostgreSQL has no implicit row order
-    ).scalars().first()
-    if profile is not None:
-        require(db, user.id, profile.family_id, PARENT_PERMISSION)
-        return _context(user, profile)
-
+def _parent_membership(db: Session, user: User) -> FamilyMember:
     memberships = db.execute(
         select(FamilyMember).where(
             FamilyMember.user_id == user.id, FamilyMember.status == "active"
         )
     ).scalars().all()
-    parent_families = [m.family_id for m in memberships if role_name_for(db, m) == PARENT_ROLE]
-    if len(parent_families) != 1:
+    found = [m for m in memberships if role_name_for(db, m) == PARENT_ROLE]
+    if len(found) != 1:
         raise ParentNotLinked("Ask your family to link your profile")
-    family_id = parent_families[0]
-    membership = next(m for m in memberships if m.family_id == family_id)
+    return found[0]
+
+
+def _linked_profile(db: Session, user: User) -> CareProfile | None:
+    return db.execute(
+        select(CareProfile)
+        .where(CareProfile.linked_user_id == user.id)
+        .order_by(CareProfile.created_at, CareProfile.id)  # PostgreSQL has no implicit row order
+    ).scalars().first()
+
+
+def _own_context(db: Session, user: User) -> ParentContext:
+    profile = _linked_profile(db, user)
+    if profile is not None:
+        require(db, user.id, profile.family_id, PARENT_PERMISSION)
+        return _context(user, profile)
+
+    membership = _parent_membership(db, user)
+    family_id = membership.family_id
     own = db.execute(
         select(CareProfile).where(
             CareProfile.family_id == family_id,
@@ -81,4 +91,27 @@ def resolve_parent(db: Session, user: User) -> ParentContext:
         raise ParentNotLinked("Ask your family to link your profile")
     profile.linked_user_id = user.id
     db.commit()
+    return _context(user, profile)
+
+
+def family_profiles(db: Session, user: User) -> list[CareProfile]:
+    """The parents' profiles this account can use the chat as: its own family's, without the children."""
+    own = _linked_profile(db, user)
+    family_id = own.family_id if own is not None else _parent_membership(db, user).family_id
+    require(db, user.id, family_id, PARENT_PERMISSION)
+    profiles = db.execute(
+        select(CareProfile)
+        .where(CareProfile.family_id == family_id)
+        .order_by(CareProfile.created_at, CareProfile.id)
+    ).scalars().all()
+    return [p for p in profiles if not is_child(db, p)]
+
+
+def resolve_parent(db: Session, user: User, care_profile_id: str | None = None) -> ParentContext:
+    """Whose conversation this is: the profile chosen on the chat page, else the account's own."""
+    if care_profile_id is None:
+        return _own_context(db, user)
+    profile = next((p for p in family_profiles(db, user) if p.id == care_profile_id), None)
+    if profile is None:
+        raise NotFound("Profile not found")
     return _context(user, profile)

@@ -17,7 +17,7 @@ from tests.test_parent_invites import email, family_setup  # noqa: F401
 # NOW is 08:30 IST (morning). 13:30 IST == 08:00 UTC; 20:30 IST == 15:00 UTC.
 AFTERNOON = datetime(2026, 11, 22, 8, 0, tzinfo=timezone.utc)
 NIGHT = datetime(2026, 11, 22, 15, 0, tzinfo=timezone.utc)
-GOODBYE = "Take care, Amma. Talk to you soon!"
+NOTE_ASK = "Is there anything you would like to tell me or note down?"
 
 
 def _meals(db):
@@ -40,8 +40,8 @@ def test_answer_is_saved_then_the_conversation_finishes(db_session, world):
     _to_meal_question(db_session, world)
     turn = engine.handle_parent_text(db_session, world["ctx"], "Two idlis and coffee", NOW)
     assert turn.bot_messages[0] == "Thank you, I've noted what you ate."
-    assert turn.bot_messages[-1] == GOODBYE
-    assert turn.checkin.step == "done"
+    assert turn.bot_messages[-1] == NOTE_ASK
+    assert turn.checkin.step == "note"
     assert _meals(db_session) == [("breakfast", "Two idlis and coffee")]
     # The meal answer is not a health note and is not shared as one.
     assert "idli" not in (turn.checkin.health_text or "")
@@ -129,4 +129,4 @@ def test_appointment_is_not_repeated_when_the_meal_question_reopens(db_session, 
     engine.start_or_resume(db_session, world["ctx"], NIGHT)
     later = engine.handle_parent_text(db_session, world["ctx"], "Rice and soup", NIGHT)
     assert reminder not in later.bot_messages
-    assert later.bot_messages[-1] == GOODBYE
+    assert later.bot_messages[-1] == NOTE_ASK

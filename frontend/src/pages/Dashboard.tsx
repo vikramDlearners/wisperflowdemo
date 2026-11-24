@@ -8,6 +8,7 @@ import {
   ApiError,
   auth,
   careProfiles,
+  completeEmergency,
   families,
   getFamilyDashboard,
   medicines,
@@ -229,6 +230,7 @@ export default function Dashboard() {
   const [zones, setZones] = useState<Record<string, string>>({});
   const [perms, setPerms] = useState<string[]>([]);
   const [recorded, setRecorded] = useState(0); // bumped after a dose is recorded, to load the page again
+  const [completing, setCompleting] = useState<string | null>(null);
   const [shareNote, setShareNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -312,6 +314,18 @@ export default function Dashboard() {
       )
     : [];
   const medicineNames = new Map(data?.today_schedule.map((i) => [i.medicine_id, i.medicine_name]));
+  async function markCompleted(id: string) {
+    setCompleting(id);
+    try {
+      await completeEmergency(familyId, id);
+      setRecorded((n) => n + 1);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setCompleting(null);
+    }
+  }
+
   const mayRecord = perms.includes("medicine_quantity.update");
   const zone = profileId ? zones[profileId] : undefined;
   const openTasks = (familyTasks ?? []).filter((t) => !isDone(t));
@@ -369,7 +383,7 @@ export default function Dashboard() {
         };
       }),
   ];
-  const onTrack = attention.length === 0;
+  const onTrack = attention.length === 0 && !data?.emergencies.length;
   const appt = data?.next_appointment ?? null;
 
   // Doses whose time has come and that nobody has marked taken or skipped: what "Remind parent" is for.
@@ -481,6 +495,26 @@ export default function Dashboard() {
           </div>
         )}
         {loading && <p role="status" className="pp-muted">Updating…</p>}
+
+        {data.emergencies.map((e) => (
+          <section key={e.id} role="alert" className="db-emergency" aria-label={`Emergency: ${e.parent_name}`}>
+            <div className="db-emergency-body">
+              <h2>🚨 Emergency: {e.parent_name}</h2>
+              <p>{e.source === "button" ? "Pressed the emergency button" : e.text}</p>
+              <p>{formatStamp(e.created_at)}</p>
+            </div>
+            {perms.includes("tasks.update_own") && (
+              <button
+                type="button"
+                className="db-emergency-done"
+                disabled={completing !== null}
+                onClick={() => void markCompleted(e.id)}
+              >
+                {completing === e.id ? "Saving…" : "Mark as completed"}
+              </button>
+            )}
+          </section>
+        ))}
 
         {data.parents.length > 1 && (
           <div className="db-switcher" role="group" aria-label="Choose profile">

@@ -329,3 +329,53 @@ def test_is_dose_report(text, expected):
 def test_bare_yes_in_every_language_is_taken(text):
     answers = understand_medicines(text, [_dose("a")], OFFLINE_RULES)
     assert [(a.medicine_id, a.outcome) for a in answers.items] == [("a", "taken")]
+
+
+@pytest.mark.parametrize("text", [
+    "I am feeling good.", "fine", "I'm very well, thank you", "not bad", "No problems, all good", "main theek hoon",
+    "मैं ठीक हूँ।", "நான் நல்லா இருக்கேன்", "నేను బాగున్నాను", "എനിക്ക് സുഖമാണ്", "ನಾನು ಚೆನ್ನಾಗಿದ್ದೇನೆ",
+])
+def test_all_well(text):
+    assert understanding.is_all_well(text)
+
+
+@pytest.mark.parametrize("text", [
+    "", "thank you", "I am not good", "not feeling well", "fine but my knee hurts", "my knee hurts", "I slept badly",
+    "I feel tired", "मैं ठीक नहीं हूँ", "மூட்டு வலிக்கிறது", "நான் நல்லா இல்லை", "నేను బాగా లేను",
+    "എനിക്ക് സുഖമില്ല", "ನಾನು ಚೆನ್ನಾಗಿಲ್ಲ",
+])
+def test_not_all_well(text):
+    assert not understanding.is_all_well(text)
+
+
+MEDS = {"d3": "Vitamin D3 60000 IU", "b12": "Vitamin B12", "met": "Metformin 500 mg", "xr": "Metformin XR 1000 mg"}
+
+
+@pytest.mark.parametrize("text, ids", [
+    ("Which medicine do I need to take for vitamin D3? Can you send me the photo of that medicine?", ["d3"]),
+    ("vitamin d 3 photo", ["d3"]), ("photo of Vitamin D", ["d3"]), ("வைட்டமின் D3 போட்டோ", ["d3"]),
+    ("show me b12", ["b12"]), ("metformin photo", ["met", "xr"]), ("metformin xr", ["xr"]),
+    ("vitamin c photo", []), ("vitamin b6 photo", []), ("which tablet", []), ("photo of 500 mg", []),
+])
+def test_named_medicines(text, ids):
+    assert understanding.named_medicines(text, MEDS) == ids
+
+
+@pytest.mark.parametrize("text, named, on_step, wanted", [
+    ("Can you send me the photo of that medicine?", False, False, True), ("send me the photo", False, False, True),
+    ("D3 photo", True, False, True), ("photo please?", False, True, True), ("मेरी दवा की फोटो दिखाओ", False, False, True),
+    ("மாத்திரை போட்டோ காட்டு", False, False, True),
+    ("my grandson sent me a photo", False, False, False), ("I took the wrong tablet, send photo", False, True, False),
+    ("yes I took my tablets", False, True, False),
+])
+def test_photo_request(text, named, on_step, wanted):
+    assert understanding.is_photo_request(text, named, on_step) is wanted
+
+
+def test_medicine_confusion():
+    assert understanding.is_medicine_confusion("I'm confused which tablet to take", False)
+    assert understanding.is_medicine_confusion("I don't know which medicine is this", False)
+    assert not understanding.is_medicine_confusion("I took the wrong tablet, I'm confused", False)
+    assert not understanding.is_medicine_confusion("I am confused", False)
+    assert understanding.is_bare_confusion("I'm confused.")
+    assert not understanding.is_bare_confusion("I'm confused and don't know where I am")

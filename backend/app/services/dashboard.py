@@ -17,6 +17,7 @@ from app.models.medicine import Medicine
 from app.models.membership import FamilyMember
 from app.models.parent_onboarding_profile import ParentOnboardingProfile
 from app.services.doses import ANY_SLOT, no_time_slots, today_for
+from app.services.emergencies import open_emergencies
 from app.services.errors import NotFound
 from app.services.profile import age_from, get_care_profile_onboarding
 from app.services.reminders import list_reminder_times
@@ -106,6 +107,7 @@ ACTIVITY_LABELS: dict[str, str] = {
     "care_profile.created": "Care profile added",
     "care_profile.deleted": "Care profile removed",
     "task.notified": "Task notification sent",
+    "emergency.completed": "Emergency marked as completed",
 }
 
 
@@ -147,6 +149,7 @@ def build_family_dashboard(
     parents = [_parent_card(db, p, _day_for(p, on_date, now)) for p in profiles]
     selected = _select_profile(profiles, care_profile_id)
     recent = _recent_activity(db, family_id)
+    emergencies = open_emergencies(db, family_id)
 
     if selected is None:
         return {
@@ -160,6 +163,7 @@ def build_family_dashboard(
             "next_appointment": None,
             "emergency": {"active": False, "last_check_at": None},
             "recent_activity": recent,
+            "emergencies": emergencies,
         }
 
     day = _day_for(selected, on_date, now)
@@ -232,4 +236,5 @@ def build_family_dashboard(
             "last_check_at": max(checks) if checks else None,
         },
         "recent_activity": recent,
+        "emergencies": emergencies,
     }

@@ -26,6 +26,7 @@ from app.schemas import (
 )
 from app.services import care as care_svc
 from app.services import families as svc
+from app.services.emergencies import complete_emergency as complete_emergency_svc
 from app.services.profile import MAX_PHOTO_BYTES, clear_profile_photo, set_profile_photo
 from app.services.dashboard import build_family_dashboard
 from app.services.permissions import get_membership, permission_codes_for
@@ -141,6 +142,14 @@ def family_dashboard(
     return DashboardResponse(**build_family_dashboard(db, family_id, care_profile_id, on_date))
 
 
+@router.post("/{family_id}/emergencies/{emergency_id}/complete", status_code=204)
+def complete_emergency(
+    family_id: str, emergency_id: str, db: Session = DbSession, user: User = CurrentUser,
+) -> Response:
+    complete_emergency_svc(db, user.id, family_id, emergency_id, datetime.now(timezone.utc))
+    return Response(status_code=204)
+
+
 def _parent_in_family(db: Session, family_id: str, care_profile_id: str) -> CareProfile:
     care_profile = db.scalar(
         select(CareProfile).where(CareProfile.id == care_profile_id, CareProfile.family_id == family_id)
@@ -222,11 +231,13 @@ def update_parent_profile(
     if profile is None:
         profile = ParentOnboardingProfile(user_id=care_profile.linked_user_id, care_profile_id=care_profile.id)
         db.add(profile)
+    old_language = profile.preferred_language
     # Only touch the fields the client actually sent; the section name is not stored.
     for name in body.model_fields_set - {"section"}:
         setattr(profile, name, getattr(body, name))
     # Chatbot language is per user account, so it only syncs for a linked parent.
-    if "preferred_language" in body.model_fields_set and care_profile.linked_user_id is not None:
+    # Saving the form with the same language keeps the one the parent picked in the chat.
+    if "preferred_language" in body.model_fields_set and body.preferred_language != old_language and care_profile.linked_user_id is not None:
         care_svc.sync_chatbot_language(db, care_profile.linked_user_id, body.preferred_language)
     profile.updated_at = datetime.now(timezone.utc)
     db.commit()

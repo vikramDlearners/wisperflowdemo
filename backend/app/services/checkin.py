@@ -1,4 +1,4 @@
-"""The parent check-in step machine: greet -> health -> medicines -> appointments -> done.
+"""The parent check-in step machine: greet -> health -> medicines -> meals -> appointments -> note -> done.
 
 One check-in per care profile per local day. Every bot and parent message is stored as a ChatMessage and every
 step change writes a "checkin.updated" activity row. Medicine names only ever come from the due-dose list.
@@ -30,7 +30,9 @@ from app.services.doses import (
     set_remind_later,
     today_for,
 )
+from app.services.emergencies import note_emergency
 from app.services.family_alerts import (
+    EMERGENCY_TEXT,
     notify_family_emergency,
     notify_family_finished,
     notify_family_update,
@@ -41,7 +43,7 @@ from app.services.parent_context import ParentContext
 from app.services.meals import meals_due, save_meals
 from app.services.permissions import role_name_for
 from app.services.profile import get_care_profile_onboarding
-from app.services.replies import reply
+from app.services.replies import is_photo_offer, reply, reply_list
 from app.services.understanding import (
     ALL,
     DEFAULT_DELAY_MINUTES,
@@ -51,12 +53,21 @@ from app.services.understanding import (
     count_scope,
     is_dose_report,
     is_medicine_question,
+    is_all_well,
+    is_bare_confusion,
+    is_bare_no,
+    is_bare_yes,
+    is_medicine_confusion,
+    is_photo_request,
     is_urgent,
+    named_medicines,
+    photo_offer_answer,
     understand_medicines,
 )
 
 GREET, HEALTH, MEDICINES, APPOINTMENTS, DONE = "greet", "health", "medicines", "appointments", "done"
 MEALS_STEP = "meals"
+NOTE = "note"  # "anything to tell me or note down?", the last question
 MANAGER_ROLE = "Family manager"
 UPCOMING_STATUSES = ("scheduled", "rescheduled")
 NOT_TAKEN_REASK = timedelta(minutes=30)
@@ -77,7 +88,7 @@ def _count_state(question: str, from_done: bool) -> str:
 _CLOSINGS = tuple(sorted({
     "ok", "okay", "okey", "k", "fine", "alright", "all right", "good", "bye", "bye bye", "goodbye", "good bye",
     "see you", "good night", "thank you", "thank you so much", "thank you very much", "thanks", "thanks a lot",
-    "thank u", "no", "nope", "nothing", "nothing else", "nothing more", "that's all", "that is all",
+    "thank u", "no", "nope", "nothing", "nothing to tell", "nothing to note", "nothing to say", "nothing else", "nothing more", "that's all", "that is all",
     "நன்றி", "ரொம்ப நன்றி", "மிக்க நன்றி", "சரி", "போதும்", "ஒன்றுமில்லை", "ஒன்னுமில்லை", "இல்லை", "வணக்கம்", "பை",
     "धन्यवाद", "शुक्रिया", "ठीक है", "ठीक", "बस", "अलविदा", "नहीं", "कुछ नहीं", "नमस्ते", "बाय",
     "ధన్యవాదాలు", "ధన్యవాదం", "సరే", "ఏమీ లేదు", "లేదు", "బై",
@@ -109,6 +120,10 @@ def format_time(hhmm: str) -> str:
 
 def _say(ctx: ParentContext, key: str, **values) -> str:
     return reply(key, ctx.language, **values)
+
+
+def _say_list(ctx: ParentContext, key: str, names: list[str], **values) -> str:
+    return reply_list(key, ctx.language, names, **values)
 
 
 def _family_names(db: Session, ctx: ParentContext) -> str:
@@ -236,13 +251,59 @@ def _unique(doses: list[DueDose]) -> list[DueDose]:
     return out
 
 
-def _ask_medicines(ctx: ParentContext, checkin: HealthCheckin, remaining: list[DueDose]) -> str:
+def _with_photo(db: Session, doses: list[DueDose]) -> list[str]:
+    """The names of these medicines that have a photo."""
+    ids = set(db.execute(
+        select(Medicine.id).where(
+            Medicine.id.in_({d.medicine_id for d in doses}), Medicine.image_data.isnot(None)
+        )
+    ).scalars())
+    return [d.name for d in _unique(doses) if d.medicine_id in ids]
+
+
+def _ask_medicines(
+    db: Session, ctx: ParentContext, checkin: HealthCheckin, remaining: list[DueDose]
+) -> list[str]:
+    """"Did you take them?" and, once per conversation, whether to show the images (if there are any)."""
+    question = _medicines_question(ctx, checkin, remaining)
+    said = [m.text for m in session_messages(db, checkin) if m.sender == "bot"]
+    if any(is_photo_offer(t) for t in said) or not _with_photo(db, remaining):
+        return [question]
+    return [question, _say(ctx, "photo_offer")]
+
+
+def _answer_photo_offer(
+    db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime
+) -> list[str] | None:
+    """The reply when the parent's message answers the images question, else None. Then the doses are asked
+    about again: a "yes" to the images must never be recorded as medicines taken."""
+    if checkin.step != MEDICINES:
+        return None
+    bot = [m.text for m in conversation(db, checkin) if m.sender == "bot"]
+    if not bot or not is_photo_offer(bot[-1]):
+        return None
+    answer = photo_offer_answer(text)
+    remaining = _remaining(db, ctx, now)
+    if answer is None or not remaining:
+        return None
+    msgs: list[str] = []
+    if answer:
+        have = _with_photo(db, remaining)
+        missing = [d.name for d in _unique(remaining) if d.name not in have]
+        if have:
+            msgs.append(_say(ctx, "photo_here", names=_names(have)))
+        if missing:
+            msgs.append(_say(ctx, "photo_missing", names=_names(missing)))
+    return msgs + [_medicines_question(ctx, checkin, remaining)]
+
+
+def _medicines_question(ctx: ParentContext, checkin: HealthCheckin, remaining: list[DueDose]) -> str:
     meds = _unique(remaining)
     if len(meds) == 1:
         checkin.pending_medicine_id = meds[0].medicine_id
         return _say(ctx, "meds_one", name=meds[0].name)
     checkin.pending_medicine_id = None
-    return _say(ctx, "meds_list", count=len(meds), names=", ".join(d.name for d in meds))
+    return _say_list(ctx, "meds_list", [d.name for d in meds], count=len(meds))
 
 
 def _continue_medicines(
@@ -251,7 +312,7 @@ def _continue_medicines(
 ) -> list[str]:
     remaining = _remaining(db, ctx, now)
     if remaining:
-        return [_ask_medicines(ctx, checkin, remaining)]
+        return _ask_medicines(db, ctx, checkin, remaining)
     if from_done:
         # A dose the parent reported after the check-in finished: no need to repeat appointments and goodbye.
         checkin.pending_medicine_id = None
@@ -302,10 +363,10 @@ def _handle_medicines(
         if scope is None:
             # "I took my medicine" with several due: ask how many before marking anything.
             checkin.pending_medicine_id = _count_state(HOW_MANY, from_done)
-            return [_say(ctx, "meds_how_many", count=len(asked), names=_names([d.name for d in asked]))]
+            return [_say_list(ctx, "meds_how_many", [d.name for d in asked], count=len(asked))]
         if isinstance(scope, int) and 0 < scope < len(asked):
             checkin.pending_medicine_id = _count_state(WHICH, from_done)
-            return [_say(ctx, "meds_which", names=_names([d.name for d in asked]))]
+            return [_say_list(ctx, "meds_which", [d.name for d in asked])]
         if isinstance(scope, list):
             answers = MedicineAnswers(items=[MedicineAnswer(m, "taken") for m in scope])
     return _apply_answers(db, ctx, checkin, answers, remaining, now, from_done)
@@ -326,7 +387,7 @@ def _handle_count_answer(
         answers = MedicineAnswers(items=[MedicineAnswer(m, "taken") for m in scope])
     elif isinstance(scope, int):
         checkin.pending_medicine_id = _count_state(WHICH, from_done)
-        return [_say(ctx, "meds_which", names=_names([d.name for d in asked]))]
+        return [_say_list(ctx, "meds_which", [d.name for d in asked])]
     else:
         plain = understand_medicines(text, asked, get_intent_mode(db))
         if not plain.unclear and plain.items and all(a.outcome == "not_taken" for a in plain.items):
@@ -334,7 +395,7 @@ def _handle_count_answer(
         else:
             key = "meds_which" if checkin.pending_medicine_id.startswith(WHICH) else "meds_how_many"
             return [_say(ctx, "not_understood"),
-                    _say(ctx, key, count=len(asked), names=_names([d.name for d in asked]))]
+                    _say_list(ctx, key, [d.name for d in asked], count=len(asked))]
     checkin.pending_medicine_id = None
     return _apply_answers(db, ctx, checkin, answers, remaining, now, from_done)
 
@@ -449,12 +510,30 @@ def _appointments_and_done(db: Session, ctx: ParentContext, checkin: HealthCheck
         line = _say(ctx, key, time=format_time(a.start_time), reason=a.reason, provider=a.provider)
         if line not in already_said:  # each appointment is reminded once a day, not on every reopen
             msgs.append(line)
-    _set_step(db, ctx, checkin, DONE, now)
+    _set_step(db, ctx, checkin, NOTE, now)
     note = _care_note(db, ctx, checkin)
     if note:
         msgs.append(note)
-    msgs.append(_say(ctx, "goodbye", name=ctx.greeting_name))
+    msgs.append(_say(ctx, "note_ask"))
     return msgs
+
+
+def _handle_note(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime) -> list[str]:
+    """The answer to the last question: kept with today's health notes, then goodbye (or newly due doses)."""
+    urgent = is_urgent(text)
+    nothing = is_closing(text) or is_bare_no(text)
+    if not urgent and is_bare_yes(text) and not nothing:
+        return [_say(ctx, "note_listening")]
+    msgs: list[str] = []
+    if urgent or not nothing:
+        checkin.health_text = f"{checkin.health_text}\n{text}" if checkin.health_text else text
+        msgs.append(_share_health(db, ctx, checkin, text, now))
+        if is_bare_confusion(text):
+            msgs += [_say(ctx, "confused_help"), *_schedule_answer(db, ctx, now)]
+    if urgent:
+        return msgs + [_say(ctx, "note_ask")]  # no cheerful goodbye in an emergency
+    _set_step(db, ctx, checkin, DONE, now)
+    return msgs + _reopen_or(db, ctx, checkin, now, _say(ctx, "goodbye", name=ctx.greeting_name))
 
 
 def _care_note(db: Session, ctx: ParentContext, checkin: HealthCheckin) -> str | None:
@@ -471,10 +550,11 @@ def _care_note(db: Session, ctx: ParentContext, checkin: HealthCheckin) -> str |
 
 # ---------- health ----------
 
-def _urgent(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str) -> str:
+def _urgent(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime) -> str:
     """Mark the check-in urgent, alert the family once, and say only what is true: who was alerted and
     whether a Call button exists (call_number) at all."""
     checkin.urgent = True
+    note_emergency(db, ctx, checkin, text, "chat", now)
     notify_family_urgent(db, ctx, checkin, text)
     has_family = bool(other_members(db, ctx))
     has_phone = call_number(db, ctx) is not None
@@ -484,10 +564,12 @@ def _urgent(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str) 
     return _say(ctx, "health_urgent_call_only" if has_phone else "health_urgent_alone")
 
 
-def _share_health(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str) -> str:
+def _share_health(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime) -> str:
     if is_urgent(text):
-        return _urgent(db, ctx, checkin, text)
+        return _urgent(db, ctx, checkin, text, now)
     notify_family_update(db, ctx, checkin)
+    if is_all_well(text):
+        return _say(ctx, "health_ok")  # nothing the family needs to act on, so no "I've shared it"
     if not other_members(db, ctx):
         return _say(ctx, "health_noted_alone")  # nobody to share it with: do not claim it was shared
     return _say(ctx, "health_noted", family=_family_names(db, ctx))
@@ -519,9 +601,16 @@ def _with_instructions(name: str, med: Medicine | None) -> str:
     return f"{name} ({text})"
 
 
-def _schedule_answer(db: Session, ctx: ParentContext, now: datetime) -> list[str]:
-    """Today's medicines, from the database only: taken, due now, later at a time, or any time today."""
+def _schedule_answer(
+    db: Session, ctx: ParentContext, now: datetime, only: list[str] | None = None
+) -> list[str]:
+    """Today's medicines, from the database only: taken, due now, later at a time, or any time today.
+    `only` limits the answer to these medicine ids (nothing is said when none of them is due today)."""
     doses = doses_today(db, ctx.profile, now)
+    if only is not None:
+        doses = [d for d in doses if d.medicine_id in only]
+        if not doses:
+            return []
     if not doses:
         return [_say(ctx, "sched_none")]
     meds = {m.id: m for m in db.execute(
@@ -546,15 +635,63 @@ def _schedule_answer(db: Session, ctx: ParentContext, now: datetime) -> list[str
             later.setdefault(d.slot, []).append(label)
     msgs = []
     if taken:
-        msgs.append(_say(ctx, "sched_taken", names=_names(taken)))
+        msgs.append(_say_list(ctx, "sched_taken", taken))
     if due_now:
-        msgs.append(_say(ctx, "sched_now", names=_names(due_now)))
+        msgs.append(_say_list(ctx, "sched_now", due_now))
     for slot in sorted(later):
-        msgs.append(_say(ctx, "sched_at", time=format_time(slot), names=_names(later[slot])))
+        msgs.append(_say_list(ctx, "sched_at", later[slot], time=format_time(slot)))
     if anytime:
-        msgs.append(_say(ctx, "sched_anytime", names=_names(anytime)))
-    if not (due_now or later or anytime):
+        msgs.append(_say_list(ctx, "sched_anytime", anytime))
+    if only is None and not (due_now or later or anytime):
         msgs.append(_say(ctx, "sched_all_done"))
+    return msgs
+
+
+def _medicine_help(
+    db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime
+) -> list[str] | None:
+    """The answer to "send me the photo of my vitamin D3" or "I'm confused which tablet to take", or None when the
+    text asks for neither. The chat shows the photos of the medicines a "photo_here" message names."""
+    rows = db.execute(
+        select(Medicine.id, Medicine.display_name, Medicine.image_data.isnot(None))
+        .where(Medicine.care_profile_id == ctx.profile.id, Medicine.active.is_(True))
+        .order_by(Medicine.created_at, Medicine.id)
+    ).all()
+    named = named_medicines(text, {mid: name for mid, name, _ in rows})
+    wants_photo = is_photo_request(text, bool(named), checkin.step == MEDICINES)
+    confused = is_medicine_confusion(text, bool(named)) or (
+        # "I'm confused" as the answer to "How are you feeling?" is health news, which the family must hear.
+        checkin.step in (MEDICINES, MEALS_STEP, APPOINTMENTS) and is_bare_confusion(text)
+    )
+    if not (wants_photo or confused):
+        return None
+    if not rows:
+        return [_say(ctx, "sched_none")]
+    if named:
+        have = [name for mid, name, photo in rows if mid in named and photo]
+        missing = [name for mid, name, photo in rows if mid in named and not photo]
+        parts = []
+        if have:
+            parts.append(_say(ctx, "photo_here", names=_names(have)))
+        if missing:
+            parts.append(_say(ctx, "photo_missing", names=_names(missing)))
+        # One message, so each photo appears once.
+        schedule = _schedule_answer(db, ctx, now, only=named)
+        if any("\n" in s for s in schedule):  # a bulleted list starts on its own line
+            return ["\n".join([" ".join(parts), *schedule])]
+        return [" ".join(parts + schedule)]
+    intro = _say(ctx, "photo_which" if wants_photo else "confused_help")
+    schedule = _schedule_answer(db, ctx, now)
+    due = {d.medicine_id for d in doses_today(db, ctx.profile, now)}
+    if not due:
+        return schedule
+    missing = [name for mid, name, photo in rows if mid in due and not photo]
+    msgs = [intro, *schedule]
+    have = [name for mid, name, photo in rows if mid in due and photo]
+    if have:
+        msgs.append(_say(ctx, "photo_here", names=_names(have)))
+    if wants_photo and missing:
+        msgs.append(_say(ctx, "photo_missing", names=_names(missing)))
     return msgs
 
 
@@ -565,10 +702,12 @@ def _after_question(db: Session, ctx: ParentContext, checkin: HealthCheckin, now
     if checkin.step == MEDICINES:
         remaining = _remaining(db, ctx, now)
         if remaining:
-            return [_ask_medicines(ctx, checkin, remaining)]
+            return _ask_medicines(db, ctx, checkin, remaining)
         return _meals_or_done(db, ctx, checkin, now)
     if checkin.step == MEALS_STEP:
         return _meals_or_done(db, ctx, checkin, now)
+    if checkin.step == NOTE:
+        return [_say(ctx, "note_ask")]
     return _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
 
 
@@ -587,7 +726,7 @@ def _reopen_or(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: dat
     remaining = _remaining(db, ctx, now)
     if remaining:
         _set_step(db, ctx, checkin, MEDICINES, now)
-        return [_ask_medicines(ctx, checkin, remaining)]
+        return _ask_medicines(db, ctx, checkin, remaining)
     due = meals_due(db, ctx.profile, now)
     if due:
         _set_step(db, ctx, checkin, MEALS_STEP, now)
@@ -618,16 +757,16 @@ def _resume(
     db: Session, ctx: ParentContext, checkin: HealthCheckin, history: list[ChatMessage], now: datetime
 ) -> Turn:
     msgs: list[str] = []
-    if checkin.step in (DONE, MEDICINES):
+    if checkin.step in (NOTE, DONE, MEDICINES):
         remaining = _remaining(db, ctx, now)
-        if checkin.step == DONE and remaining:
+        if checkin.step in (NOTE, DONE) and remaining:
             _set_step(db, ctx, checkin, MEDICINES, now)
-            msgs = [_ask_medicines(ctx, checkin, remaining)]
+            msgs = _ask_medicines(db, ctx, checkin, remaining)
         elif checkin.step == MEDICINES and remaining:
             asked = _bot_texts_since_parent(history)
             if any(not any(d.name in t for t in asked) for d in _unique(remaining)):
-                msgs = [_ask_medicines(ctx, checkin, remaining)]
-    if not msgs and checkin.step in (DONE, MEALS_STEP):
+                msgs = _ask_medicines(db, ctx, checkin, remaining)
+    if not msgs and checkin.step in (NOTE, DONE, MEALS_STEP):
         due = meals_due(db, ctx.profile, now)
         if due:
             question = _meal_question(ctx, due)
@@ -649,6 +788,11 @@ def _next_seq(db: Session, checkin: HealthCheckin) -> int:
     db.flush()
     last = db.execute(select(func.max(ChatMessage.seq)).where(ChatMessage.checkin_id == checkin.id)).scalar()
     return (last or 0) + 1
+
+
+def current_checkin(db: Session, ctx: ParentContext, now: datetime) -> HealthCheckin | None:
+    """Today's check-in, or None when the chat has not been opened today."""
+    return _today(db, ctx, now)
 
 
 def session_messages(db: Session, checkin: HealthCheckin) -> list[ChatMessage]:
@@ -678,14 +822,14 @@ def _opening_questions(db: Session, ctx: ParentContext, checkin: HealthCheckin, 
         return _meals_or_done(db, ctx, checkin, now)
     if checkin.step == APPOINTMENTS:
         return _appointments_and_done(db, ctx, checkin, now)
-    return _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
+    return _reopen_or(db, ctx, checkin, now, _say(ctx, "note_ask" if checkin.step == NOTE else "anything_else"))
 
 
-def start_new_session(db: Session, ctx: ParentContext, now: datetime) -> Turn:
+def start_new_session(db: Session, ctx: ParentContext, now: datetime, force: bool = False) -> Turn:
     """The parent opened the chat: start a new conversation on screen with a greeting and today's open question.
-    Answers already saved today are kept, so nothing answered is asked again."""
+    Answers already saved today are kept, so nothing answered is asked again. force: also when the chat was opened a moment ago (the language changed)."""
     checkin = _get_or_create(db, ctx, now)
-    if _just_opened(db, checkin, now):
+    if not force and _just_opened(db, checkin, now):
         number = call_number(db, ctx) if checkin.urgent else None
         return Turn(checkin=checkin, bot_messages=[], call_number=number, urgent=bool(checkin.urgent))
     checkin.pending_medicine_id = None  # questions from an earlier opening are asked afresh below
@@ -718,7 +862,7 @@ def start_or_resume(db: Session, ctx: ParentContext, now: datetime) -> Turn:
     elif checkin.step == APPOINTMENTS:
         msgs += _appointments_and_done(db, ctx, checkin, now)
     else:
-        msgs += _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
+        msgs += _reopen_or(db, ctx, checkin, now, _say(ctx, "note_ask" if checkin.step == NOTE else "anything_else"))
     return _turn(db, ctx, checkin, msgs)
 
 
@@ -732,13 +876,22 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
     _store(db, ctx, checkin, "parent", [text])
     checkin.updated_at = now
 
+    if not is_urgent(text):
+        # "Send me the photo of my vitamin D3": show it; record and share nothing.
+        offer_reply = _answer_photo_offer(db, ctx, checkin, text, now)
+        if offer_reply is not None:
+            return _turn(db, ctx, checkin, offer_reply)
+        medicine_help = _medicine_help(db, ctx, checkin, text, now)
+        if medicine_help is not None:
+            return _turn(db, ctx, checkin, medicine_help + _after_question(db, ctx, checkin, now))
+
     if is_medicine_question(text) and not is_urgent(text):
         # A question about today's medicines: answer it from the database; record and share nothing.
         return _turn(db, ctx, checkin, _schedule_answer(db, ctx, now) + _after_question(db, ctx, checkin, now))
 
     if checkin.step == HEALTH:
         checkin.health_text = text
-        msgs = [_share_health(db, ctx, checkin, text)]
+        msgs = [_share_health(db, ctx, checkin, text, now)]
         _set_step(db, ctx, checkin, MEDICINES, now)
         msgs += _continue_medicines(db, ctx, checkin, now, announce_none=True)
     elif checkin.step in (MEDICINES, MEALS_STEP, APPOINTMENTS):
@@ -747,7 +900,7 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         urgent = is_urgent(text)
         if urgent:
             checkin.health_text = f"{checkin.health_text}\n{text}" if checkin.health_text else text
-            msgs.append(_urgent(db, ctx, checkin, text))
+            msgs.append(_urgent(db, ctx, checkin, text, now))
         if checkin.step == MEDICINES:
             msgs += _handle_medicines(db, ctx, checkin, text, now)
         elif checkin.step == MEALS_STEP:
@@ -761,11 +914,15 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         _set_step(db, ctx, checkin, MEDICINES, now)
         msgs = _handle_medicines(db, ctx, checkin, text, now,
                                  remaining=_remaining(db, ctx, now, volunteered=True), from_done=True)
+    elif checkin.step == NOTE:
+        msgs = _handle_note(db, ctx, checkin, text, now)
     elif is_closing(text) and not is_urgent(text):
         msgs = _reopen_or(db, ctx, checkin, now, _say(ctx, "goodbye", name=ctx.greeting_name))
     else:
         checkin.health_text = f"{checkin.health_text}\n{text}" if checkin.health_text else text
-        msgs = [_share_health(db, ctx, checkin, text)]
+        msgs = [_share_health(db, ctx, checkin, text, now)]
+        if is_bare_confusion(text):  # how they feel, or the medicines: cover both
+            msgs += [_say(ctx, "confused_help"), *_schedule_answer(db, ctx, now)]
         msgs += _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
     return _turn(db, ctx, checkin, msgs)
 
@@ -777,8 +934,9 @@ def raise_emergency(db: Session, ctx: ParentContext, now: datetime) -> list[str]
     checkin = _get_or_create(db, ctx, now)
     checkin.urgent = True
     checkin.updated_at = now
+    note_emergency(db, ctx, checkin, EMERGENCY_TEXT, "button", now)
     users = notify_family_emergency(db, ctx, checkin)
     log_activity(db, ctx.family_id, ctx.user_id, "checkin.emergency", "health_checkin", checkin.id, {})
-    _store(db, ctx, checkin, "bot", [_say(ctx, "emergency_logged")])
+    _store(db, ctx, checkin, "bot", [_say(ctx, "emergency_logged" if users else "health_urgent_alone")])
     db.commit()
     return [u.display_name or u.email for u in users]

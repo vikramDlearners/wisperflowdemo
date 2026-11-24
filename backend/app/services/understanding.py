@@ -115,6 +115,142 @@ def is_urgent(text: str) -> bool:
     return any(k in normalised for k in _NON_LATIN_KEYWORDS)
 
 
+# ---------- "I am fine" ----------
+
+_WELL_WORDS = frozenset(
+    """fine good great well better okay ok alright wonderful excellent happy fantastic nice perfect normal healthy
+    theek thik accha acha achha badhiya nalla nallaa bagunnanu bagunna sukham chennagi chennagiddini
+    ठीक अच्छा अच्छी अच्छे बढ़िया बढिया स्वस्थ खुश
+    நல்லா நல்ல நன்றாக நலம் நலமாக சந்தோஷமாக
+    బాగున్నాను బాగున్నా బాగుంది బాగా బాగానే సంతోషంగా క్షేమంగా
+    സുഖം സുഖമാണ് സുഖമായിരിക്കുന്നു നല്ലത് നല്ല നന്നായി നന്നായിരിക്കുന്നു സന്തോഷം
+    ಚೆನ್ನಾಗಿದ್ದೇನೆ ಚೆನ್ನಾಗಿದ್ದೀನಿ ಚೆನ್ನಾಗಿದೆ ಚೆನ್ನಾಗಿ ಆರಾಮ ಆರಾಮಾಗಿದ್ದೇನೆ ಸಂತೋಷವಾಗಿದ್ದೇನೆ""".split()
+)
+_WELL_FILLERS = frozenset(
+    """i i'm im am is it's its everything all my health we are feel feeling doing very so really pretty quite
+    much just absolutely today now yes yeah hi hello and also thank thanks you god a the day morning afternoon
+    evening this slept sleep main mein hoon hu hun bilkul sab bahut irukken naan nenu njan naanu
+    मैं में हूँ हूं हू बिल्कुल बिलकुल सब बहुत आज अभी जी हाँ हां है तबीयत तबियत मेरी और धन्यवाद महसूस कर रहा रही
+    நான் இருக்கிறேன் இருக்கேன் இன்று இன்னைக்கு மிகவும் ரொம்ப ஆம் எல்லாம் இருக்கு நன்றி
+    నేను ఉన్నాను ఉన్నా ఈ రోజు ఈరోజు చాలా అవును అంతా ధన్యవాదాలు
+    ഞാൻ ഇന്ന് വളരെ അതെ എല്ലാം എനിക്ക് ആണ് ഇരിക്കുന്നു നന്ദി
+    ನಾನು ಇಂದು ಇವತ್ತು ತುಂಬಾ ಹೌದು ಎಲ್ಲಾ ಇದ್ದೇನೆ ಧನ್ಯವಾದಗಳು""".split()
+)
+_WELL_PHRASES = re.compile(r"\b(?:not bad|no (?:problems?|issues?|complaints?|pain))\b")
+_WORD_BREAKS = re.compile(r"[\s.,!?;:।\-–—\"()]+")
+
+
+def is_all_well(text: str) -> bool:
+    """True only when every word says the parent is well ("I am feeling good"). Any other word ("not good",
+    "fine but my knee hurts") makes it something the family should hear about."""
+    normalised = _WELL_PHRASES.sub(" fine ", (text or "").lower().replace("’", "'"))
+    words = [w for w in _WORD_BREAKS.split(normalised) if w]
+    return any(w in _WELL_WORDS for w in words) and all(w in _WELL_WORDS or w in _WELL_FILLERS for w in words)
+
+
+# ---------- "send me the photo of that medicine" / "I'm confused" ----------
+
+_PHOTO_WORDS = re.compile(
+    r"\b(?:photos?|photographs?|pictures?|pics?|images?|show me|look like|looks like|tasveer|padam)\b"
+)
+_PHOTO_WORDS_NON_LATIN = ("போட்டோ", "புகைப்பட", "படம்", "படத்தை", "फोटो", "फ़ोटो", "तस्वीर", "ఫోటో", "చిత్రం",
+                          "ഫോട്ടോ", "ചിത്രം", "ಫೋಟೋ", "ಚಿತ್ರ")
+# "Can you send me the photo?": a request on its own, without saying of what.
+_BARE_PHOTO = re.compile(
+    r"(?:please |can you |could you |will you )*(?:send|show|give)(?: me)?(?: the| a| its| that)?"
+    r" (?:photo|picture|pic|image)s?(?: again| of it)?(?: please)?"
+)
+_CONFUSED = re.compile(
+    r"\b(?:confused|confusing|confusion|mixed up|(?:not sure|don't know|do not know|can't tell|cannot tell|forgot)"
+    r" (?:which|what))\b"
+)
+_CONFUSED_NON_LATIN = ("குழப்ப", "उलझन", "कन्फ्यूज", "कंफ्यूज", "గందరగోళ", "అయోమయ", "ആശയക്കുഴപ്പ", "കൺഫ്യൂഷൻ", "ಗೊಂದಲ")
+_BARE_CONFUSED = re.compile(
+    r"(?:(?:i'm|im|i am|am|i feel|feeling|so|very|a bit|a little|little|still|just|now) )*confused(?: now)?"
+)
+# Not a request to see a medicine: something may have gone wrong with a dose.
+_DOSE_MISTAKE = re.compile(r"\b(?:wrong|twice|double|extra|overdose|too many|by mistake)\b")
+
+
+def _plain(text: str) -> str:
+    return " ".join(_WORD_BREAKS.sub(" ", (text or "").lower().replace("’", "'")).split())
+
+
+def is_bare_confusion(text: str) -> bool:
+    """Just "I'm confused": it may be about the medicines, or it may be how the parent feels."""
+    plain = _plain(text)
+    return bool(_BARE_CONFUSED.fullmatch(plain)) or (
+        len(plain.split()) <= 4
+        and any(w in plain for w in _CONFUSED_NON_LATIN)
+        and not any(w in plain for w in _MEDICINE_WORDS_NON_LATIN)
+    )
+
+
+def is_photo_request(text: str, names_medicine: bool, about_medicines: bool) -> bool:
+    """True when the parent asks to see a medicine. `names_medicine`: the text names one of their medicines.
+    `about_medicines`: the chat is on the medicine question, so the photo needs no medicine word."""
+    plain = _plain(text)
+    if not plain or _DOSE_MISTAKE.search(plain):
+        return False
+    if not (_PHOTO_WORDS.search(plain) or any(w in plain for w in _PHOTO_WORDS_NON_LATIN)):
+        return False
+    if names_medicine or about_medicines or _BARE_PHOTO.fullmatch(plain):
+        return True
+    if _MEDICINE_WORDS.search(plain) or any(w in plain for w in _MEDICINE_WORDS_NON_LATIN):
+        return True
+    return len(plain.split()) <= 3 and any(w in plain for w in _PHOTO_WORDS_NON_LATIN)
+
+
+def is_medicine_confusion(text: str, names_medicine: bool) -> bool:
+    """True for "I'm confused which tablet to take". Never for a dose report or a possible dose mistake."""
+    plain = _plain(text)
+    if _DOSE_MISTAKE.search(plain) or is_dose_report(text):
+        return False
+    if not (_CONFUSED.search(plain) or any(w in plain for w in _CONFUSED_NON_LATIN)):
+        return False
+    return names_medicine or bool(
+        _MEDICINE_WORDS.search(plain) or any(w in plain for w in _MEDICINE_WORDS_NON_LATIN)
+    )
+
+
+_NAME_TOKEN = re.compile(r"[^\W_]+")
+# Words in a medicine name that do not tell one medicine from another.
+_COMMON_NAME_WORDS = frozenset(
+    """vitamin vitamins vit tablet tablets tab tabs capsule capsules cap caps pill pills medicine medicines syrup drops
+    drop injection cream gel ointment inhaler powder sachet daily morning afternoon evening night day week weekly after
+    before food with and for the of to my in on at or one two half mg mcg ml iu gm blood pressure sugar heart pain
+    photo picture image show""".split()
+)
+_VITAMIN_CODE = re.compile(r"[a-z]\d{1,2}")
+
+
+def _name_tokens(text: str) -> set[str]:
+    joined = re.sub(r"\b(vitamin|vit)\.?\s*[- ]?([a-k])[- ]?(\d{1,2})?\b", r"vitamin \2\3", (text or "").lower())
+    return set(_NAME_TOKEN.findall(joined.replace("’", "'")))
+
+
+def named_medicines(text: str, names: dict[str, str]) -> list[str]:
+    """The ids of the medicines the text names, matched loosely ("vitamin d 3" is "Vitamin D3 60000 IU"). A word
+    shared by many medicines ("vitamin", "tablet") never matches alone. When several fit equally well, all of them
+    are returned, so a parent is never shown one of two look-alike names as if it were the only one."""
+    said = _name_tokens(text)
+    vitamins = {c for c in re.findall(r"vitamin ([a-k])\b", " ".join(_NAME_TOKEN.findall((text or "").lower())))}
+    scores: dict[str, int] = {}
+    for mid, name in names.items():
+        tokens = _name_tokens(name)
+        hit = tokens & said
+        hit |= {t for t in tokens if _VITAMIN_CODE.fullmatch(t) and t[0] in vitamins and "vitamin" in tokens
+                and not any(_VITAMIN_CODE.fullmatch(w) and w[0] == t[0] for w in said)}
+        distinctive = {
+            t for t in hit - _COMMON_NAME_WORDS
+            if _VITAMIN_CODE.fullmatch(t) or (len(t) >= 3 and not t[0].isdigit())
+        }
+        if distinctive:
+            scores[mid] = len(hit)
+    best = max(scores.values(), default=0)
+    return [mid for mid, score in scores.items() if score == best]
+
+
 # ---------- questions about the medicine schedule ----------
 
 # "What medicine do I take tonight?" is a question, not a health note or a dose answer: it needs a medicine word
@@ -341,6 +477,42 @@ def count_scope(text: str, due: list[DueDose]):
         if _has_word(normalised, word):
             return number
     return None
+
+
+_OFFER_YES = frozenset(
+    """yes yeah yep sure ok okay show see want haan
+    ஆமா ஆம் ஆமாம் சரி வேண்டும் காட்டு காட்டுங்கள் हाँ हां जी ठीक दिखाओ दिखाइए అవును ఔను సరే చూపించు చూపించండి
+    അതെ ശരി വേണം കാണണം കാണിക്കൂ ಹೌದು ಸರಿ ಬೇಕು ತೋರಿಸಿ""".split()
+)
+_OFFER_NO = frozenset("no nope nah not don't illai இல்லை வேண்டாம் नहीं मत వద్దు లేదు വേണ്ട ഇല്ല ಬೇಡ ಇಲ್ಲ".split())
+_OFFER_FILLERS = frozenset(
+    """please me them it the a i i'd would like to can you could need thanks thank images image photos photo
+    pictures picture pics of medicines medicine tablets है""".split()
+)
+
+
+def is_bare_yes(text: str) -> bool:
+    """A "yes" that says nothing more ("yes", "yes please", "ஆமா")."""
+    words = _plain(text).split()
+    return any(w in _OFFER_YES for w in words) and all(w in _OFFER_YES or w in _OFFER_FILLERS for w in words)
+
+
+def is_bare_no(text: str) -> bool:
+    """A "no" that says nothing more ("no", "no thank you", "வேண்டாம்")."""
+    words = _plain(text).split()
+    polite = ("please", "thanks", "thank", "you")
+    return any(w in _OFFER_NO for w in words) and all(w in _OFFER_NO or w in polite for w in words)
+
+
+def photo_offer_answer(text: str) -> bool | None:
+    """The answer to "Do you want to see the images?": True or False, or None when the text says anything more
+    (such as "yes, I took them", which is about the doses)."""
+    words = _plain(text).split()
+    if not words or not all(w in _OFFER_YES or w in _OFFER_NO or w in _OFFER_FILLERS for w in words):
+        return None
+    if any(w in _OFFER_NO for w in words):
+        return False
+    return True if any(w in _OFFER_YES for w in words) or is_photo_request(text, False, True) else None
 
 
 def is_dose_report(text: str) -> bool:
