@@ -249,6 +249,23 @@ def record_dose(
     return row
 
 
+def record_family_dose(
+    db: Session, profile: CareProfile, medicine_id: str, slot: str, status: str, actor_id: str, now: datetime
+) -> MedicineDose:
+    """Record a caregiver's answer for one of today's doses. A dose that is not due yet is refused."""
+    now = _aware(now)
+    dose = next(
+        (d for d in doses_today(db, profile, now) if d.medicine_id == medicine_id and d.slot == slot), None
+    )
+    if dose is None:
+        raise ValueError("This dose is not one of today's doses")
+    if dose.due_at is not None and dose.due_at > now + EARLY_WINDOW:
+        raise ValueError("This dose is not due yet")
+    if slot == ANY_SLOT:
+        slot = day_part(local_now(profile, now))
+    return record_dose(db, profile, medicine_id, slot, status, actor_id, "manual", now)
+
+
 def set_remind_later(
     db: Session, profile: CareProfile, medicine_id: str, slot: str, minutes: int, now: datetime
 ) -> MedicineDose:

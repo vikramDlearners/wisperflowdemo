@@ -68,7 +68,7 @@ class MemberOut(BaseModel):
     relationship: str | None = None
 
 
-RelationshipIn = Literal["mother", "father", "grandmother", "grandfather", "other"]
+RelationshipIn = Literal["mother", "father", "grandmother", "grandfather", "son", "daughter", "other"]
 
 
 
@@ -182,6 +182,13 @@ class MedicineOut(BaseModel):
     unit_price: Decimal | None = None
     total_medicine_count: int | None = None
     total_price: Decimal | None = None
+
+
+class DoseRecordIn(BaseModel):
+    care_profile_id: str
+    medicine_id: str
+    slot: str
+    status: Literal["taken", "skipped"]
 
 
 class MedicineLastTakenOut(BaseModel):

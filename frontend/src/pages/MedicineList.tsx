@@ -52,7 +52,7 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
   const [items, setItems] = useState<MedicineOut[] | null>(null);
   const [people, setPeople] = useState<MemberOut[]>([]);
   const [doses, setDoses] = useState<Record<string, DoseToday[]>>({});
-  const [zones, setZones] = useState<Record<string, string>>({});
+  const [profiles, setProfiles] = useState<CareProfileOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -73,7 +73,7 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
         careProfiles
           .list(familyId)
           .then((ps: CareProfileOut[]) => {
-            if (!cancelled) setZones(Object.fromEntries(ps.map((p) => [p.id, p.timezone])));
+            if (!cancelled) setProfiles(ps);
           })
           .catch(() => undefined);
         const profileIds = [...new Set(list.map((m) => m.care_profile_id))];
@@ -99,6 +99,7 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
   }, [familyId]);
 
   const byUser = useMemo(() => new Map(people.map((p) => [p.user_id, p])), [people]);
+  const byProfile = useMemo(() => new Map(profiles.map((p) => [p.id, p])), [profiles]);
   const all = items ?? [];
 
   const activeCount = all.filter((m) => m.active).length;
@@ -117,10 +118,11 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
   );
 
   function handleExport() {
-    const header = ["Medicine", "Instructions", "Quantity left", "Responsible caregiver", "Refill date", "Status"];
+    const header = ["Medicine", "For", "Instructions", "Quantity left", "Responsible caregiver", "Refill date", "Status"];
     const lines = rows.map((m) =>
       [
         m.display_name,
+        byProfile.get(m.care_profile_id)?.display_name ?? "",
         m.instructions_text ?? "",
         m.quantity_remaining?.toString() ?? "",
         (m.responsible_user_id && byUser.get(m.responsible_user_id)?.display_name) || "",
@@ -241,6 +243,7 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
                     <thead>
                       <tr>
                         <th>Medicine</th>
+                        <th>For</th>
                         <th>Schedule</th>
                         <th>Next check-in</th>
                         <th>Responsible caregiver</th>
@@ -271,12 +274,15 @@ export default function MedicineList({ familyId, onSelect, onAdd }: MedicineList
                                 </div>
                               </div>
                             </td>
+                            <td data-label="For">
+                              <div>{byProfile.get(m.care_profile_id)?.display_name ?? "—"}</div>
+                            </td>
                             <td data-label="Schedule">
                               <div>{m.instructions_text || "—"}</div>
                               <div className="md-sub">{m.instructions_text ? "Instructions" : "Not set"}</div>
                             </td>
                             <td data-label="Next check-in">
-                              <CheckIn doses={doses[m.id]} timeZone={zones[m.care_profile_id]} />
+                              <CheckIn doses={doses[m.id]} timeZone={byProfile.get(m.care_profile_id)?.timezone} />
                             </td>
                             <td data-label="Caregiver">
                               {owner ? (

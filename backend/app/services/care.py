@@ -5,18 +5,21 @@ from decimal import Decimal
 from functools import cache
 from zoneinfo import available_timezones
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.care_profile import CareProfile
 from app.models.medicine import Medicine
+from app.models.membership import FamilyMember
 from app.models.parent_onboarding_profile import ParentOnboardingProfile
 from app.models.prescription_scan import PrescriptionScan
+from app.models.user import User
 from app.services.activity import log_activity
 from app.services.errors import NotFound
 from app.services.languages import LANGUAGE_CODES, language_code, language_name
-from app.services.permissions import require
+from app.services.permissions import permission_codes_for, require
 from app.services.prescription_scan import ALLOWED_MIME_TYPES, MAX_IMAGE_BYTES
+from app.services.profile import get_care_profile_onboarding
 
 ALLOWED_LANGUAGES = frozenset(LANGUAGE_CODES)
 
@@ -76,6 +79,63 @@ def create_care_profile(
     return profile
 
 
+def sync_own_parent(db: Session, user: User, onboarding: ParentOnboardingProfile) -> None:
+    """List the parent a caregiver describes in their own onboarding as a parent of their family.
+
+    Creates the care profile once, then keeps its name, greeting and language current. Does nothing for a
+    parent's own account or without permission to edit parents. The caller commits.
+    """
+    name = (onboarding.parent_full_name or "").strip()
+    if not name or user.role == "parent":
+        return
+    if db.scalar(select(CareProfile.id).where(CareProfile.linked_user_id == user.id).limit(1)):
+        return
+    greeting = (onboarding.preferred_name or "").strip() or name.split()[0]
+    profile = db.get(CareProfile, onboarding.care_profile_id) if onboarding.care_profile_id else None
+    if profile is None:
+        membership = db.scalar(
+            select(FamilyMember)
+            .where(FamilyMember.user_id == user.id, FamilyMember.status == "active")
+            .order_by(FamilyMember.created_at, FamilyMember.id)
+            .limit(1)
+        )
+        if membership is None or "parent_profile.edit" not in permission_codes_for(db, membership):
+            return
+        # Reuse a parent already listed under this name (e.g. made while adding a medicine).
+        same_name = db.scalars(
+            select(CareProfile).where(
+                CareProfile.family_id == membership.family_id,
+                func.lower(CareProfile.display_name) == name.lower(),
+            )
+        ).all()
+        if same_name:
+            profile = next(
+                (
+                    p for p in same_name
+                    if p.linked_user_id is None and get_care_profile_onboarding(db, p) is None
+                ),
+                None,
+            )
+            if profile is None:
+                return
+        else:
+            profile = CareProfile(
+                family_id=membership.family_id, display_name=name, greeting_name=greeting
+            )
+            db.add(profile)
+            db.flush()
+            log_activity(
+                db, membership.family_id, user.id, "care_profile.created", "care_profile", profile.id
+            )
+        onboarding.care_profile_id = profile.id
+    if profile.linked_user_id is not None:
+        return
+    profile.display_name = name
+    profile.greeting_name = greeting
+    if onboarding.preferred_language:
+        profile.preferred_language = language_code(onboarding.preferred_language)
+
+
 def update_care_profile(
     db: Session, actor_id: str, family_id: str, profile_id: str, changes: dict
 ) -> CareProfile:
@@ -113,6 +173,15 @@ def delete_care_profile(db: Session, actor_id: str, family_id: str, profile_id: 
     require(db, actor_id, family_id, "parent_profile.edit")
     profile = _profile_in_family(db, family_id, profile_id)
     log_activity(db, family_id, actor_id, "care_profile.deleted", "care_profile", profile.id)
+    # An account's own onboarding details outlive the care profile; a row with no account goes with it.
+    for row in db.scalars(
+        select(ParentOnboardingProfile).where(ParentOnboardingProfile.care_profile_id == profile.id)
+    ):
+        if row.user_id is None:
+            db.delete(row)
+        else:
+            row.care_profile_id = None
+    db.flush()
     db.delete(profile)
     db.commit()
 

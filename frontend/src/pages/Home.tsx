@@ -111,7 +111,7 @@ const PARENT_SCREENS = [
 const PROFILE_FIELDS = [
   "Full name & the name they like to be greeted by",
   "Relationship to you",
-  "Date of birth or approximate age",
+  "Date of birth",
   "Profile photo",
   "Preferred language & mobile number",
   "Known health conditions & allergies",

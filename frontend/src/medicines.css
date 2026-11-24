@@ -1004,6 +1004,7 @@
 .md-today-list li:first-child {
   border-top: 0;
 }
+.md-today-list li .dose-buttons { flex: 1; }
 .md-today-slot {
   font-size: 0.85rem;
   color: var(--pp-muted);

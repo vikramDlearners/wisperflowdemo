@@ -212,7 +212,7 @@ def add_member(
     if relationship is not None:
         relationship = relationship.strip().lower() or None
         if relationship is not None and relationship not in {
-            "mother", "father", "grandmother", "grandfather", "other",
+            "mother", "father", "grandmother", "grandfather", "son", "daughter", "other",
         }:
             raise ValueError("Unknown relationship")
     email = email.strip().lower()

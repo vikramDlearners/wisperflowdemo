@@ -11,6 +11,7 @@ from app.models.dose import MedicineDose
 from app.models.medicine import Medicine
 from app.models.user import User
 from app.schemas import (
+    DoseRecordIn,
     MedicineCreate,
     MedicineLastTakenOut,
     MedicineOut,
@@ -72,6 +73,24 @@ def doses_today(
             "recorded_at": row.recorded_at if row else None,
         })
     return out
+
+
+@router.post("/doses", status_code=201)
+def record_dose(
+    family_id: str, body: DoseRecordIn, db: Session = DbSession, user: User = CurrentUser
+) -> dict:
+    """A caregiver marks one of today's doses as taken or skipped."""
+    require(db, user.id, family_id, "medicine_quantity.update")
+    profile = svc._profile_in_family(db, family_id, body.care_profile_id)
+    row = doses_svc.record_family_dose(
+        db, profile, body.medicine_id, body.slot, body.status, user.id, datetime.now(timezone.utc)
+    )
+    return {
+        "medicine_id": row.medicine_id,
+        "slot": row.slot,
+        "status": row.status,
+        "recorded_at": row.recorded_at,
+    }
 
 
 @router.post("", response_model=MedicineOut, status_code=201)

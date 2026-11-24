@@ -233,3 +233,62 @@ def test_record_dose_racing_insert_updates_the_other_row(db_session, setup, monk
     assert row.status == "taken" and row.source == "manual"
     rows = db_session.execute(select(MedicineDose)).scalars().all()
     assert len(rows) == 1 and rows[0].status == "taken"
+
+
+def _post_dose(client, setup, headers, **body):
+    return client.post(
+        f"/api/families/{setup['family'].id}/medicines/doses",
+        json={"care_profile_id": setup["profile"].id, "slot": "any", "status": "taken", **body},
+        headers=headers,
+    )
+
+
+def test_caregiver_records_and_corrects_a_dose(client, db_session, setup):
+    m = _med(db_session, setup["profile"], times=("00:00",))
+    h = {"Authorization": f"Bearer {create_auth_session(db_session, setup['manager'].id)}"}
+    assert _post_dose(client, setup, h, medicine_id=m.id, slot="00:00", status="skipped").status_code == 201
+    r = _post_dose(client, setup, h, medicine_id=m.id, slot="00:00")
+    assert r.status_code == 201, r.text
+    db_session.expire_all()
+    [row] = db_session.execute(select(MedicineDose)).scalars().all()
+    assert (row.status, row.source, row.recorded_by_user_id) == ("taken", "manual", setup["manager"].id)
+
+
+def test_caregiver_answer_replaces_missed(db_session, setup):
+    m = _med(db_session, setup["profile"], times=("08:00",))
+    db_session.add(MedicineDose(
+        family_id=setup["family"].id, care_profile_id=setup["profile"].id, medicine_id=m.id,
+        dose_date=date(2026, 11, 22), slot="08:00", status="missed", recorded_at=NOW, source="system",
+    ))
+    db_session.commit()
+    row = svc.record_family_dose(
+        db_session, setup["profile"], m.id, "08:00", "taken", setup["manager"].id, NOW
+    )
+    assert (row.status, row.source) == ("taken", "manual")
+
+
+def test_caregiver_dose_without_times_uses_the_day_part(db_session, setup):
+    m = _med(db_session, setup["profile"])
+    row = svc.record_family_dose(db_session, setup["profile"], m.id, "any", "taken", setup["manager"].id, EVENING)
+    assert row.slot == "night"
+
+
+def test_caregiver_cannot_record_a_later_or_unknown_dose(db_session, setup):
+    m = _med(db_session, setup["profile"], times=("20:00",))
+    for slot in ("20:00", "08:00"):
+        with pytest.raises(ValueError):
+            svc.record_family_dose(
+                db_session, setup["profile"], m.id, slot, "taken", setup["manager"].id, NOW
+            )
+
+
+def test_recording_a_dose_needs_permission_and_a_valid_status(client, db_session, setup):
+    m = _med(db_session, setup["profile"])
+    stranger = User(email="stranger@example.com", display_name="Stranger")
+    db_session.add(stranger)
+    db_session.commit()
+    h = {"Authorization": f"Bearer {create_auth_session(db_session, stranger.id)}"}
+    assert _post_dose(client, setup, h, medicine_id=m.id).status_code in (403, 404)
+    h = {"Authorization": f"Bearer {create_auth_session(db_session, setup['manager'].id)}"}
+    assert _post_dose(client, setup, h, medicine_id=m.id, status="missed").status_code == 422
+    assert db_session.execute(select(MedicineDose)).scalars().all() == []

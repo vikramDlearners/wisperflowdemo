@@ -62,7 +62,7 @@ export default function ParentDetails() {
             {error}
           </div>
         )}
-        <section className="db-card db-tint-teal" aria-label="Parent details">
+        <section className="db-card db-tint-teal" aria-label="Profile details">
           <h2 className="db-card-title">{parent.display_name}</h2>
           <dl className="db-facts">
             <div>

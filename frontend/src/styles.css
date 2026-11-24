@@ -257,33 +257,72 @@ a {
   outline-offset: 2px;
 }
 
-/* Parent onboarding wizard: page, progress bar, step form, completion box. */
+/* Parent onboarding wizard: brand, step bar and a card holding the form. */
 .wizard-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.wizard-progress-header {
+.parent-layout.onboarding-page {
+  max-width: 640px;
+  padding: 40px 16px;
+}
+
+.wizard-brand {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  font-size: 0.95rem;
+}
+
+.wizard-brand img {
+  height: 64px;
+  width: auto;
+}
+
+.wizard-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 12px 32px rgba(31, 45, 42, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.wizard-card h1 {
+  font-size: 1.6rem;
+  margin: 0 0 4px;
+}
+
+.wizard-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 8px;
-  flex-wrap: wrap;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
-.wizard-progress {
-  width: 100%;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--accent);
-  overflow: hidden;
+.wizard-steps li {
+  padding-top: 8px;
+  border-top: 4px solid var(--border);
 }
 
-.wizard-progress-fill {
-  height: 100%;
-  background: var(--primary);
-  transition: width 0.3s ease;
+.wizard-steps li.is-done,
+.wizard-steps li.is-current {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.wizard-steps li.is-current {
+  font-weight: 700;
 }
 
 .wizard-form {
@@ -292,8 +331,22 @@ a {
   gap: 16px;
 }
 
+.onboarding-page .wizard-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 16px;
+  align-items: end;
+}
+
+.wizard-wide,
+.wizard-actions {
+  grid-column: 1 / -1;
+}
+
 .wizard-field {
   display: block;
+  min-width: 0;
+  font-size: 0.92rem;
   font-weight: 600;
 }
 
@@ -302,32 +355,50 @@ a {
 .wizard-field textarea {
   display: block;
   width: 100%;
+  min-height: 48px;
   margin-top: 6px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   font: inherit;
+  font-size: 1rem;
   font-weight: 400;
+  color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  border-radius: 10px;
+  background: #fbfcfc;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.wizard-field input:focus-visible,
-.wizard-field select:focus-visible,
-.wizard-field textarea:focus-visible,
-.wizard-actions .btn:focus-visible {
+.wizard-field textarea {
+  resize: vertical;
+}
+
+.wizard-field input:focus,
+.wizard-field select:focus,
+.wizard-field textarea:focus {
+  outline: 2px solid transparent;
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.wizard-actions .btn:focus-visible,
+.wizard-skip:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 
 .wizard-required {
+  color: var(--danger);
+}
+
+.wizard-optional {
   font-weight: 400;
-  font-size: 0.85rem;
   color: var(--muted);
 }
 
 .wizard-hint {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--muted);
 }
 
@@ -339,56 +410,49 @@ a {
 
 .wizard-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.wizard-back {
+  margin-right: auto;
+}
+
+.wizard-skip {
+  min-height: 48px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.wizard-skip:hover {
+  color: var(--text);
 }
 
 .wizard-actions .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.wizard-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+@media (max-width: 560px) {
+  .parent-layout.onboarding-page {
+    padding: 20px 16px;
+  }
+  .wizard-card {
+    padding: 20px;
+  }
+  .onboarding-page .wizard-form {
+    grid-template-columns: 1fr;
+  }
 }
-
-/* Completion-score box on the Finish screen. */
-.wizard-completion {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-}
-
-.wizard-completion h3 {
-  font-size: 1rem;
-  margin-bottom: 8px;
-}
-
-.wizard-completion-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.wizard-completion-list li {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.wizard-completion-list li:last-child {
-  border-bottom: none;
-}
-
-
 
 /* Finish dialog shown at the end of parent onboarding. */
 .finish-overlay {
@@ -440,3 +504,10 @@ a {
   flex: 1 1 160px;
 }
 
+/* Parent or child choice in the profile wizard. */
+.wizard-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* Caregiver's answer for one dose (Overview and medicine page). */
+.dose-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.dose-buttons .dose-button { min-height: 36px; padding: 6px 12px; font-size: 0.82rem; white-space: nowrap; }
+.dose-error { flex-basis: 100%; text-align: right; font-size: 0.82rem; color: #a3261c; }

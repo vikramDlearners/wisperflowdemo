@@ -423,6 +423,13 @@ export interface DoseToday {
   recorded_at: string | null;
 }
 
+export interface DoseRecord {
+  care_profile_id: string;
+  medicine_id: string;
+  slot: string;
+  status: "taken" | "skipped";
+}
+
 export interface MedicineLastTakenOut {
   medicine_id: string;
   last_taken_at: string | null;
@@ -433,6 +440,8 @@ export const medicines = {
     get<DoseToday[]>(
       `/api/families/${familyId}/medicines/doses/today?care_profile_id=${encodeURIComponent(careProfileId)}`,
     ),
+  recordDose: (familyId: string, body: DoseRecord) =>
+    post<DoseToday>(`/api/families/${familyId}/medicines/doses`, body),
   list: (familyId: string) => get<MedicineOut[]>(`/api/families/${familyId}/medicines`),
   lastTaken: (familyId: string) =>
     get<MedicineLastTakenOut[]>(`/api/families/${familyId}/medicines/last-taken`),

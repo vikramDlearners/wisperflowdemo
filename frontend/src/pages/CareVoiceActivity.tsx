@@ -66,11 +66,11 @@ function describe(item: ActivityOut): Described {
     case "family.created":
       return { category: "family", what: "created the family", detail: null };
     case "care_profile.created":
-      return { category: "family", what: "added a parent profile", detail: name };
+      return { category: "family", what: "added a care profile", detail: name };
     case "care_profile.updated":
-      return { category: "family", what: "updated a parent profile", detail: name };
+      return { category: "family", what: "updated a care profile", detail: name };
     case "care_profile.deleted":
-      return { category: "family", what: "removed a parent profile", detail: name };
+      return { category: "family", what: "removed a care profile", detail: name };
     case "member.added":
       return { category: "family", what: "added a family member", detail: role ? `As ${role}` : null };
     case "member.removed":

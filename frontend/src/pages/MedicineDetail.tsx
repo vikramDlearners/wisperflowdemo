@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import "../medicines.css";
+import DoseButtons from "../components/DoseButtons";
 import WorkspaceLayout from "../components/WorkspaceLayout";
-import { doseLabel, slotName, sortDoses } from "../doses";
+import { canRecord, doseLabel, slotName, sortDoses } from "../doses";
 import { formatPrice, useMedicineImage } from "../medicineImage";
 import {
   ApiError,
@@ -108,6 +109,15 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
       cancelled = true;
     };
   }, [familyId, medicineId]);
+
+  async function loadDoses(m: MedicineOut) {
+    try {
+      const all = await medicines.dosesToday(familyId, m.care_profile_id);
+      setDoses(all.filter((d) => d.medicine_id === m.id));
+    } catch {
+      setDosesFailed(true);
+    }
+  }
 
   // Unknown permissions: show the controls and let the server decide.
   const can = (code: string) => perms === null || perms.includes(code);
@@ -263,7 +273,7 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
               </div>
             </div>
 
-            {/* Today's doses (display only) */}
+            {/* Today's doses */}
             {(dosesFailed || (doses !== null && doses.length > 0)) && (
               <section className="pp-card md-today">
                 <h2>Today</h2>
@@ -277,6 +287,15 @@ export default function MedicineDetail({ familyId, medicineId, onEdit }: Medicin
                         <li key={d.slot}>
                           <span className="md-today-slot">{slotName(d.slot)}</span>
                           <span className={`md-dose is-${label.tone}`}>{label.text}</span>
+                          {can("medicine_quantity.update") && canRecord(d, recipient?.timezone) && (
+                            <DoseButtons
+                              familyId={familyId}
+                              careProfileId={medicine.care_profile_id}
+                              dose={d}
+                              medicineName={medicine.display_name}
+                              onRecorded={() => void loadDoses(medicine)}
+                            />
+                          )}
                         </li>
                       );
                     })}

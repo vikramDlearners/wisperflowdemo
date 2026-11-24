@@ -88,6 +88,14 @@ export function doseLabel(
   return { text: "Due now", tone: "due" };
 }
 
+// The server accepts a dose from an hour before its time.
+const EARLY_MINUTES = 60;
+
+export function canRecord(d: DoseToday, timeZone?: string | null, now: Date = new Date()): boolean {
+  const slot = parseSlot(d.slot);
+  return slot === null || slot - EARLY_MINUTES <= minutesNow(now, tz(timeZone));
+}
+
 // Human slot name: "8:00 AM", "Morning" / "Afternoon" / "Night", or "Once today".
 export function slotName(slot: string): string {
   if (DAY_PARTS[slot]) return DAY_PARTS[slot].name;
