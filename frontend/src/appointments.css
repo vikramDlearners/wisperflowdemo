@@ -543,3 +543,122 @@
     height: 44px;
   }
 }
+
+/* ---- voice mode in Add appointment ---- */
+.ap-voice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #eef7f4, #f7fbfa);
+  border: 1px solid #cfe7e0;
+}
+.ap-voice-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--pp-ink);
+}
+.ap-voice-label small {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--pp-muted);
+}
+.ap-voice textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 84px;
+  padding: 12px 14px;
+  border: 1.5px solid #cfe0db;
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--pp-ink);
+  resize: vertical;
+}
+.ap-voice textarea:focus-visible {
+  outline: 3px solid #9fd3c9;
+  outline-offset: 0;
+  border-color: var(--pp-teal);
+}
+.ap-voice-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.ap-voice-example {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--pp-teal-dark);
+  cursor: pointer;
+}
+.ap-voice-example:hover {
+  text-decoration: underline;
+}
+.ap-voice-hint {
+  font-size: 0.75rem;
+  color: var(--pp-muted);
+}
+.ap-voice-note {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #cfe7e0;
+  font-size: 0.82rem;
+  color: var(--pp-teal-dark);
+}
+.ap-voice-note.is-bad {
+  border-color: #f5c2bd;
+  background: #fdecea;
+  color: #b42318;
+}
+.ap-voice-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--pp-muted);
+}
+.ap-voice-or::before,
+.ap-voice-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #d6e6e1;
+}
+.ap-optional {
+  margin-left: 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pp-muted);
+}
+@keyframes ap-filled-glow {
+  from { background: #dff5ef; }
+  to { background: transparent; }
+}
+.ap-filled {
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px #7cc9b8;
+  animation: ap-filled-glow 4s ease-out;
+}
+.ap-modal:has(.ap-voice) {
+  max-width: 600px;
+}

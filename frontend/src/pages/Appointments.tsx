@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import TimeSelect from "../components/TimeSelect";
 import { useParams } from "react-router-dom";
 import "../medicines.css";
@@ -30,12 +30,17 @@ type LoadError = { kind: "auth" | "forbidden" | "general"; message: string };
 
 interface FormState {
   id: string | null; // null = new appointment
+  profileId: string; // which parent it is for
   scheduled_date: string;
   start_time: string;
   provider: string;
   reason: string;
+  location: string;
   notes: string;
 }
+
+const VOICE_EXAMPLE =
+  "Amma's eye check-up with Dr. Rao at Apollo Hospital next Tuesday at 10:30 am. Bring the old reports.";
 
 // ---------- date helpers (dates are local calendar days, "YYYY-MM-DD") ----------
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -110,6 +115,19 @@ export default function Appointments() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Voice mode for a new appointment: say it in one go (Wispr Flow types it), "Fill the form" fills the fields.
+  const [spoken, setSpoken] = useState("");
+  const [reading, setReading] = useState(false);
+  const [readNote, setReadNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [filled, setFilled] = useState<string[]>([]);
+  const voiceRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (filled.length === 0) return;
+    const t = window.setTimeout(() => setFilled([]), 6000);
+    return () => window.clearTimeout(t);
+  }, [filled]);
 
   const loadAppointments = useCallback(async (profileId: string) => {
     if (!profileId) {
@@ -204,25 +222,93 @@ export default function Appointments() {
   function openAdd(day?: string) {
     setActionError(null);
     setNotice(null);
+    setSpoken("");
+    setReadNote(null);
+    setFilled([]);
     setForm({
       id: null,
+      profileId: careProfileId,
       scheduled_date: day ?? isoDay(today),
       start_time: "10:00",
       provider: "",
       reason: "",
+      location: "",
       notes: "",
     });
+    window.setTimeout(() => voiceRef.current?.focus(), 50);
   }
+
+  async function fillFromSpeech() {
+    if (!form) return;
+    if (!spoken.trim()) {
+      setReadNote({ text: "Say or type the appointment first.", bad: true });
+      voiceRef.current?.focus();
+      return;
+    }
+    setReading(true);
+    setReadNote(null);
+    try {
+      const r = await api.parseText(familyId, spoken.trim(), isoDay(new Date()));
+      const next: FormState = { ...form };
+      const got: string[] = [];
+      if (r.care_recipient_id && profiles.some((p) => p.id === r.care_recipient_id) && profiles.length > 1) {
+        next.profileId = r.care_recipient_id;
+        got.push("parent");
+      }
+      if (r.reason) {
+        next.reason = r.reason;
+        got.push("reason");
+      }
+      if (r.provider) {
+        next.provider = r.provider;
+        got.push("doctor");
+      }
+      if (r.location) {
+        next.location = r.location;
+        got.push("place");
+      }
+      if (r.scheduled_date) {
+        next.scheduled_date = r.scheduled_date;
+        got.push("date");
+      }
+      if (r.start_time) {
+        next.start_time = r.start_time;
+        got.push("time");
+      }
+      if (r.notes) {
+        next.notes = r.notes;
+        got.push("notes");
+      }
+      setForm(next);
+      setFilled(got);
+      setActionError(null);
+      setReadNote(
+        got.length
+          ? {
+              text: `Filled ${got.join(", ")}${r.source === "gemini" ? " (read by Gemini)" : ""}. Check it and press Add appointment.`,
+            }
+          : { text: "Couldn't make out an appointment from that. Try again, or fill the fields below.", bad: true },
+      );
+    } catch (err) {
+      setReadNote({ text: errorFrom(err).message, bad: true });
+    } finally {
+      setReading(false);
+    }
+  }
+
+  const filledClass = (key: string) => (filled.includes(key) ? " ap-filled" : "");
 
   function openEdit(a: AppointmentOut) {
     setActionError(null);
     setDetail(null);
     setForm({
       id: a.id,
+      profileId: a.care_recipient_id,
       scheduled_date: a.scheduled_date,
       start_time: a.start_time,
       provider: a.provider,
       reason: a.reason,
+      location: a.location ?? "",
       notes: a.notes,
     });
   }
@@ -260,6 +346,7 @@ export default function Appointments() {
           start_time: form.start_time,
           provider: form.provider.trim(),
           reason: form.reason.trim(),
+          location: form.location.trim() || null,
           notes: form.notes.trim(),
           // Moving a scheduled visit marks it as rescheduled.
           ...(moved && original?.status === "scheduled" ? { status: "rescheduled" as const } : {}),
@@ -268,7 +355,7 @@ export default function Appointments() {
         await refresh();
       } else {
         // Appointments belong to a care profile; create one first if the family has none.
-        let profileId = careProfileId;
+        let profileId = form.profileId || careProfileId;
         if (!profileId) {
           const created = await createCareProfileFromOnboarding(familyId);
           setProfiles([created]);
@@ -282,9 +369,13 @@ export default function Appointments() {
           start_time: form.start_time,
           provider: form.provider.trim(),
           reason: form.reason.trim(),
+          location: form.location.trim() || null,
           notes: form.notes.trim(),
         });
-        setNotice("Appointment added.");
+        const forName = profiles.length > 1 ? profiles.find((p) => p.id === profileId)?.display_name : null;
+        setNotice(forName ? `Appointment added for ${forName}.` : "Appointment added.");
+        // Show the parent it was added for.
+        if (profileId !== careProfileId) setCareProfileId(profileId);
         await refresh(profileId);
       }
       const d = parseDay(form.scheduled_date);
@@ -585,6 +676,12 @@ export default function Appointments() {
               <dt>Doctor / clinic</dt>
               <dd>{detail.provider}</dd>
             </div>
+            {detail.location && (
+              <div>
+                <dt>Where</dt>
+                <dd>{detail.location}</dd>
+              </div>
+            )}
             <div>
               <dt>Notes</dt>
               <dd className={detail.notes ? "" : "pp-muted"}>{detail.notes || "No notes"}</dd>
@@ -638,8 +735,65 @@ export default function Appointments() {
       {form && (
         <Modal title={form.id ? "Edit appointment" : "Add appointment"} onClose={() => setForm(null)}>
           <form onSubmit={handleSave} className="ap-form" noValidate>
+            {!form.id && (
+              <div className="ap-voice">
+                <label htmlFor="ap-voice-box" className="ap-voice-label">
+                  <span aria-hidden="true">🎙️</span> Say it in one go
+                  <small>Who it's for, the reason, doctor, place, day and time. Speak with Wispr Flow or type.</small>
+                </label>
+                <textarea
+                  id="ap-voice-box"
+                  ref={voiceRef}
+                  rows={3}
+                  maxLength={2000}
+                  value={spoken}
+                  placeholder={`e.g. “${VOICE_EXAMPLE}”`}
+                  onChange={(e) => {
+                    setSpoken(e.target.value);
+                    setReadNote(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      void fillFromSpeech();
+                    }
+                  }}
+                />
+                <div className="ap-voice-actions">
+                  <button type="button" className="pp-btn" disabled={reading} onClick={() => void fillFromSpeech()}>
+                    {reading ? "Reading…" : "✨ Fill the form"}
+                  </button>
+                  {!spoken && (
+                    <button type="button" className="ap-voice-example" onClick={() => setSpoken(VOICE_EXAMPLE)}>
+                      Try an example
+                    </button>
+                  )}
+                  <span className="ap-voice-hint">Ctrl + Enter also works</span>
+                </div>
+                {readNote && (
+                  <p className={`ap-voice-note${readNote.bad ? " is-bad" : ""}`} role={readNote.bad ? "alert" : "status"}>
+                    {readNote.text}
+                  </p>
+                )}
+                <div className="ap-voice-or" aria-hidden="true">
+                  <span>or fill in the details</span>
+                </div>
+              </div>
+            )}
+            {!form.id && profiles.length > 1 && (
+              <label className={`pp-field${filledClass("parent")}`}>
+                For
+                <select value={form.profileId} onChange={(e) => setForm({ ...form, profileId: e.target.value })}>
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.display_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="ap-form-row">
-              <label className="pp-field">
+              <label className={`pp-field${filledClass("date")}`}>
                 Date
                 <input
                   type="date"
@@ -648,7 +802,7 @@ export default function Appointments() {
                   onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })}
                 />
               </label>
-              <div className="pp-field">
+              <div className={`pp-field${filledClass("time")}`}>
                 <span>Time</span>
                 <TimeSelect
                   value={form.start_time}
@@ -657,7 +811,7 @@ export default function Appointments() {
                 />
               </div>
             </div>
-            <label className="pp-field">
+            <label className={`pp-field${filledClass("doctor")}`}>
               Doctor or clinic
               <input
                 required
@@ -667,7 +821,18 @@ export default function Appointments() {
                 onChange={(e) => setForm({ ...form, provider: e.target.value })}
               />
             </label>
-            <label className="pp-field">
+            <label className={`pp-field${filledClass("place")}`}>
+              <span>
+                Where <span className="ap-optional">Optional</span>
+              </span>
+              <input
+                maxLength={255}
+                placeholder="e.g. Apollo Hospital, Jayanagar"
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+              />
+            </label>
+            <label className={`pp-field${filledClass("reason")}`}>
               Reason
               <input
                 required
@@ -677,7 +842,7 @@ export default function Appointments() {
                 onChange={(e) => setForm({ ...form, reason: e.target.value })}
               />
             </label>
-            <label className="pp-field">
+            <label className={`pp-field${filledClass("notes")}`}>
               Notes
               <textarea
                 rows={3}

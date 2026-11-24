@@ -345,6 +345,24 @@ class AppointmentOut(BaseModel):
     status: AppointmentStatusIn
 
 
+class AppointmentTextIn(BaseModel):
+    family_id: str
+    text: str = Field(min_length=1, max_length=2000)
+    today: date | None = None  # the family member's own date, so "tomorrow" means their tomorrow
+
+
+class AppointmentTextOut(BaseModel):
+    care_recipient_id: str | None = None
+    care_recipient_name: str | None = None
+    reason: str | None = None
+    provider: str | None = None
+    location: str | None = None
+    scheduled_date: date | None = None
+    start_time: str | None = None
+    notes: str | None = None
+    source: str
+
+
 class AppointmentListOut(BaseModel):
     upcoming: list[AppointmentOut]
     past: list[AppointmentOut]

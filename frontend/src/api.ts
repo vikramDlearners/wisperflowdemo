@@ -690,6 +690,7 @@ export interface AppointmentOut {
   start_time: string; // HH:MM
   provider: string;
   reason: string;
+  location?: string | null;
   notes: string;
   status: AppointmentStatus;
 }
@@ -706,7 +707,21 @@ export interface AppointmentCreate {
   start_time: string;
   provider: string;
   reason: string;
+  location?: string | null;
   notes?: string;
+}
+
+/** Voice mode: what POST /api/appointments/parse-text read from the spoken appointment. Unknown fields are null. */
+export interface AppointmentTextOut {
+  care_recipient_id: string | null;
+  care_recipient_name: string | null;
+  reason: string | null;
+  provider: string | null;
+  location: string | null;
+  scheduled_date: string | null; // YYYY-MM-DD
+  start_time: string | null; // HH:MM
+  notes: string | null;
+  source: "gemini" | "rules";
 }
 
 export type AppointmentUpdate = Partial<Omit<AppointmentCreate, "family_id">> & {
@@ -721,6 +736,8 @@ export const appointments = {
   update: (appointmentId: string, body: AppointmentUpdate) =>
     patch<AppointmentOut>(`/api/appointments/${appointmentId}`, body),
   remove: (appointmentId: string) => del(`/api/appointments/${appointmentId}`),
+  parseText: (familyId: string, text: string, today: string) =>
+    post<AppointmentTextOut>("/api/appointments/parse-text", { family_id: familyId, text, today }),
 };
 
 // ---- family dashboard (verified against api/dashboard.py and schemas.py) ----
