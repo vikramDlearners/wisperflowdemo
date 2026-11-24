@@ -17,6 +17,8 @@ from app.schemas import (
     MedicineOut,
     MedicineTextIn,
     MedicineTextOut,
+    RemindParentIn,
+    RemindParentOut,
     MedicineUpdate,
     QuantityUpdate,
     ReminderTimesIn,
@@ -26,6 +28,7 @@ from app.services import care as svc
 from app.services import doses as doses_svc
 from app.services import reminders as reminders_svc
 from app.services.medicine_text import parse_medicine_text
+from app.services.parent_reminder import remind_parent
 from app.services.permissions import require
 from app.services.prescription_scan import MAX_IMAGE_BYTES
 
@@ -95,6 +98,14 @@ def record_dose(
         "status": row.status,
         "recorded_at": row.recorded_at,
     }
+
+
+@router.post("/remind-parent", response_model=RemindParentOut)
+def remind_parent_route(
+    family_id: str, body: RemindParentIn, db: Session = DbSession, user: User = CurrentUser
+) -> RemindParentOut:
+    """'Remind parent': message the parent about today's medicines that are due and not taken yet."""
+    return RemindParentOut(**remind_parent(db, user.id, family_id, body.care_profile_id))
 
 
 @router.post("/parse-text", response_model=MedicineTextOut)

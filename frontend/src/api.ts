@@ -81,7 +81,9 @@ export interface MemberOut {
 }
 
 export interface MemberCreate {
-  email: string;
+  /** An email, a mobile number, or both. */
+  email?: string | null;
+  phone?: string | null;
   display_name?: string | null;
   role_id: string;
   relationship?: string | null;
@@ -484,7 +486,18 @@ export const medicines = {
     put<{ times: string[] }>(`/api/families/${familyId}/medicines/${medicineId}/reminders`, { times }),
   parseText: (familyId: string, text: string) =>
     post<MedicineTextOut>(`/api/families/${familyId}/medicines/parse-text`, { text }),
+  remindParent: (familyId: string, careProfileId: string) =>
+    post<RemindParentOut>(`/api/families/${familyId}/medicines/remind-parent`, { care_profile_id: careProfileId }),
 };
+
+/** What "Remind parent" sent: channels are "whatsapp", "sms" and "app"; sent_to is a masked phone number. */
+export interface RemindParentOut {
+  sent_at: string;
+  channels: ("whatsapp" | "sms" | "app")[];
+  sent_to: string | null;
+  medicines: string[];
+  message: string;
+}
 
 // ---- tasks (verified against api/tasks.py) ----
 

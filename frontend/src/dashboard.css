@@ -339,3 +339,62 @@ div.ov-list-main { display: grid; gap: 2px; }
 
 .ov-record .dose-buttons { justify-content: flex-start; }
 .ov-record .dose-error { text-align: left; }
+
+/* Plain-language care summary and "Remind parent" (pages/Dashboard.tsx). */
+.ov-pulse .ov-pulse-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.ov-pulse-lines li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #33443f;
+}
+.ov-pulse-lines li.is-warn {
+  color: #7a4a00;
+  font-weight: 600;
+}
+.ov-pulse-lines li.is-ok {
+  color: #1d6b47;
+}
+.ov-remind {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 4px 0 8px;
+}
+.ov-remind-btn {
+  background: #c2410c;
+  border-color: #c2410c;
+}
+.ov-remind-btn:hover:not(:disabled) {
+  background: #9a3412;
+  border-color: #9a3412;
+}
+.ov-remind-hint {
+  font-size: 0.8rem;
+  color: #6b5a3e;
+}
+.ov-pulse .ov-remind-note {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #e7f6ee;
+  border: 1px solid #b8e2cb;
+  color: #1d6b47;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.ov-pulse .ov-remind-note.is-bad {
+  background: #fdecea;
+  border-color: #f5c2bd;
+  color: #b42318;
+}

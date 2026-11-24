@@ -1,5 +1,6 @@
 """Families, members and roles. Every action is permission-checked and logged."""
 
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -14,7 +15,7 @@ from app.models.parent_invite import ParentInvite
 from app.models.role import Role, RolePermission
 from app.models.user import User
 from app.services.activity import log_activity
-from app.services.adapters.messaging import get_email_provider
+from app.services.adapters.messaging import get_email_provider, get_sms_provider, get_whatsapp_provider
 from app.services.auth import _hash_token
 from app.services.errors import NotFound
 
@@ -188,13 +189,14 @@ def add_member(
     db: Session,
     actor_id: str,
     family_id: str,
-    email: str,
+    email: str | None,
     role_id: str,
     display_name: str | None = None,
     relationship: str | None = None,
     care_profile_id: str | None = None,
+    phone: str | None = None,
 ) -> FamilyMember:
-    """Add a person to the family. Creates the user record if the email is new.
+    """Add a person to the family by email or mobile number. Creates the user record if the person is new.
 
     A mother or father member also gets a linked Mother/Father care profile. With care_profile_id
     the member is linked to that existing care profile instead (no duplicate parent): it must be
@@ -215,14 +217,22 @@ def add_member(
             "mother", "father", "grandmother", "grandfather", "son", "daughter", "other",
         }:
             raise ValueError("Unknown relationship")
-    email = email.strip().lower()
-    user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    email = email.strip().lower() if email and email.strip() else None
+    phone = normalise_phone(phone) if phone and phone.strip() else None
+    if email is None and phone is None:
+        raise ValueError("Enter an email address or a mobile number")
+    if email is not None:
+        user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    else:
+        user = db.execute(select(User).where(User.phone == phone)).scalars().first()
     if user is None:
         if not display_name or not display_name.strip():
             raise ValueError("display_name is required for a new person")
-        user = User(email=email, display_name=display_name.strip())
+        user = User(email=email, phone=phone, display_name=display_name.strip())
         db.add(user)
         db.flush()
+    elif phone and not user.phone:
+        user.phone = phone
     existing = db.execute(
         select(FamilyMember).where(
             FamilyMember.family_id == family_id, FamilyMember.user_id == user.id
@@ -295,8 +305,21 @@ def membership_permissions(db: Session, actor_id: str, family_id: str) -> dict:
     return {"role": role.name if role else "", "permissions": sorted(permission_codes_for(db, membership))}
 
 
-def create_parent_invite(db: Session, actor_id: str, family_id: str, membership_id: str) -> tuple[str, str]:
-    """Create a one-time sign-in link for a parent member and email it to them. Returns (email address, sign-in link)."""
+def normalise_phone(phone: str) -> str:
+    """Keep a leading + and the digits: "+91 98765-43210" -> "+919876543210". Raises ValueError if too short."""
+    raw = phone.strip()
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) < 8 or len(digits) > 15:
+        raise ValueError("Enter a valid mobile number, e.g. +91 98765 43210")
+    return ("+" if raw.startswith("+") else "") + digits
+
+
+def create_parent_invite(
+    db: Session, actor_id: str, family_id: str, membership_id: str
+) -> tuple[str, str, list[str]]:
+    """Create a one-time sign-in link for a parent member and send it: on WhatsApp and as a text message when
+    they have a mobile number, else by email. Returns (where it went, sign-in link, channels).
+    WhatsApp and SMS are Phase 1 logging stand-ins (adapters/messaging.py)."""
     require(db, actor_id, family_id, "members.manage")
     membership = db.get(FamilyMember, membership_id)
     if membership is None or membership.family_id != family_id:
@@ -305,8 +328,8 @@ def create_parent_invite(db: Session, actor_id: str, family_id: str, membership_
     if role is None or role.name != "Parent":
         raise ValueError("Sign-in links can only be sent to members with the Parent role")
     user = db.get(User, membership.user_id)
-    if user is None or not user.email:
-        raise NotFound("Member has no email address to send the invite to")
+    if user is None or not (user.phone or user.email):
+        raise NotFound("Member has no mobile number or email address to send the invite to")
 
     token = secrets.token_urlsafe(32)
     expires = datetime.now(timezone.utc) + timedelta(hours=settings.parent_invite_hours)
@@ -315,7 +338,7 @@ def create_parent_invite(db: Session, actor_id: str, family_id: str, membership_
             family_id=family_id,
             membership_id=membership.id,
             user_id=user.id,
-            email=user.email,
+            email=user.email or user.phone,
             token_hash=_hash_token(token),
             expires_at=expires,
             created_by_user_id=actor_id,
@@ -326,12 +349,20 @@ def create_parent_invite(db: Session, actor_id: str, family_id: str, membership_
     db.commit()
 
     link = f"{settings.parent_invite_base_url}?token={token}"
+    if user.phone:
+        text = (
+            f"Hello {user.display_name}, your family has invited you to CareCircle. "
+            f"Open this link within {settings.parent_invite_hours} hours to start: {link}"
+        )
+        get_whatsapp_provider().send(user.phone, text)
+        get_sms_provider().send(user.phone, text)
+        return user.phone, link, ["whatsapp", "sms"]
     get_email_provider().send(
         user.email,
         "You're invited to CareCircle",
         f"Open this link within {settings.parent_invite_hours} hours to create your sign-in: {link}",
     )
-    return user.email, link
+    return user.email, link, ["email"]
 
 
 __all__ = [

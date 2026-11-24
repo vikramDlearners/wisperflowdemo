@@ -73,12 +73,20 @@ RelationshipIn = Literal["mother", "father", "grandmother", "grandfather", "son"
 
 
 class MemberCreate(BaseModel):
-    email: EmailStr
+    # An email, a mobile number, or both. A parent is often added by mobile number only.
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=32)
     display_name: str | None = Field(default=None, max_length=255)
     role_id: str
     relationship: RelationshipIn | None = None
     # Link this member to an existing care profile of the family instead of creating a new one.
     care_profile_id: str | None = None
+
+    @model_validator(mode="after")
+    def _email_or_phone(self) -> "MemberCreate":
+        if not self.email and not (self.phone and self.phone.strip()):
+            raise ValueError("Enter an email address or a mobile number")
+        return self
 
 
 class MemberRoleChange(BaseModel):
@@ -160,6 +168,18 @@ class MedicineUpdate(BaseModel):
     active: bool | None = None
     unit_price: Decimal | None = Field(default=None, ge=0)
     total_medicine_count: int | None = Field(default=None, ge=0)
+
+
+class RemindParentIn(BaseModel):
+    care_profile_id: str
+
+
+class RemindParentOut(BaseModel):
+    sent_at: datetime
+    channels: list[str]  # "whatsapp", "sms", "app"
+    sent_to: str | None = None  # masked phone number
+    medicines: list[str]
+    message: str
 
 
 class MedicineTextIn(BaseModel):

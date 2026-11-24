@@ -83,6 +83,12 @@ function shortStamp(iso: string): string {
     : d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+/** "A", "A and B", "A, B and C". */
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
@@ -366,15 +372,75 @@ export default function Dashboard() {
   const onTrack = attention.length === 0;
   const appt = data?.next_appointment ?? null;
 
-  const summary = data
+  // Doses whose time has come and that nobody has marked taken or skipped: what "Remind parent" is for.
+  const notTakenYet = schedule.filter((d) => {
+    if (d.status === "taken" || d.status === "skipped") return false;
+    if (d.status === "missed" || d.status === "not_taken") return true;
+    const text = doseLabel(d, zone).text;
+    return text === "Due now" || text === "Not answered yet";
+  });
+  const takenCount = data?.medicines_today.taken ?? 0;
+  const totalCount = data?.medicines_today.total ?? 0;
+  const notTakenNames = [...new Set(notTakenYet.map((d) => medicineNames.get(d.medicine_id) ?? "a medicine"))];
+
+  // The care summary in plain words, one line per topic.
+  const summaryLines: { icon: string; text: string; tone: "ok" | "warn" | "info" }[] = data
     ? [
-        data.medicines_today.total > 0
-          ? `${data.medicines_today.taken} of ${count(data.medicines_today.total, "check-in")} confirmed`
-          : "No medicines scheduled today",
-        `${count(attention.length, "item")} ${attention.length === 1 ? "needs" : "need"} attention`,
-        appt ? `next appointment: ${dayLabel(parseDay(appt.scheduled_date))} at ${formatTime(appt.start_time)}` : "no upcoming appointments",
-      ].join(", ") + "."
-    : "";
+        totalCount === 0
+          ? { icon: "💊", text: "No medicines to take today.", tone: "info" }
+          : takenCount >= totalCount
+            ? { icon: "💊", text: `All ${count(totalCount, "medicine")} taken today. Well done!`, tone: "ok" }
+            : notTakenYet.length > 0
+              ? {
+                  icon: "💊",
+                  text: `${takenCount === 0 ? "No medicines" : `Only ${takenCount} of ${totalCount}`} taken so far today. ${listNames(notTakenNames)} ${notTakenNames.length === 1 ? "is" : "are"} waiting to be taken.`,
+                  tone: "warn",
+                }
+              : {
+                  icon: "💊",
+                  text: `${takenCount} of ${count(totalCount, "medicine")} taken so far. The rest are due later today.`,
+                  tone: "info",
+                },
+        attention.length === 0
+          ? { icon: "✅", text: "Nothing else to worry about.", tone: "ok" }
+          : {
+              icon: "⚠️",
+              text:
+                attention.length === 1
+                  ? `1 thing to check: ${attention[0].title}.`
+                  : `${attention.length} things to check, starting with: ${attention[0].title}.`,
+              tone: "warn",
+            },
+        appt
+          ? {
+              icon: "📅",
+              text: `Next appointment: ${dayLabel(parseDay(appt.scheduled_date))} at ${formatTime(appt.start_time)}.`,
+              tone: "info",
+            }
+          : { icon: "📅", text: "No doctor appointments booked.", tone: "info" },
+      ]
+    : [];
+  const summary = summaryLines.map((l) => l.text).join(" ");
+
+  // "Remind parent": WhatsApp + text message (and the app) about the medicines waiting to be taken.
+  const [reminding, setReminding] = useState(false);
+  const [reminderNote, setReminderNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  useEffect(() => setReminderNote(null), [profileId]);
+
+  async function remindParent() {
+    if (!profileId || !parent) return;
+    setReminding(true);
+    setReminderNote(null);
+    try {
+      const r = await medicines.remindParent(familyId, profileId);
+      const phone = r.sent_to ? ` (${r.sent_to})` : "";
+      setReminderNote({ text: `Reminder sent to ${parent.display_name} on WhatsApp and text message${phone}.` });
+    } catch (err) {
+      setReminderNote({ text: errorText(err), bad: true });
+    } finally {
+      setReminding(false);
+    }
+  }
 
   async function shareUpdate() {
     if (!parent) return;
@@ -449,9 +515,30 @@ export default function Dashboard() {
             <div className="ov-pulse-text">
               <h2>
                 <Link to={path(`/parents/${parent.care_profile_id}`)}>{parent.display_name}</Link>
-                {onTrack ? "'s care looks on track today." : "'s care needs a look today."}
+                {onTrack ? " is doing well today." : " needs a little help today."}
               </h2>
-              <p>{summary}</p>
+              <ul className="ov-pulse-lines">
+                {summaryLines.map((l) => (
+                  <li key={l.icon} className={`is-${l.tone}`}>
+                    <span aria-hidden="true">{l.icon}</span>
+                    {l.text}
+                  </li>
+                ))}
+              </ul>
+              {notTakenYet.length > 0 && (
+                <div className="ov-remind">
+                  <button type="button" className="pp-btn ov-remind-btn" disabled={reminding} onClick={() => void remindParent()}>
+                    {reminding ? "Sending…" : `🔔 Remind ${parent.display_name}`}
+                  </button>
+                  <span className="ov-remind-hint">Sends a WhatsApp and text message about the medicines not taken yet.</span>
+                </div>
+              )}
+              {reminderNote && (
+                <p className={`ov-remind-note${reminderNote.bad ? " is-bad" : ""}`} role={reminderNote.bad ? "alert" : "status"}>
+                  {reminderNote.bad ? "" : "✓ "}
+                  {reminderNote.text}
+                </p>
+              )}
               <p className="ov-pulse-facts">
                 <span>{parent.age !== null ? `${parent.age} years` : "Age not set"}{parent.relationship && ` · ${parent.relationship}`}</span>
                 <span>Health: {parent.known_health_conditions || "None recorded"}</span>

@@ -50,6 +50,19 @@ class LoggingSmsProvider:
         logger.info("MOCK SMS to=%s", to)
 
 
+class WhatsAppProvider(Protocol):
+    def send(self, to: str, body: str) -> None: ...
+
+
+@dataclass
+class LoggingWhatsAppProvider:
+    outbox: list[OutboundMessage] = field(default_factory=list)
+
+    def send(self, to: str, body: str) -> None:
+        self.outbox.append(OutboundMessage("whatsapp", to, None, body))
+        logger.info("MOCK WHATSAPP to=%s", to)
+
+
 @dataclass
 class SmtpEmailProvider:
     def send(self, to: str, subject: str, body: str) -> None:
@@ -69,6 +82,7 @@ class SmtpEmailProvider:
 _email_provider: EmailProvider = LoggingEmailProvider()
 _smtp_email_provider: EmailProvider = SmtpEmailProvider()
 _sms_provider: SmsProvider = LoggingSmsProvider()
+_whatsapp_provider: WhatsAppProvider = LoggingWhatsAppProvider()
 
 
 def get_email_provider() -> EmailProvider:
@@ -83,3 +97,8 @@ def get_sms_provider() -> SmsProvider:
     if settings.sms_provider != "mock":
         raise NotImplementedError(f"SMS provider '{settings.sms_provider}' is not implemented in Phase 1")
     return _sms_provider
+
+
+def get_whatsapp_provider() -> WhatsAppProvider:
+    # Phase 1: a logging stand-in; a WhatsApp Business API gateway can be plugged in here.
+    return _whatsapp_provider

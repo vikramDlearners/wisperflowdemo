@@ -90,9 +90,9 @@ export default function ParentProfilePage() {
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   const [inviteErr, setInviteErr] = useState<string | null>(null);
-  // No Parent member yet: "Give link to parent" first asks for the parent's email and adds them.
+  // No Parent member yet: "Give link to parent" first asks for the parent's mobile number and adds them.
   const [askEmail, setAskEmail] = useState(false);
-  const [parentEmail, setParentEmail] = useState("");
+  const [parentEmail, setParentEmail] = useState(""); // holds the mobile number
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -226,6 +226,7 @@ export default function ParentProfilePage() {
       void sendInvite(parentMember);
     } else {
       setInviteErr(null);
+      setParentEmail((cur) => cur || profile?.parent_mobile?.trim() || "");
       setAskEmail(true);
     }
   }
@@ -243,9 +244,10 @@ export default function ParentProfilePage() {
   // the button and the Enter key call this directly.
   async function handleAddParentAndSend() {
     if (!familyId) return;
-    const email = parentEmail.trim();
-    if (!email) {
-      setInviteErr("Please enter your parent's email address.");
+    const phone = parentEmail.trim();
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 8 || digits.length > 15) {
+      setInviteErr("Please enter your parent's mobile number, e.g. +91 98765 43210.");
       return;
     }
     setInviting(true);
@@ -256,7 +258,7 @@ export default function ParentProfilePage() {
       if (!parentRole) throw new Error("This family has no Parent role.");
       const relationship = profile?.relationship?.trim().toLowerCase() || null;
       const created = await members.create(familyId, {
-        email,
+        phone,
         display_name: profile?.parent_full_name?.trim() || firstName,
         role_id: parentRole.id,
         relationship:
@@ -282,17 +284,18 @@ export default function ParentProfilePage() {
     setInviteErr(null);
     setInviteLink(null);
     try {
-      // The backend replies { email, invite_link } with the address the sign-in link went to and the link itself.
+      // The backend replies { sent_to, channels, invite_link }: where the link went and the link itself.
       const res = (await members.invite(familyId, parent.membership_id)) as unknown as {
-        email?: string;
+        email?: string | null;
+        sent_to?: string;
+        channels?: string[];
         invite_link?: string;
       };
-      const mobile = profile?.parent_mobile?.trim();
       const who = profile?.parent_full_name?.trim().split(/\s+/)[0] || "your parent";
       setInviteMsg(
-        mobile
-          ? `Invite sent to ${who} via mobile (${mobile}).`
-          : `Invite sent to ${who} via email (${res.email ?? parent.email ?? "their email"}).`,
+        res.channels?.includes("email")
+          ? `Link sent to ${who} by email (${res.sent_to ?? parent.email ?? "their email"}).`
+          : `Link sent to ${who} on WhatsApp and text message${res.sent_to ? ` (${res.sent_to})` : ""}.`,
       );
       setInviteLink(res.invite_link ?? null);
       setShowLinkDialog(true);
@@ -829,25 +832,33 @@ export default function ParentProfilePage() {
                           aria-labelledby="pp-dialog-title"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          <div className="pp-sent-icon" aria-hidden="true">
+                            ✓
+                          </div>
                           <h3 id="pp-dialog-title">Link sent</h3>
-                          <p>Link sent to SMS, WhatsApp and Email</p>
-                          <button
-                            type="button"
-                            className="pp-btn"
-                            onClick={() => {
-                              setShowLinkDialog(false);
-                              setCopied(false);
-                            }}
-                          >
-                            OK
-                          </button>
+                          <p>Message sent in WhatsApp and text message.</p>
+                          {inviteLink && (
+                            <p className="pp-sent-link" title={inviteLink}>
+                              {inviteLink}
+                            </p>
+                          )}
                           <button
                             type="button"
                             className="pp-btn"
                             onClick={handleCopyLink}
                             disabled={!inviteLink}
                           >
-                            {copied ? "Copied" : "Copy Link"}
+                            {copied ? "✓ Link copied" : "Copy link"}
+                          </button>
+                          <button
+                            type="button"
+                            className="pp-btn pp-btn-ghost"
+                            onClick={() => {
+                              setShowLinkDialog(false);
+                              setCopied(false);
+                            }}
+                          >
+                            Done
                           </button>
                           {copyErr && (
                             <p role="alert" className="pp-invite-err">
@@ -871,16 +882,18 @@ export default function ParentProfilePage() {
                         >
                           <h3 id="pp-email-title">Send {firstName} a sign-in link</h3>
                           <p>
-                            Enter {firstName}'s email. We'll add them to your family as a Parent and send the
-                            link.
+                            Enter {firstName}'s mobile number. We'll add them to your family as a Parent and send
+                            the link on WhatsApp and text message.
                           </p>
                           <input
-                            type="email"
+                            type="tel"
+                            inputMode="tel"
+                            autoComplete="tel"
                             className="pp-input"
                             value={parentEmail}
                             onChange={(e) => setParentEmail(e.target.value)}
-                            placeholder="parent@example.com"
-                            aria-label={`${firstName}'s email`}
+                            placeholder="+91 98765 43210"
+                            aria-label={`${firstName}'s mobile number`}
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {

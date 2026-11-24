@@ -81,7 +81,7 @@ def add_member(
 ) -> MemberOut:
     membership = svc.add_member(
         db, user.id, family_id, body.email, body.role_id, body.display_name,
-        relationship=body.relationship, care_profile_id=body.care_profile_id,
+        relationship=body.relationship, care_profile_id=body.care_profile_id, phone=body.phone,
     )
     rows = svc.list_members(db, user.id, family_id)
     row = next(r for r in rows if r[0].id == membership.id)
@@ -92,9 +92,15 @@ def add_member(
 def invite_parent(
     family_id: str, membership_id: str, db: Session = DbSession, user: User = CurrentUser
 ) -> dict:
-    # Emails a one-time sign-in link to the parent member and returns the address it was sent to plus the link.
-    email, link = svc.create_parent_invite(db, user.id, family_id, membership_id)
-    return {"email": email, "invite_link": link}
+    # Sends a one-time sign-in link to the parent member (WhatsApp and text message when they have a mobile
+    # number, else email) and returns where it went plus the link, so the family can also copy it.
+    sent_to, link, channels = svc.create_parent_invite(db, user.id, family_id, membership_id)
+    return {
+        "email": sent_to if channels == ["email"] else None,
+        "sent_to": sent_to,
+        "channels": channels,
+        "invite_link": link,
+    }
 
 
 @router.patch("/{family_id}/members/{membership_id}", response_model=MemberOut)
