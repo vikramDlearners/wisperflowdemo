@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -32,6 +32,9 @@ class ParentOnboardingProfile(Base):
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     approximate_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     profile_picture_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # A photo uploaded from the device (shown before profile_picture_url when both exist).
+    profile_photo_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    profile_photo_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     preferred_language: Mapped[str | None] = mapped_column(String(20), nullable=True)
     gender: Mapped[str | None] = mapped_column(String(16), nullable=True)
 

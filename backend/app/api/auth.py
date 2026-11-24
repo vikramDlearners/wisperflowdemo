@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -33,7 +33,7 @@ from app.services.auth import (
     verify_sign_in_token,
 )
 from app.services import care as care_svc
-from app.services.profile import age_from, completion
+from app.services.profile import MAX_PHOTO_BYTES, age_from, clear_profile_photo, completion, set_profile_photo
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -148,6 +148,7 @@ def _profile_out(profile: ParentOnboardingProfile) -> ProfileOut:
     values = {name: getattr(profile, name) for name in _PROFILE_FIELDS}
     return ProfileOut(
         **values,
+        has_photo=profile.profile_photo_content_type is not None,
         age=age_from(profile),
         updated_at=profile.updated_at,
         completion=completion(profile),
@@ -162,6 +163,48 @@ def get_profile(user: User = CurrentUser, db: Session = DbSession) -> ProfileOut
     if profile is None:
         profile = ParentOnboardingProfile(user_id=user.id)
     return _profile_out(profile)
+
+
+def _own_profile(db: Session, user: User, create: bool = False) -> ParentOnboardingProfile | None:
+    profile = db.scalar(select(ParentOnboardingProfile).where(ParentOnboardingProfile.user_id == user.id))
+    if profile is None and create:
+        profile = ParentOnboardingProfile(user_id=user.id)
+        db.add(profile)
+    return profile
+
+
+def _photo_response(profile: ParentOnboardingProfile | None) -> Response:
+    if profile is None or profile.profile_photo_content_type is None or profile.profile_photo_data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No photo yet")
+    return Response(content=profile.profile_photo_data, media_type=profile.profile_photo_content_type,
+                    headers={"Cache-Control": "private, no-cache"})
+
+
+@router.get("/me/profile/photo")
+def get_profile_photo(user: User = CurrentUser, db: Session = DbSession) -> Response:
+    return _photo_response(_own_profile(db, user))
+
+
+@router.put("/me/profile/photo", response_model=ProfileOut)
+def upload_profile_photo(
+    file: UploadFile = File(...), user: User = CurrentUser, db: Session = DbSession
+) -> ProfileOut:
+    profile = _own_profile(db, user, create=True)
+    # Read one byte past the limit so an oversized upload is refused without loading it all.
+    set_profile_photo(profile, file.file.read(MAX_PHOTO_BYTES + 1), file.content_type or "")
+    profile.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(profile)
+    return _profile_out(profile)
+
+
+@router.delete("/me/profile/photo", status_code=204)
+def delete_profile_photo(user: User = CurrentUser, db: Session = DbSession) -> Response:
+    profile = _own_profile(db, user)
+    if profile is not None:
+        clear_profile_photo(profile)
+        db.commit()
+    return Response(status_code=204)
 
 
 @router.patch("/me/profile", response_model=ProfileOut)

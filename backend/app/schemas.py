@@ -417,6 +417,8 @@ class CompletionOut(BaseModel):
 
 
 class ProfileOut(BaseModel):
+    # True when a photo was uploaded (fetch it from .../profile/photo).
+    has_photo: bool = False
     parent_full_name: str | None
     preferred_name: str | None
     relationship: str | None

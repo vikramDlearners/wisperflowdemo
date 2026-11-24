@@ -3,11 +3,11 @@
 from datetime import date as Date
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.auth import _profile_out
+from app.api.auth import _photo_response, _profile_out
 from app.api.deps import CurrentUser, DbSession
 from app.models.care_profile import CareProfile
 from app.models.membership import FamilyMember
@@ -26,6 +26,7 @@ from app.schemas import (
 )
 from app.services import care as care_svc
 from app.services import families as svc
+from app.services.profile import MAX_PHOTO_BYTES, clear_profile_photo, set_profile_photo
 from app.services.dashboard import build_family_dashboard
 from app.services.permissions import get_membership, permission_codes_for
 from app.services.permissions import require  # noqa: F401  (re-exported for readers of this module)
@@ -162,6 +163,46 @@ def get_parent_profile(
         # Nothing saved yet: return the same unsaved defaults get_profile does.
         return _profile_out(ParentOnboardingProfile())
     return _profile_out(profile)
+
+
+@router.get("/{family_id}/parents/{care_profile_id}/profile/photo")
+def get_parent_profile_photo(
+    family_id: str, care_profile_id: str, db: Session = DbSession, user: User = CurrentUser,
+) -> Response:
+    require(db, user.id, family_id, "dashboard.view")
+    care_profile = _parent_in_family(db, family_id, care_profile_id)
+    return _photo_response(_onboarding_for_care_profile(db, care_profile))
+
+
+@router.put("/{family_id}/parents/{care_profile_id}/profile/photo", response_model=ProfileOut)
+def upload_parent_profile_photo(
+    family_id: str, care_profile_id: str, file: UploadFile = File(...),
+    db: Session = DbSession, user: User = CurrentUser,
+) -> ProfileOut:
+    require(db, user.id, family_id, "parent_profile.edit")
+    care_profile = _parent_in_family(db, family_id, care_profile_id)
+    profile = _onboarding_for_care_profile(db, care_profile)
+    if profile is None:
+        profile = ParentOnboardingProfile(user_id=care_profile.linked_user_id, care_profile_id=care_profile.id)
+        db.add(profile)
+    set_profile_photo(profile, file.file.read(MAX_PHOTO_BYTES + 1), file.content_type or "")
+    profile.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(profile)
+    return _profile_out(profile)
+
+
+@router.delete("/{family_id}/parents/{care_profile_id}/profile/photo", status_code=204)
+def delete_parent_profile_photo(
+    family_id: str, care_profile_id: str, db: Session = DbSession, user: User = CurrentUser,
+) -> Response:
+    require(db, user.id, family_id, "parent_profile.edit")
+    care_profile = _parent_in_family(db, family_id, care_profile_id)
+    profile = _onboarding_for_care_profile(db, care_profile)
+    if profile is not None:
+        clear_profile_photo(profile)
+        db.commit()
+    return Response(status_code=204)
 
 
 @router.patch("/{family_id}/parents/{care_profile_id}/profile", response_model=ProfileOut)

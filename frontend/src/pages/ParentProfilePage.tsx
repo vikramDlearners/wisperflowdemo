@@ -18,6 +18,7 @@ import {
   type ParentProfileOut,
 } from "../api";
 import { RELATIONSHIP_OPTIONS } from "../lib/constants";
+import { fetchProfilePhoto, removeProfilePhoto, uploadProfilePhoto } from "../profilePhoto";
 
 
 // Parent profile page in the shared family workspace layout (sidebar + header).
@@ -67,6 +68,11 @@ function errorText(err: unknown): string {
 
 export default function ParentProfilePage() {
   const [profile, setProfile] = useState<ParentProfileOut | null>(null);
+  // The uploaded photo as a blob: URL (null: none, or not loaded yet).
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoErr, setPhotoErr] = useState<string | null>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -313,6 +319,56 @@ export default function ParentProfilePage() {
   const toggleAccess = (item: string) =>
     setAccess((prev) => (prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]));
 
+  // Load the uploaded photo for the profile on screen (own profile or the selected parent tab).
+  const photoTarget = { familyId, careProfileId: selectedCareProfileId };
+  useEffect(() => {
+    let active = true;
+    let created: string | null = null;
+    setPhotoUrl(null);
+    if (profile?.has_photo) {
+      fetchProfilePhoto({ familyId, careProfileId: selectedCareProfileId })
+        .then((url) => {
+          created = url;
+          if (active) setPhotoUrl(url);
+          else if (url) URL.revokeObjectURL(url);
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      active = false;
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [profile?.has_photo, familyId, selectedCareProfileId, profile]);
+
+  async function handlePhotoChosen(file: File | undefined) {
+    if (!file) return;
+    setPhotoBusy(true);
+    setPhotoErr(null);
+    try {
+      const updated = await uploadProfilePhoto(photoTarget, file);
+      setProfile(updated);
+    } catch (err) {
+      setPhotoErr(errorText(err));
+    } finally {
+      setPhotoBusy(false);
+      if (photoInput.current) photoInput.current.value = "";
+    }
+  }
+
+  async function handleRemovePhoto() {
+    if (!window.confirm("Remove this profile picture?")) return;
+    setPhotoBusy(true);
+    setPhotoErr(null);
+    try {
+      await removeProfilePhoto(photoTarget);
+      setProfile((p) => (p ? { ...p, has_photo: false } : p));
+    } catch (err) {
+      setPhotoErr(errorText(err));
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
   function handleEdit() {
     setError(null);
     setSaved(false);
@@ -375,6 +431,16 @@ export default function ParentProfilePage() {
 
   const parentName = profile?.parent_full_name?.trim() || "Your parent";
   const firstName = parentName.split(/\s+/)[0];
+  const photoInitials =
+    parentName === "Your parent"
+      ? "?"
+      : parentName
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((w) => w[0]?.toUpperCase() ?? "")
+          .join("");
+  // Uploaded photo first, else the image link from onboarding, else initials.
+  const shownPhoto = photoUrl ?? (profile?.profile_picture_url?.trim() || null);
   const greeting = form?.preferred_name.trim() || "there";
 
   // One form row: an input in edit mode, plain text in view mode.
@@ -402,12 +468,59 @@ export default function ParentProfilePage() {
           onSubmit={editing ? handleSave : (e) => e.preventDefault()}
         >
           <div className="pp-page-head">
+            <div className="pp-head-main">
+              <div className="pp-photo">
+                <div className="pp-photo-frame">
+                  {shownPhoto ? (
+                    <img src={shownPhoto} alt={`${parentName}'s profile picture`} className="pp-photo-img" />
+                  ) : (
+                    <span className="pp-photo-initials" aria-hidden="true">
+                      {photoInitials}
+                    </span>
+                  )}
+                </div>
+                {editing && (
+                  <div className="pp-photo-actions">
+                    <input
+                      ref={photoInput}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="pp-photo-input"
+                      onChange={(e) => void handlePhotoChosen(e.target.files?.[0])}
+                    />
+                    <button
+                      type="button"
+                      className="pp-btn pp-btn-ghost pp-photo-btn"
+                      onClick={() => photoInput.current?.click()}
+                      disabled={photoBusy}
+                    >
+                      {photoBusy ? "Uploading…" : profile?.has_photo ? "Change photo" : "📷 Add photo"}
+                    </button>
+                    {profile?.has_photo && (
+                      <button
+                        type="button"
+                        className="pp-photo-remove"
+                        onClick={() => void handleRemovePhoto()}
+                        disabled={photoBusy}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                )}
+                {photoErr && (
+                  <p role="alert" className="pp-photo-err">
+                    {photoErr}
+                  </p>
+                )}
+              </div>
             <div>
               <p className="pp-eyebrow">Care circle · Family workspace</p>
               <h1>Parent profile</h1>
               <p className="pp-muted">
                 Manage {firstName}'s care profile, preferred voice experience and assigned family contacts.
               </p>
+            </div>
             </div>
             <div className="pp-head-actions">
               {familyId ? (

@@ -517,6 +517,8 @@ export interface ProfileCompletion {
 }
 
 export interface ParentProfileOut {
+  /** A photo was uploaded from the device (see profilePhoto.ts). */
+  has_photo?: boolean;
   parent_full_name: string | null;
   preferred_name: string | null;
   relationship: string | null;

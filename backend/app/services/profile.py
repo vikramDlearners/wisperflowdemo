@@ -1,4 +1,4 @@
-"""Completion score and age helpers for the parent onboarding profile."""
+"""Completion score, age and photo helpers for the parent onboarding profile."""
 
 from datetime import date
 
@@ -106,3 +106,25 @@ def completion(profile: object) -> dict:
         total_filled += filled
         total_slots += len(slots)
     return {"overall": _percent(total_filled, total_slots), "sections": sections}
+
+
+PHOTO_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+
+
+def set_profile_photo(profile, image_bytes: bytes, mime_type: str) -> None:
+    """Validate and store an uploaded photo on the onboarding profile. The caller commits."""
+    if mime_type not in PHOTO_TYPES:
+        raise ValueError("Upload a JPEG, PNG or WebP image")
+    if not image_bytes:
+        raise ValueError("Uploaded image is empty")
+    if len(image_bytes) > MAX_PHOTO_BYTES:
+        raise ValueError("Uploaded image must be 10 MB or smaller")
+    profile.profile_photo_data = image_bytes
+    profile.profile_photo_content_type = mime_type
+
+
+def clear_profile_photo(profile) -> None:
+    profile.profile_photo_data = None
+    profile.profile_photo_content_type = None
+
