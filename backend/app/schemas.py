@@ -240,6 +240,16 @@ class TaskCreate(BaseModel):
     care_profile_id: str | None = None
 
 
+class AskIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+    tried: list[str] = Field(default_factory=list, max_length=30)  # pages already opened for this question
+
+
+class AskOut(BaseModel):
+    destination: str | None = None
+    available: bool
+
+
 class TaskTextIn(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     # The family member's own date, so "tomorrow" means their tomorrow; defaults to the server's date.

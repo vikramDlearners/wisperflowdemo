@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
-import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { useRef, type ReactNode } from "react";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { AskHelpResult } from "./components/AskHelp";
+import type { AskState } from "./lib/askHelp";
 import SignIn from "./pages/SignIn";
 import ParentAcceptInvite from "./pages/ParentAcceptInvite";
 import Landing from "./pages/Landing";
@@ -40,91 +42,100 @@ function MedicineRoute({
 }
 
 export default function App() {
+  // Each Ask for help answer remounts the page, because pages read ?new=1 only when they first load. The key is kept
+  // after that, so a page that changes its own URL (and drops the state) is not remounted.
+  const askId = (useLocation().state as { ask?: AskState } | null)?.ask?.id;
+  const askKey = useRef(askId);
+  if (askId !== undefined) askKey.current = askId;
+
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/start" element={<Landing />} />
-      <Route path="/signin" element={<SignIn />} />
-      <Route path="/parent/accept-invite" element={<ParentAcceptInvite />} />
+    <>
+      <Routes key={askKey.current}>
+        <Route path="/" element={<Home />} />
+        <Route path="/start" element={<Landing />} />
+        <Route path="/signin" element={<SignIn />} />
+        <Route path="/parent/accept-invite" element={<ParentAcceptInvite />} />
 
-      <Route path="/family/:familyId" element={<Dashboard />} />
-      <Route
-        path="/family/:familyId/parents/:careProfileId"
-        element={<FamilyRoute render={() => <ParentDetails />} />}
-      />
-      <Route
-        path="/family/:familyId/profile"
-        element={<FamilyRoute render={(familyId) => <ParentProfile familyId={familyId} />} />}
-      />
-      <Route
-        path="/family/:familyId/medicines"
-        element={<FamilyRoute render={(familyId) => <MedicineList familyId={familyId} />} />}
-      />
-      <Route
-        path="/family/:familyId/medicines/new"
-        element={<FamilyRoute render={(familyId) => <MedicineForm familyId={familyId} />} />}
-      />
-      <Route
-        path="/family/:familyId/prescription-scan"
-        element={
-          <FamilyRoute render={(familyId) => <PrescriptionScan familyId={familyId} />} />
-        }
-      />
-      <Route
-        path="/family/:familyId/medicines/:medicineId/edit"
-        element={
-          <MedicineRoute
-            render={(familyId, medicineId) => <MedicineForm familyId={familyId} medicineId={medicineId} />}
-          />
-        }
-      />
-      <Route
-        path="/family/:familyId/medicines/:medicineId"
-        element={
-          <MedicineRoute
-            render={(familyId, medicineId) => (
-              <MedicineDetail familyId={familyId} medicineId={medicineId} />
-            )}
-          />
-        }
-      />
-      <Route
-        path="/family/:familyId/activity"
-        element={<FamilyRoute render={(familyId) => <CareVoiceActivity familyId={familyId} />} />}
-      />
-      <Route
-        path="/family/:familyId/tasks"
-        element={<FamilyRoute render={(familyId) => <FamilyTasks familyId={familyId} />} />}
-      />
-      <Route path="/family/:familyId/appointments" element={<Appointments />} />
-      <Route
-        path="/family/:familyId/records"
-        element={<FamilyRoute render={(familyId) => <SharedRecords familyId={familyId} />} />}
-      />
-      <Route path="/family/:familyId/timeline" element={<FamilyTimeline />} />
-      <Route
-        path="/family/:familyId/members"
-        element={<FamilyRoute render={(familyId) => <MembersPermissions familyId={familyId} />} />}
-      />
-      <Route
-        path="/family/:familyId/manage-profile"
-        element={<FamilyRoute render={() => <ManageProfile />} />}
-      />
-      <Route
-        path="/family/:familyId/notifications"
-        element={
-          <FamilyRoute render={(familyId) => <NotificationSettings familyId={familyId} />} />
-        }
-      />
+        <Route path="/family/:familyId" element={<Dashboard />} />
+        <Route
+          path="/family/:familyId/parents/:careProfileId"
+          element={<FamilyRoute render={() => <ParentDetails />} />}
+        />
+        <Route
+          path="/family/:familyId/profile"
+          element={<FamilyRoute render={(familyId) => <ParentProfile familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/medicines"
+          element={<FamilyRoute render={(familyId) => <MedicineList familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/medicines/new"
+          element={<FamilyRoute render={(familyId) => <MedicineForm familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/prescription-scan"
+          element={
+            <FamilyRoute render={(familyId) => <PrescriptionScan familyId={familyId} />} />
+          }
+        />
+        <Route
+          path="/family/:familyId/medicines/:medicineId/edit"
+          element={
+            <MedicineRoute
+              render={(familyId, medicineId) => <MedicineForm familyId={familyId} medicineId={medicineId} />}
+            />
+          }
+        />
+        <Route
+          path="/family/:familyId/medicines/:medicineId"
+          element={
+            <MedicineRoute
+              render={(familyId, medicineId) => (
+                <MedicineDetail familyId={familyId} medicineId={medicineId} />
+              )}
+            />
+          }
+        />
+        <Route
+          path="/family/:familyId/activity"
+          element={<FamilyRoute render={(familyId) => <CareVoiceActivity familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/tasks"
+          element={<FamilyRoute render={(familyId) => <FamilyTasks familyId={familyId} />} />}
+        />
+        <Route path="/family/:familyId/appointments" element={<Appointments />} />
+        <Route
+          path="/family/:familyId/records"
+          element={<FamilyRoute render={(familyId) => <SharedRecords familyId={familyId} />} />}
+        />
+        <Route path="/family/:familyId/timeline" element={<FamilyTimeline />} />
+        <Route
+          path="/family/:familyId/members"
+          element={<FamilyRoute render={(familyId) => <MembersPermissions familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/manage-profile"
+          element={<FamilyRoute render={() => <ManageProfile />} />}
+        />
+        <Route
+          path="/family/:familyId/notifications"
+          element={
+            <FamilyRoute render={(familyId) => <NotificationSettings familyId={familyId} />} />
+          }
+        />
 
-      <Route path="/parent/chat" element={<ParentChat />} />
-      {/* The old parent pages are replaced by the chat; their files stay on disk. */}
-      <Route path="/parent/home" element={<Navigate to="/parent/chat" replace />} />
-      <Route path="/parent/checkin" element={<Navigate to="/parent/chat" replace />} />
-      <Route path="/parent/confirmation" element={<Navigate to="/parent/chat" replace />} />
-      <Route path="/parent/help" element={<Navigate to="/parent/chat" replace />} />
-      <Route path="/onboarding/parent" element={<ParentOnboarding />} />
-      <Route path="/parent-profile" element={<ParentProfilePage />} />
-    </Routes>
+        <Route path="/parent/chat" element={<ParentChat />} />
+        {/* The old parent pages are replaced by the chat; their files stay on disk. */}
+        <Route path="/parent/home" element={<Navigate to="/parent/chat" replace />} />
+        <Route path="/parent/checkin" element={<Navigate to="/parent/chat" replace />} />
+        <Route path="/parent/confirmation" element={<Navigate to="/parent/chat" replace />} />
+        <Route path="/parent/help" element={<Navigate to="/parent/chat" replace />} />
+        <Route path="/onboarding/parent" element={<ParentOnboarding />} />
+        <Route path="/parent-profile" element={<ParentProfilePage />} />
+      </Routes>
+      <AskHelpResult />
+    </>
   );
 }

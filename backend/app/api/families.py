@@ -14,6 +14,8 @@ from app.models.membership import FamilyMember
 from app.models.parent_onboarding_profile import ParentOnboardingProfile
 from app.models.user import User
 from app.schemas import (
+    AskIn,
+    AskOut,
     DashboardResponse,
     FamilyCreate,
     FamilyOut,
@@ -26,6 +28,7 @@ from app.schemas import (
 )
 from app.services import care as care_svc
 from app.services import families as svc
+from app.services.ask_help import choose_destination
 from app.services.emergencies import complete_emergency as complete_emergency_svc
 from app.services.profile import MAX_PHOTO_BYTES, clear_profile_photo, set_profile_photo
 from app.services.dashboard import build_family_dashboard
@@ -69,6 +72,13 @@ def get_family(family_id: str, db: Session = DbSession, user: User = CurrentUser
 def my_access(family_id: str, db: Session = DbSession, user: User = CurrentUser) -> MyAccess:
     data = svc.membership_permissions(db, user.id, family_id)
     return MyAccess(**data)
+
+
+@router.post("/{family_id}/ask", response_model=AskOut)
+def ask(family_id: str, body: AskIn, db: Session = DbSession, user: User = CurrentUser) -> AskOut:
+    """Ask for help: the page the user means, when the app's own text rules were not sure."""
+    svc.get_family(db, user.id, family_id)  # members only
+    return AskOut(**choose_destination(body.text, body.tried))
 
 
 @router.get("/{family_id}/members", response_model=list[MemberOut])

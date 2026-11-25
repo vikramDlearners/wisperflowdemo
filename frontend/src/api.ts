@@ -753,6 +753,18 @@ export const appointments = {
     post<AppointmentTextOut>("/api/appointments/parse-text", { family_id: familyId, text, today }),
 };
 
+// ---- ask for help (only called when the text rules are not sure) ----
+
+export interface AskOut {
+  destination: string | null; // a key from lib/askHelp.ts, or null when nothing fits
+  available: boolean; // false when no LLM could be reached
+}
+
+export const askHelp = {
+  ask: (familyId: string, text: string, tried: string[]) =>
+    post<AskOut>(`/api/families/${familyId}/ask`, { text, tried }),
+};
+
 // ---- family dashboard (verified against api/dashboard.py and schemas.py) ----
 
 export interface DashboardParentOut {
