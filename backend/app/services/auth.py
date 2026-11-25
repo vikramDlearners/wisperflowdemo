@@ -73,14 +73,20 @@ def create_otp(db: Session, user: User, purpose: str) -> str:
     for row in previous:
         row.used_at = now
     code = "123456"
+    token_hash = _otp_hash(user.id, purpose, code)
     expires = now + timedelta(minutes=settings.otp_minutes)
-    db.add(
-        LoginToken(
-            user_id=user.id,
-            token_hash=_otp_hash(user.id, purpose, code),
-            expires_at=expires,
-        )
-    )
+    # The code is always 123456, so its hash is fixed per user and purpose. A row with this
+    # hash may already exist from an earlier request, so refresh it in place; a fresh INSERT
+    # would collide with the unique index on token_hash.
+    existing = db.execute(
+        select(LoginToken).where(LoginToken.token_hash == token_hash)
+    ).scalar_one_or_none()
+    if existing is None:
+        db.add(LoginToken(user_id=user.id, token_hash=token_hash, expires_at=expires))
+    else:
+        existing.expires_at = expires
+        existing.used_at = None
+        existing.created_at = now
     db.commit()
     return code
 
