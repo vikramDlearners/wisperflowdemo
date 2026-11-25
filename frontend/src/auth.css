@@ -324,6 +324,57 @@
   cursor: not-allowed;
   box-shadow: none;
 }
+.au-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--au-muted);
+  font-size: 0.85rem;
+}
+.au-or::before,
+.au-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--au-line);
+}
+.au-btn-alt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 50px;
+  border: 1.5px solid var(--au-line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--au-ink);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.au-btn-alt:hover:not(:disabled) {
+  background: #f7faf9;
+}
+.au-btn-alt:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.au-btn-alt:focus-visible {
+  outline: 3px solid #9fd3c9;
+  outline-offset: 2px;
+}
+.au-voice-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--au-muted);
+}
+.au-voice-hint strong {
+  color: var(--au-ink);
+  word-break: break-all;
+}
 .au-spinner {
   width: 16px;
   height: 16px;

@@ -14,6 +14,8 @@ import {
   verifyOtp,
   type RoleChoice,
 } from "../api";
+import WisprFlowIcon from "../components/WisprFlowIcon";
+import { spokenEmail } from "../spokenEmail";
 
 // Sign up / log in with an emailed 6-digit code, then (new users) pick a role.
 // Steps: login | signup -> code -> role -> family Overview, or /onboarding/parent before setup (parents: /parent/chat)
@@ -67,6 +69,9 @@ export default function Landing() {
   const [codeFrom, setCodeFrom] = useState<"login" | "signup">("login");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
+  // Wispr Flow login: the spoken email is typed into the same box and tidied up before sending.
+  const [voice, setVoice] = useState(false);
+  const emailRef = useRef<HTMLInputElement>(null);
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(""));
   const [selectedRole, setSelectedRole] = useState<RoleChoice | null>(null);
   const [otherRole, setOtherRole] = useState("");
@@ -77,6 +82,8 @@ export default function Landing() {
   const digitRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const code = digits.join("");
+  const speaking = voice && step === "login";
+  const heard = speaking ? spokenEmail(email) : null;
 
   // Returning visitor: if a session token is already stored, check it with the server.
   useEffect(() => {
@@ -111,8 +118,16 @@ export default function Landing() {
 
   function switchTo(next: "login" | "signup") {
     setStep(next);
+    setVoice(false);
     setError(null);
     setNotice(null);
+  }
+
+  function toggleVoice() {
+    setVoice(!voice);
+    setEmail("");
+    setError(null);
+    emailRef.current?.focus();
   }
 
   function openCodeStep(from: "login" | "signup") {
@@ -139,10 +154,16 @@ export default function Landing() {
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
+    const address = speaking ? heard : email.trim();
+    if (!address) {
+      setError("We couldn't read that as an email. Try again, like: meera at gmail dot com.");
+      return;
+    }
+    setEmail(address);
     setLoading(true);
     setError(null);
     try {
-      await login(email.trim());
+      await login(address);
       openCodeStep("login");
     } catch (err) {
       setError(errorText(err));
@@ -311,7 +332,9 @@ export default function Landing() {
               <h1>{step === "login" ? "Welcome back" : "Create your account"}</h1>
               <p className="au-sub">
                 {step === "login"
-                  ? "Enter your email and we'll send you a 6-digit code."
+                  ? speaking
+                    ? "Say your email and we'll send you a 6-digit code."
+                    : "Enter your email and we'll send you a 6-digit code."
                   : "Start your family's care circle in under a minute."}
               </p>
 
@@ -364,19 +387,48 @@ export default function Landing() {
                 <label className="au-field">
                   <span>Email address</span>
                   <input
-                    type="email"
+                    ref={emailRef}
+                    type={speaking ? "text" : "email"}
                     required
                     autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     inputMode="email"
-                    placeholder="you@example.com"
+                    placeholder={
+                      speaking
+                        ? "meera at gmail dot com"
+                        : step === "login"
+                          ? "Enter email or use Wispr Flow to log in"
+                          : "you@example.com"
+                    }
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </label>
+                {speaking && (
+                  <p className="au-voice-hint" role="status">
+                    {heard ? (
+                      <>
+                        We'll send the code to <strong>{heard}</strong>
+                      </>
+                    ) : (
+                      "Keep the cursor in the box, hold your Wispr Flow shortcut and say your email."
+                    )}
+                  </p>
+                )}
                 <button type="submit" className="au-btn" disabled={loading}>
                   {loading ? <span className="au-spinner" aria-hidden="true" /> : null}
                   {loading ? "Sending code…" : "Send code"}
                 </button>
+                {step === "login" && (
+                  <>
+                    <div className="au-or">or</div>
+                    <button type="button" className="au-btn-alt" disabled={loading} onClick={toggleVoice}>
+                      {!speaking && <WisprFlowIcon size={18} />}
+                      {speaking ? "Type email instead" : "Log in with Wispr Flow"}
+                    </button>
+                  </>
+                )}
               </form>
 
               <p className="au-foot">

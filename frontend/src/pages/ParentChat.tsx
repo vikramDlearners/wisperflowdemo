@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import WisprFlowIcon from "../components/WisprFlowIcon";
 import "../parent-chat.css";
 import { ApiError } from "../api";
 import LogoutButton from "../components/LogoutButton";
@@ -115,21 +116,6 @@ function telHref(number: string): string {
 
 function reminderKey(r: ReminderDue): string {
   return `${r.medicine_id}|${r.slot}|${r.remind_at}`;
-}
-
-/** The Wispr Flow mark: five bars. */
-function WisprFlowIcon() {
-  return (
-    <svg className="pc-wispr" viewBox="0 0 344 337" width="26" height="26" aria-hidden="true">
-      <path
-        d="M24.5 24.5v288M98.5 176v102M172.5 81v175M246 179v99M319.5 24.5v288"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="49"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
 }
 
 export default function ParentChat() {
@@ -1112,7 +1098,7 @@ export default function ParentChat() {
               {t.typeYourAnswer}
             </label>
             <div className="pc-text-wrap">
-              <WisprFlowIcon />
+              <WisprFlowIcon className="pc-wispr" />
               <input
                 id="pc-text"
                 ref={inputRef}
