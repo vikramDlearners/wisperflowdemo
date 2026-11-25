@@ -7,7 +7,7 @@ Create Date: 2026-11-24 23:00:00.000000
 """
 from typing import Sequence, Union
 
-from alembic import op
+from alembic import context, op
 import sqlalchemy as sa
 
 
@@ -18,7 +18,7 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def upgrade() -> None:
+def _create_table() -> None:
     op.create_table(
         'emergencies',
         sa.Column('id', sa.String(length=36), primary_key=True),
@@ -33,7 +33,20 @@ def upgrade() -> None:
         sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('completed_by_user_id', sa.String(length=36), sa.ForeignKey('users.id'), nullable=True),
     )
-    op.create_index('ix_emergencies_family_status', 'emergencies', ['family_id', 'status'])
+
+
+def _create_index() -> None:
+    op.create_index(
+        'ix_emergencies_family_status', 'emergencies', ['family_id', 'status'], if_not_exists=True
+    )
+
+
+def upgrade() -> None:
+    # The table was created directly on one database before this migration ran there, so it may already exist.
+    # Offline mode (--sql) has no database to look at.
+    if context.is_offline_mode() or not sa.inspect(op.get_bind()).has_table('emergencies'):
+        _create_table()
+    _create_index()
 
 
 def downgrade() -> None:
