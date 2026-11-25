@@ -17,6 +17,9 @@ from app.schemas import (
     AskIn,
     AskOut,
     DashboardResponse,
+    DoseHistoryItemOut,
+    FamilyChatIn,
+    FamilyChatOut,
     FamilyCreate,
     FamilyOut,
     MemberCreate,
@@ -28,14 +31,17 @@ from app.schemas import (
 )
 from app.services import care as care_svc
 from app.services import families as svc
+from app.services import family_chat
 from app.services.ask_help import choose_destination
 from app.services.emergencies import complete_emergency as complete_emergency_svc
 from app.services.profile import MAX_PHOTO_BYTES, clear_profile_photo, set_profile_photo
-from app.services.dashboard import build_family_dashboard
+from app.services.dashboard import build_family_dashboard, list_dose_history
 from app.services.permissions import get_membership, permission_codes_for
 from app.services.permissions import require  # noqa: F401  (re-exported for readers of this module)
 
 router = APIRouter(prefix="/api/families", tags=["families"])
+
+MAX_HISTORY_DAYS = 90
 
 
 def _member_out(row) -> MemberOut:
@@ -79,6 +85,14 @@ def ask(family_id: str, body: AskIn, db: Session = DbSession, user: User = Curre
     """Ask for help: the page the user means, when the app's own text rules were not sure."""
     svc.get_family(db, user.id, family_id)  # members only
     return AskOut(**choose_destination(body.text, body.tried))
+
+
+@router.post("/{family_id}/chat", response_model=FamilyChatOut)
+def chat(family_id: str, body: FamilyChatIn, db: Session = DbSession, user: User = CurrentUser) -> FamilyChatOut:
+    """Chat: answers about the parent's care. Reads only, and only what this member may view."""
+    svc.get_family(db, user.id, family_id)  # members only
+    history = [m.model_dump() for m in body.history]
+    return FamilyChatOut(**family_chat.answer(db, user.id, family_id, body.text, history))
 
 
 @router.get("/{family_id}/members", response_model=list[MemberOut])
@@ -150,6 +164,22 @@ def family_dashboard(
         except ValueError:
             raise HTTPException(status_code=422, detail="date must be an ISO date (YYYY-MM-DD)")
     return DashboardResponse(**build_family_dashboard(db, family_id, care_profile_id, on_date))
+
+
+@router.get("/{family_id}/dose-history", response_model=list[DoseHistoryItemOut])
+def dose_history(
+    family_id: str,
+    care_profile_id: str,
+    start: Date,
+    end: Date,
+    db: Session = DbSession,
+    user: User = CurrentUser,
+) -> list[DoseHistoryItemOut]:
+    require(db, user.id, family_id, "dashboard.view")
+    if not 0 <= (end - start).days < MAX_HISTORY_DAYS:
+        raise HTTPException(status_code=422, detail=f"Choose a date range of 1 to {MAX_HISTORY_DAYS} days")
+    _parent_in_family(db, family_id, care_profile_id)
+    return [DoseHistoryItemOut(**row) for row in list_dose_history(db, care_profile_id, start, end)]
 
 
 @router.post("/{family_id}/emergencies/{emergency_id}/complete", status_code=204)

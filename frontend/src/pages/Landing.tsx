@@ -50,7 +50,7 @@ async function workspaceHome(): Promise<string> {
       } catch (err) {
         if (!(err instanceof ApiError && err.status === 403)) continue;
       }
-      return `/family/${family.id}`;
+      return `/family/${family.id}/chat`;
     }
   } catch {
     // Fall through to onboarding.

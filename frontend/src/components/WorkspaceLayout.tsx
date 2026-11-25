@@ -9,6 +9,7 @@ import LogoutButton from "./LogoutButton";
 // from parent-profile.css so it matches the Care profile page.
 
 export type WorkspacePage =
+  | "chat"
   | "overview"
   | "parent-profile"
   | "medicines"
@@ -106,6 +107,7 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
 
   const fam = (path: string) => (familyId ? `/family/${familyId}${path}` : null);
   const workspace: NavItem[] = [
+    { key: "chat", icon: "✦", label: "Chat", to: fam("/chat") },
     { key: "overview", icon: "⌂", label: "Overview", to: fam("") },
     { key: "parent-profile", icon: "♡", label: "Care profile", to: "/parent-profile" },
     { key: "medicines", icon: "▤", label: "Medicines", to: fam("/medicines") },
@@ -167,7 +169,8 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
             </Link>
           )}
           <p className="pp-nav-heading">Workspace</p>
-          {renderNav(workspace)}
+          {/* A parent already has their own chat. */}
+          {renderNav(showBackToChat ? workspace.filter((item) => item.key !== "chat") : workspace)}
           <p className="pp-nav-heading">Settings</p>
           {renderNav(settings)}
         </nav>

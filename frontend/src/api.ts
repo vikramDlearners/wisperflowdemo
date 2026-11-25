@@ -765,6 +765,24 @@ export const askHelp = {
     post<AskOut>(`/api/families/${familyId}/ask`, { text, tried }),
 };
 
+// ---- family chat ----
+
+export interface FamilyChatTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+export interface FamilyChatOut {
+  reply: string;
+  destination: string | null; // a key from lib/askHelp.ts
+  source: "ai" | "rules";
+}
+
+export const familyChat = {
+  send: (familyId: string, text: string, history: FamilyChatTurn[]) =>
+    post<FamilyChatOut>(`/api/families/${familyId}/chat`, { text, history }),
+};
+
 // ---- family dashboard (verified against api/dashboard.py and schemas.py) ----
 
 export interface DashboardParentOut {
@@ -854,6 +872,23 @@ export function completeEmergency(familyId: string, id: string): Promise<void> {
 export interface DashboardParams {
   care_profile_id?: string;
   date?: string; // YYYY-MM-DD
+}
+
+export interface DoseHistoryItemOut {
+  dose_date: string; // YYYY-MM-DD
+  slot: string; // "HH:MM", "morning", "noon", "night" or "any"
+  medicine_name: string;
+  status: string; // taken, not_taken, skipped or missed
+  source: string; // chatbot, manual or system
+  recorded_at: string;
+}
+
+/** Recorded medicine answers from start to end, both included (YYYY-MM-DD, at most 90 days). */
+export function getDoseHistory(
+  familyId: string,
+  params: { care_profile_id: string; start: string; end: string },
+): Promise<DoseHistoryItemOut[]> {
+  return get<DoseHistoryItemOut[]>(`/api/families/${familyId}/dose-history?${new URLSearchParams(params)}`);
 }
 
 export function getFamilyDashboard(familyId: string, params: DashboardParams = {}): Promise<DashboardResponse> {

@@ -49,6 +49,27 @@ def _gender_for(explicit_gender: str | None, relationship: str | None) -> str | 
     return None
 
 
+def list_dose_history(db: Session, profile_id: str, start: date, end: date) -> list[dict[str, Any]]:
+    """Every recorded answer from start to end (both included), also for medicines removed since."""
+    rows = db.execute(
+        select(MedicineDose, Medicine.display_name)
+        .join(Medicine, Medicine.id == MedicineDose.medicine_id)
+        .where(MedicineDose.care_profile_id == profile_id, MedicineDose.dose_date.between(start, end))
+        .order_by(MedicineDose.dose_date, MedicineDose.slot, Medicine.display_name)
+    ).all()
+    return [
+        {
+            "dose_date": dose.dose_date,
+            "slot": dose.slot,
+            "medicine_name": name,
+            "status": dose.status,
+            "source": dose.source,
+            "recorded_at": dose.recorded_at,
+        }
+        for dose, name in rows
+    ]
+
+
 def _logged_on(db: Session, profile_id: str, day: date) -> dict[tuple[str, str], MedicineDose]:
     rows = db.execute(
         select(MedicineDose).where(MedicineDose.care_profile_id == profile_id, MedicineDose.dose_date == day)

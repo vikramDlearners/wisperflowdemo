@@ -1,3 +1,4 @@
+import { downloadCsv, toCsv } from "../lib/csv";
 import { useEffect, useState } from "react";
 import "../medicines.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
@@ -17,26 +18,6 @@ interface MedicineRow {
   times: string[];
   notes: string | null; // MedicineOut has no separate notes field; instructions_text is used.
   lastTaken: string | null;
-}
-
-// Quote every cell, escape internal quotes, join with CRLF rows.
-function toCsv(headers: string[], rows: string[][]): string {
-  const quote = (cell: string) => `"${cell.replace(/"/g, '""')}"`;
-  const lines = [headers, ...rows].map((row) => row.map(quote).join(","));
-  return lines.join("\r\n");
-}
-
-function downloadCsv(filename: string, csv: string): void {
-  // BOM so Excel detects UTF-8.
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
 
 export default function SharedRecords({ familyId }: { familyId: string }) {

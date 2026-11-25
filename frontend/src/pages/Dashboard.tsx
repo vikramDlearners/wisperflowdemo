@@ -3,6 +3,9 @@ import { fetchProfilePhoto } from "../profilePhoto";
 import { Link, useParams } from "react-router-dom";
 import "../dashboard.css";
 import AskHelp from "../components/AskHelp";
+import MoreActions from "../components/MoreActions";
+import GetStarted, { type SetupStep } from "../components/GetStarted";
+import { StockBar, TodayChart, AnswersChart } from "../components/OverviewCharts";
 import DoseButtons from "../components/DoseButtons";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import {
@@ -398,44 +401,37 @@ export default function Dashboard() {
   const totalCount = data?.medicines_today.total ?? 0;
   const notTakenNames = [...new Set(notTakenYet.map((d) => medicineNames.get(d.medicine_id) ?? "a medicine"))];
 
-  // The care summary in plain words, one line per topic.
-  const summaryLines: { icon: string; text: string; tone: "ok" | "warn" | "info" }[] = data
+  // The care summary in plain words, one line per topic, for sharing.
+  const summaryLines: string[] = data
     ? [
         totalCount === 0
-          ? { icon: "💊", text: "No medicines to take today.", tone: "info" }
+          ? "No medicines to take today."
           : takenCount >= totalCount
-            ? { icon: "💊", text: `All ${count(totalCount, "medicine")} taken today. Well done!`, tone: "ok" }
+            ? `All ${count(totalCount, "medicine")} taken today. Well done!`
             : notTakenYet.length > 0
-              ? {
-                  icon: "💊",
-                  text: `${takenCount === 0 ? "No medicines" : `Only ${takenCount} of ${totalCount}`} taken so far today. ${listNames(notTakenNames)} ${notTakenNames.length === 1 ? "is" : "are"} waiting to be taken.`,
-                  tone: "warn",
-                }
-              : {
-                  icon: "💊",
-                  text: `${takenCount} of ${count(totalCount, "medicine")} taken so far. The rest are due later today.`,
-                  tone: "info",
-                },
+              ? `${takenCount === 0 ? "No medicines" : `Only ${takenCount} of ${totalCount}`} taken so far today. ${listNames(notTakenNames)} ${notTakenNames.length === 1 ? "is" : "are"} waiting to be taken.`
+              : `${takenCount} of ${count(totalCount, "medicine")} taken so far. The rest are due later today.`,
         attention.length === 0
-          ? { icon: "✅", text: "Nothing else to worry about.", tone: "ok" }
-          : {
-              icon: "⚠️",
-              text:
-                attention.length === 1
-                  ? `1 thing to check: ${attention[0].title}.`
-                  : `${attention.length} things to check, starting with: ${attention[0].title}.`,
-              tone: "warn",
-            },
+          ? "Nothing else to worry about."
+          : attention.length === 1
+            ? `1 thing to check: ${attention[0].title}.`
+            : `${attention.length} things to check, starting with: ${attention[0].title}.`,
         appt
-          ? {
-              icon: "📅",
-              text: `Next appointment: ${dayLabel(parseDay(appt.scheduled_date))} at ${formatTime(appt.start_time)}.`,
-              tone: "info",
-            }
-          : { icon: "📅", text: "No doctor appointments booked.", tone: "info" },
+          ? `Next appointment: ${dayLabel(parseDay(appt.scheduled_date))} at ${formatTime(appt.start_time)}.`
+          : "No doctor appointments booked.",
       ]
     : [];
-  const summary = summaryLines.map((l) => l.text).join(" ");
+  // The card shows less than the shared update: appointments and counts have their own tiles below it.
+  const otherAttention = attention.filter((a) => !a.key.startsWith("dose-"));
+  const parentFacts = parent
+    ? [
+        parent.relationship && parent.relationship[0].toUpperCase() + parent.relationship.slice(1),
+        parent.age !== null && `${parent.age} years`,
+        parent.known_health_conditions,
+        parent.primary_caregiver_name && `Caregiver: ${parent.primary_caregiver_name}`,
+      ].filter(Boolean)
+    : [];
+  const summary = summaryLines.join(" ");
 
   // "Remind parent": WhatsApp + text message (and the app) about the medicines waiting to be taken.
   const [reminding, setReminding] = useState(false);
@@ -472,6 +468,45 @@ export default function Dashboard() {
       setShareNote("Could not share the update from this browser.");
     }
   }
+
+  // "How to get started": only the steps this user may do, and only once everything that says what is done has loaded.
+  const setupSteps: SetupStep[] =
+    data && familyTasks && team.length > 0
+      ? [
+          {
+            permission: "parent_profile.edit",
+            title: "Add the person you care for",
+            detail: "Their name, age and health details.",
+            action: "Add profile",
+            to: addProfile,
+            done: data.parents.length > 0,
+          },
+          {
+            permission: "medicines.edit",
+            title: "Add their medicines",
+            detail: "Set the dose and times, so you can follow check-ins.",
+            action: "Add medicine",
+            to: data.parents.length > 0 ? path("/medicines/new") : null, // a medicine belongs to a profile
+            done: data.medicine_stock.length > 0,
+          },
+          {
+            permission: "members.manage",
+            title: "Invite your family",
+            detail: "Share the care with another family member.",
+            action: "Invite",
+            to: path("/members"),
+            done: team.filter((m) => !/^parent$/i.test(m.role_name)).length > 1,
+          },
+          {
+            permission: "tasks.create",
+            title: "Add your first task",
+            detail: "Write down what needs doing and who will do it.",
+            action: "Add task",
+            to: path("/tasks?new=1"),
+            done: familyTasks.length > 0,
+          },
+        ].filter((s) => perms.includes(s.permission))
+      : [];
 
   let content: ReactNode;
   if (!data) {
@@ -537,7 +572,7 @@ export default function Dashboard() {
         )}
 
         {parent ? (
-          <section className={`ov-pulse${onTrack ? "" : " is-attention"}`} aria-label="Care pulse">
+          <section className="ov-pulse" aria-label="Care pulse">
             <Avatar
               name={parent.display_name}
               photoUrl={parent.photo_url}
@@ -548,24 +583,41 @@ export default function Dashboard() {
               hasPhoto={parent.has_photo}
             />
             <div className="ov-pulse-text">
-              <h2>
-                <Link to={path(`/parents/${parent.care_profile_id}`)}>{parent.display_name}</Link>
-                {onTrack ? " is doing well today." : " needs a little help today."}
-              </h2>
-              <ul className="ov-pulse-lines">
-                {summaryLines.map((l) => (
-                  <li key={l.icon} className={`is-${l.tone}`}>
-                    <span aria-hidden="true">{l.icon}</span>
-                    {l.text}
-                  </li>
-                ))}
-              </ul>
+              <div className="ov-pulse-head">
+                <h2>
+                  <Link to={path(`/parents/${parent.care_profile_id}`)}>{parent.display_name}</Link>
+                  {onTrack ? " is doing well today" : " needs a little help today"}
+                </h2>
+                <Pill tone={onTrack ? "green" : "amber"}>{onTrack ? "On track" : "Needs attention"}</Pill>
+              </div>
+              {parentFacts.length > 0 && <p className="ov-pulse-facts">{parentFacts.join(" · ")}</p>}
+              <dl className="ov-pulse-lines">
+                <div>
+                  <dt>Medicines</dt>
+                  <dd>{totalCount === 0 ? "None to take today" : `${takenCount} of ${totalCount} taken today`}</dd>
+                </div>
+                {notTakenNames.length > 0 && (
+                  <div>
+                    <dt>Not taken yet</dt>
+                    <dd>{listNames(notTakenNames)}</dd>
+                  </div>
+                )}
+                {otherAttention.length > 0 && (
+                  <div>
+                    <dt>Also check</dt>
+                    <dd>
+                      {otherAttention[0].title}
+                      {otherAttention.length > 1 && ` and ${otherAttention.length - 1} more`}
+                    </dd>
+                  </div>
+                )}
+              </dl>
               {notTakenYet.length > 0 && (
                 <div className="ov-remind">
-                  <button type="button" className="pp-btn ov-remind-btn" disabled={reminding} onClick={() => void remindParent()}>
-                    {reminding ? "Sending…" : `🔔 Remind ${parent.display_name}`}
+                  <button type="button" className="pp-btn" disabled={reminding} onClick={() => void remindParent()}>
+                    {reminding ? "Sending…" : `Remind ${parent.display_name}`}
                   </button>
-                  <span className="ov-remind-hint">Sends a WhatsApp and text message about the medicines not taken yet.</span>
+                  <span className="ov-remind-hint">Sends a WhatsApp and text message</span>
                 </div>
               )}
               {reminderNote && (
@@ -574,13 +626,7 @@ export default function Dashboard() {
                   {reminderNote.text}
                 </p>
               )}
-              <p className="ov-pulse-facts">
-                <span>{parent.age !== null ? `${parent.age} years` : "Age not set"}{parent.relationship && ` · ${parent.relationship}`}</span>
-                <span>Health: {parent.known_health_conditions || "None recorded"}</span>
-                <span>Caregiver: {parent.primary_caregiver_name || "Not set"}</span>
-              </p>
             </div>
-            <Pill tone={onTrack ? "green" : "amber"}>{onTrack ? "On track" : "Needs attention"}</Pill>
           </section>
         ) : (
           <section className="ov-pulse">
@@ -624,6 +670,17 @@ export default function Dashboard() {
             to={path("/appointments")}
           />
         </div>
+
+        {parent && (
+          <div className="ov-row ov-row-wide">
+            <Panel title="Medicine answers">
+              <AnswersChart familyId={familyId} data={data} />
+            </Panel>
+            <Panel title="Today's doses">
+              <TodayChart schedule={data.today_schedule} />
+            </Panel>
+          </div>
+        )}
 
         <div className="ov-row ov-row-wide">
           <Panel title="Today's medicine check-ins" link={{ text: "View all", to: path("/medicines") }}>
@@ -743,6 +800,7 @@ export default function Dashboard() {
                     <div className="ov-list-main">
                       <strong>{m.display_name}</strong>
                       <span className="pp-muted">{[m.instructions_text, m.purpose].filter(Boolean).join(" · ") || "—"}</span>
+                      <StockBar item={m} all={data.medicine_stock} />
                     </div>
                     <Pill tone={stockTone(m)}>{daysLabel(m)}</Pill>
                   </li>
@@ -782,22 +840,27 @@ export default function Dashboard() {
             <p className="pp-muted">
               {parent ? `Here is the latest care update for ${parent.display_name}.` : "Here is your family care summary for today."}
             </p>
+            <GetStarted steps={setupSteps} />
           </div>
           <div className="pp-head-actions">
-            {parent && (
-              <button type="button" className="pp-btn pp-btn-ghost" onClick={() => void shareUpdate()}>
-                <span aria-hidden="true">↗</span> Share update
-              </button>
-            )}
-            {perms.includes("parent_profile.edit") && (
-              <Link to={addProfile} className="pp-btn pp-btn-ghost ov-btn">
-                <span aria-hidden="true">＋</span> Add profile
-              </Link>
-            )}
             <Link to={path("/tasks?new=1")} className="pp-btn ov-btn">
               <span aria-hidden="true">＋</span> Add task
             </Link>
             {familyId && <AskHelp familyId={familyId} />}
+            {(parent || perms.includes("parent_profile.edit")) && (
+              <MoreActions>
+                {parent && (
+                  <button type="button" onClick={() => void shareUpdate()}>
+                    <span aria-hidden="true">↗</span> Share update
+                  </button>
+                )}
+                {perms.includes("parent_profile.edit") && (
+                  <Link to={addProfile}>
+                    <span aria-hidden="true">＋</span> Add profile
+                  </Link>
+                )}
+              </MoreActions>
+            )}
           </div>
         </div>
         <p role="status" className="ov-share-note">{shareNote}</p>

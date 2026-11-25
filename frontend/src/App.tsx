@@ -6,6 +6,7 @@ import SignIn from "./pages/SignIn";
 import ParentAcceptInvite from "./pages/ParentAcceptInvite";
 import Landing from "./pages/Landing";
 import Home from "./pages/Home";
+import FamilyChat from "./pages/FamilyChat";
 import Dashboard from "./pages/Dashboard";
 import ParentProfile from "./pages/ParentProfile";
 import MedicineList from "./pages/MedicineList";
@@ -56,6 +57,10 @@ export default function App() {
         <Route path="/signin" element={<SignIn />} />
         <Route path="/parent/accept-invite" element={<ParentAcceptInvite />} />
 
+        <Route
+          path="/family/:familyId/chat"
+          element={<FamilyRoute render={(familyId) => <FamilyChat key={familyId} familyId={familyId} />} />}
+        />
         <Route path="/family/:familyId" element={<Dashboard />} />
         <Route
           path="/family/:familyId/parents/:careProfileId"

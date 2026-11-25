@@ -114,3 +114,84 @@
 .ask-result-row .ask-chip {
   flex-shrink: 0;
 }
+
+/* How to get started: the steps dialog on Overview. */
+.start-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #1f6f5f;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.start-open:hover {
+  text-decoration: underline;
+}
+.start-open span {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #dff2e7;
+  color: #23694a;
+  font-size: 0.8rem;
+}
+.start-progress {
+  margin: 0 0 8px;
+  color: #586a66;
+}
+.start-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.start-steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #e3e9e8;
+}
+.start-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #eef5f4;
+  color: #17313b;
+  font-weight: 700;
+}
+.is-done .start-mark {
+  background: #dff2e7;
+  color: #23694a;
+}
+.start-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.start-text span {
+  color: #586a66;
+  font-size: 0.88rem;
+}
+.start-link {
+  flex-shrink: 0;
+  text-decoration: none;
+  font-weight: 600;
+}
+.start-later {
+  flex-shrink: 0;
+  color: #586a66;
+  font-size: 0.88rem;
+}
+.start-done {
+  flex-shrink: 0;
+  color: #23694a;
+  font-size: 0.88rem;
+  font-weight: 600;
+}

@@ -250,6 +250,22 @@ class AskOut(BaseModel):
     available: bool
 
 
+class ChatMessageIn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class FamilyChatIn(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    history: list[ChatMessageIn] = Field(default_factory=list, max_length=12)
+
+
+class FamilyChatOut(BaseModel):
+    reply: str
+    destination: str | None = None  # a page key, as in AskOut
+    source: Literal["ai", "rules"]
+
+
 class TaskTextIn(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     # The family member's own date, so "tomorrow" means their tomorrow; defaults to the server's date.
@@ -746,6 +762,15 @@ class DashboardEmergencyItemOut(BaseModel):
     text: str
     source: str
     created_at: datetime
+
+
+class DoseHistoryItemOut(BaseModel):
+    dose_date: date
+    slot: str
+    medicine_name: str
+    status: str
+    source: str
+    recorded_at: datetime
 
 
 class DashboardResponse(BaseModel):

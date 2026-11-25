@@ -119,6 +119,39 @@
 .ov .pp-page-head { margin-bottom: 6px; align-items: center; }
 .ov .pp-page-head h1 { font-size: 2.2rem; margin-bottom: 6px; }
 .ov .pp-head-actions .pp-btn { height: 44px; }
+.ov .pp-head-actions > * { white-space: nowrap; }
+.ov .pp-head-actions .ov-more { position: relative; flex: none; }
+.ov .pp-head-actions .ov-more-btn { width: 44px; padding: 0; font-size: 1.2rem; }
+.ov-more-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--db-line, #e3e9e8);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 35, 45, 0.16);
+}
+.ov-more-list > * {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ov-more-list > *:hover,
+.ov-more-list > *:focus-visible { background: #eef5f4; }
 
 .ov-btn {
   display: inline-flex;
@@ -137,33 +170,26 @@
 
 .ov-pulse {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 18px;
-  padding: 16px 22px;
-  border: 1px solid #cfe6e0;
+  padding: 20px 22px;
+  border: 1px solid var(--db-line);
   border-radius: 16px;
-  background: linear-gradient(100deg, #e3f1ee, #f1f8f6);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(27, 43, 40, 0.04);
 }
 
-.ov-pulse.is-attention {
-  border-color: #f0dfbd;
-  background: linear-gradient(100deg, #fdf5e4, #fefaf2);
-}
+.ov-pulse .db-avatar { width: 56px; height: 56px; }
+.ov-pulse .db-avatar.is-emoji { font-size: 1.8rem; background: #eef5f4; box-shadow: none; }
+.ov-pulse-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; }
 
 .ov-pulse-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.ov-pulse h2 { margin: 0 0 4px; font-size: 1.1rem; color: var(--db-teal-dark); }
+.ov-pulse h2 { margin: 0; font-size: 1.1rem; color: #1b2b28; }
 .ov-pulse h2 a { color: inherit; text-decoration: none; }
 .ov-pulse h2 a:hover { text-decoration: underline; }
 .ov-pulse p { margin: 0; color: #4a5b57; }
 
-.ov-pulse .ov-pulse-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 18px;
-  margin-top: 4px;
-  font-size: 0.86rem;
-  color: #586a66;
-}
+.ov-pulse .ov-pulse-facts { margin-top: 2px; font-size: 0.88rem; color: #586a66; }
 
 .ov-pill {
   display: inline-flex;
@@ -327,9 +353,8 @@ div.ov-list-main { display: grid; gap: 2px; }
 
 @media (max-width: 600px) {
   .ov .pp-page-head { align-items: stretch; }
-  .ov-pulse { flex-wrap: wrap; gap: 12px; padding: 16px; }
-  .ov-pulse .db-avatar { width: 56px; height: 56px; }
-  .ov-pulse-text { flex-basis: calc(100% - 70px); }
+  .ov-pulse { gap: 12px; padding: 16px; }
+  .ov-pulse .db-avatar { width: 44px; height: 44px; }
   .ov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .ov-stat { padding: 14px; }
   .ov-stat .ov-tile { display: none; }
@@ -341,50 +366,34 @@ div.ov-list-main { display: grid; gap: 2px; }
 .ov-record .dose-error { text-align: left; }
 
 /* Plain-language care summary and "Remind parent" (pages/Dashboard.tsx). */
-.ov-pulse .ov-pulse-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 6px 0 8px;
-  padding: 0;
-  list-style: none;
+.ov-pulse-lines {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 0;
 }
-.ov-pulse-lines li {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 0.95rem;
-  line-height: 1.45;
-  color: #33443f;
+.ov-pulse-lines > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 0 12px;
 }
-.ov-pulse-lines li.is-warn {
-  color: #7a4a00;
-  font-weight: 600;
+@media (max-width: 600px) {
+  .ov-pulse-lines > div { grid-template-columns: minmax(0, 1fr); }
 }
-.ov-pulse-lines li.is-ok {
-  color: #1d6b47;
-}
+.ov-pulse-lines dt { color: var(--db-muted); }
+.ov-pulse-lines dd { margin: 0; font-weight: 600; }
 .ov-remind {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 12px;
-  margin: 4px 0 8px;
-}
-.ov-remind-btn {
-  background: #c2410c;
-  border-color: #c2410c;
-}
-.ov-remind-btn:hover:not(:disabled) {
-  background: #9a3412;
-  border-color: #9a3412;
+  margin-top: 16px;
 }
 .ov-remind-hint {
   font-size: 0.8rem;
-  color: #6b5a3e;
+  color: #586a66;
 }
 .ov-pulse .ov-remind-note {
-  margin: 0 0 8px;
+  margin: 12px 0 0;
   padding: 8px 12px;
   border-radius: 10px;
   background: #e7f6ee;
