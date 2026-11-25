@@ -238,6 +238,14 @@ export default function Appointments() {
     window.setTimeout(() => voiceRef.current?.focus(), 50);
   }
 
+  // /appointments?new=1 opens the Add form once the page has loaded.
+  const openNewRef = useRef(new URLSearchParams(window.location.search).has("new"));
+  useEffect(() => {
+    if (loading || !openNewRef.current) return;
+    openNewRef.current = false;
+    if (!loadError) openAdd();
+  }, [loading, loadError]);
+
   async function fillFromSpeech() {
     if (!form) return;
     if (!spoken.trim()) {

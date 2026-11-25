@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { fetchProfilePhoto } from "../profilePhoto";
 import { Link, useParams } from "react-router-dom";
 import "../dashboard.css";
+import AskHelp from "../components/AskHelp";
 import DoseButtons from "../components/DoseButtons";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import {
@@ -796,6 +797,7 @@ export default function Dashboard() {
             <Link to={path("/tasks?new=1")} className="pp-btn ov-btn">
               <span aria-hidden="true">＋</span> Add task
             </Link>
+            {familyId && <AskHelp familyId={familyId} />}
           </div>
         </div>
         <p role="status" className="ov-share-note">{shareNote}</p>
