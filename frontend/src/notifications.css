@@ -1,0 +1,134 @@
+/* Notification settings. The list reuses the act- timeline styles from activity.css. */
+.nt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+.nt-section-title {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.nt-hint {
+  margin: 0;
+  font-size: 14px;
+  color: #5d6f6a;
+}
+.nt-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #5d6f6a;
+}
+.nt-saved {
+  color: #2f6f63;
+  font-weight: 600;
+}
+
+.nt-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+}
+.nt-option {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border: 1.5px solid #d8e2de;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+}
+.nt-option:hover {
+  background: #f7faf9;
+}
+.nt-option:has(input:checked) {
+  border-color: #1f7a6e;
+  background: #eef6f3;
+}
+.nt-option:has(input:focus-visible) {
+  outline: 3px solid #9fd3c9;
+  outline-offset: 2px;
+}
+.nt-option:has(input:disabled) {
+  cursor: not-allowed;
+}
+.nt-option input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: #1f7a6e;
+}
+.nt-option strong {
+  display: block;
+  font-size: 15px;
+}
+.nt-option small {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #5d6f6a;
+}
+
+.nt-item.is-unread .act-line {
+  font-weight: 600;
+}
+.nt-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #1f7a6e;
+  vertical-align: 1px;
+}
+.nt-urgent-tag {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #fbe4e1;
+  color: #9e2b20;
+  font-size: 12px;
+  font-weight: 700;
+}
+.nt-save-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.nt-gap {
+  margin-top: 12px;
+}
+.nt-link {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: #1f7a6e;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.nt-link:hover {
+  text-decoration: underline;
+}
+.nt-link:focus-visible {
+  outline: 2px solid #2f6f63;
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .nt-options {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,7 +1,7 @@
 import type { NotificationOut } from "./api";
 
-// One readable line per family notification, shared by Dashboard and NotificationSettings.
-// Payload shapes: backend/app/services/family_alerts.py. Other types keep showing the raw type.
+// One readable line per family notification, used by NotificationSettings.
+// Unknown types get a plain sentence, not the raw type.
 
 export interface NotificationLine {
   text: string;
@@ -43,7 +43,30 @@ export function notificationLine(n: Pick<NotificationOut, "type" | "payload">): 
       };
     case "medicine.finished":
       return { text: `${parent} says ${medicine} has run out. Please arrange a refill.`, urgent: false };
+    case "medicine.reminder": {
+      const message = str(p, "message");
+      const from = str(p, "from");
+      const lead = from ? `${from} sent you a medicine reminder` : "Medicine reminder";
+      return { text: message ? `${lead}: "${message}"` : `${lead}.`, urgent: false };
+    }
+    case "medicine_reminders_created": {
+      const names = Array.isArray(p?.medicines)
+        ? p.medicines.filter((m): m is string => typeof m === "string" && m.trim() !== "")
+        : [];
+      return {
+        text: names.length ? `Medicine reminders were set up for ${names.join(", ")}.` : "Medicine reminders were set up.",
+        urgent: false,
+      };
+    }
+    case "task.assigned": {
+      const title = str(p, "title");
+      return { text: title ? `You were given a task: ${title}` : "You were given a task.", urgent: false };
+    }
+    case "task.notified": {
+      const title = str(p, "title");
+      return { text: title ? `Task reminder: ${title}` : "You have a task reminder.", urgent: false };
+    }
     default:
-      return { text: n.type, urgent: false };
+      return { text: "You have a new care update.", urgent: false };
   }
 }
