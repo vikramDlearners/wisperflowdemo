@@ -4,6 +4,7 @@ import "../auth.css";
 import {
   ApiError,
   auth,
+  careProfiles,
   families,
   getSessionToken,
   login,
@@ -15,7 +16,7 @@ import {
 } from "../api";
 
 // Sign up / log in with an emailed 6-digit code, then (new users) pick a role.
-// Steps: login | signup -> code -> role -> /onboarding/parent (parents: /parent/chat)
+// Steps: login | signup -> code -> role -> family Overview, or /onboarding/parent before setup (parents: /parent/chat)
 
 type Step = "login" | "signup" | "code" | "role";
 
@@ -37,6 +38,24 @@ async function isFamilyParent(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// Where everyone but a parent lands. Sign-up always creates an empty family, so a family counts as
+// set up only once it has a care profile. A member not allowed to list profiles was invited to one.
+async function workspaceHome(): Promise<string> {
+  try {
+    for (const family of await families.list()) {
+      try {
+        if ((await careProfiles.list(family.id)).length === 0) continue;
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 403)) continue;
+      }
+      return `/family/${family.id}`;
+    }
+  } catch {
+    // Fall through to onboarding.
+  }
+  return "/onboarding/parent";
 }
 
 const CODE_LENGTH = 6;
@@ -66,7 +85,7 @@ export default function Landing() {
       try {
         const me = await auth.me();
         const parent = me.role === "parent" || (me.role == null && (await isFamilyParent()));
-        navigate(parent ? "/parent/chat" : "/onboarding/parent");
+        navigate(parent ? "/parent/chat" : await workspaceHome());
       } catch {
         // Token is invalid or expired (including 401): forget it and stay here.
         setSessionToken(null);
@@ -161,8 +180,8 @@ export default function Landing() {
         setNotice(null);
         setStep("role");
       } else {
-        // Parents go straight to their check-in chat; everyone else to onboarding.
-        navigate(session.user.role === "parent" ? "/parent/chat" : "/onboarding/parent");
+        // Parents go straight to their check-in chat; everyone else to their workspace.
+        navigate(session.user.role === "parent" ? "/parent/chat" : await workspaceHome());
       }
     } catch (err) {
       setError(errorText(err));
@@ -232,7 +251,7 @@ export default function Landing() {
     setError(null);
     try {
       await setRole(selectedRole, selectedRole === "others" ? other : null);
-      navigate(selectedRole === "parent" ? "/parent/chat" : "/onboarding/parent");
+      navigate(selectedRole === "parent" ? "/parent/chat" : await workspaceHome());
     } catch (err) {
       setError(errorText(err));
     } finally {
