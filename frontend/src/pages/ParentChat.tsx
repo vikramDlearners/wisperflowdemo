@@ -162,6 +162,8 @@ export default function ParentChat() {
   const showText = textOpen || !useMic;
   // The bubble being read aloud.
   const [playing, setPlaying] = useState<number | null>(null);
+  // True while any audio is sounding (autoplay or a tapped message), so the Stop button shows.
+  const [audioBusy, setAudioBusy] = useState(false);
   // Bumped whenever playback stops, so speech that arrives late is not played.
   const playSeqRef = useRef(0);
   const [text, setText] = useState("");
@@ -220,6 +222,7 @@ export default function ParentChat() {
     playSeqRef.current++;
     blockedSpeechRef.current = null;
     setPlaying(null);
+    setAudioBusy(false);
     window.speechSynthesis?.cancel();
     window.speechSynthesis?.getVoices(); // browsers load the voice list on the first ask
     const current = audioRef.current;
@@ -246,10 +249,12 @@ export default function ParentChat() {
       const audio = new Audio(url);
       const entry = { audio, url };
       audioRef.current = entry;
+      setAudioBusy(true);
       const release = (failed: boolean, blocked = false) => {
         URL.revokeObjectURL(url);
         if (audioRef.current !== entry) return; // stopped, or replaced by newer audio
         audioRef.current = null;
+        setAudioBusy(false);
         onEnd?.(failed, blocked);
       };
       audio.addEventListener("ended", () => release(false));
@@ -275,11 +280,16 @@ export default function ParentChat() {
       utterance.lang = voice.lang;
       utterance.rate = 0.9;
       utterance.onend = () => {
-        if (seq === playSeqRef.current) onEnd(false);
+        if (seq !== playSeqRef.current) return;
+        setAudioBusy(false);
+        onEnd(false);
       };
       utterance.onerror = (ev) => {
-        if (seq === playSeqRef.current) onEnd(true, ev.error === "not-allowed");
+        if (seq !== playSeqRef.current) return;
+        setAudioBusy(false);
+        onEnd(true, ev.error === "not-allowed");
       };
+      setAudioBusy(true);
       window.speechSynthesis.speak(utterance);
     },
     [],
@@ -779,89 +789,93 @@ export default function ParentChat() {
 
   const header = (
     <header className="pc-header">
-      <h1 className="pc-brand">
-        <img src="/carecircle-mark.png" alt="" className="pc-brand-img" width="34" height="34" />
-        CareCircle
-      </h1>
-      {load.kind === "ready" && (
-        <label className="pc-lang">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-            <path
-              d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.5 3.8 5.6 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.6-3.8-9S9.5 5.5 12 3z"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            />
-          </svg>
-          <span className="pc-sr">{t.language}</span>
-          <select
-            value={parentLangCode(language)}
-            disabled={phase !== "idle"}
-            onChange={(e) => void handleLanguage(e.target.value)}
-          >
-            {languageCodes.map((code) => (
-              <option key={code} value={code} lang={code}>
-                {PARENT_LANGUAGES[code]}
-                {code === recommended ? ` (${t.recommended})` : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {load.kind === "ready" && (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={voiceOn}
-          className="pc-voice"
-          onClick={toggleVoice}
-          disabled={phase !== "idle"}
-          title={t.voice}
-        >
-          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-            <path
-              d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span className="pc-voice-track" aria-hidden="true" />
-          <span className="pc-sr">{t.voice}</span>
-        </button>
-      )}
-      <div className="pc-header-actions">
-        {load.kind === "ready" && familyId && (
-          <Link to={`/family/${familyId}`} className="pc-portal-btn">
-            {t.moveToPortal}
-          </Link>
-        )}
+      <div className="pc-header-top">
+        <h1 className="pc-brand">
+          <img src="/carecircle-mark.png" alt="" className="pc-brand-img" width="34" height="34" />
+          CareCircle
+        </h1>
         {load.kind === "ready" && (
-          <button
-            type="button"
-            className="pc-help-btn"
-            aria-expanded={helpOpen}
-            aria-controls="pc-help-panel"
-            onClick={() => (helpOpen ? setHelpOpen(false) : setEmergency("ask"))}
-          >
-            {t.help}
-          </button>
+          <div className="pc-header-tools">
+            <label className="pc-lang">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path
+                  d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.5 3.8 5.6 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.6-3.8-9S9.5 5.5 12 3z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                />
+              </svg>
+              <span className="pc-sr">{t.language}</span>
+              <select
+                value={parentLangCode(language)}
+                disabled={phase !== "idle"}
+                onChange={(e) => void handleLanguage(e.target.value)}
+              >
+                {languageCodes.map((code) => (
+                  <option key={code} value={code} lang={code}>
+                    {PARENT_LANGUAGES[code]}
+                    {code === recommended ? ` (${t.recommended})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={voiceOn}
+              className="pc-voice"
+              onClick={toggleVoice}
+              disabled={phase !== "idle"}
+              title={t.voice}
+            >
+              <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                <path
+                  d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="pc-voice-track" aria-hidden="true" />
+              <span className="pc-sr">{t.voice}</span>
+            </button>
+          </div>
         )}
-        <LogoutButton className="pc-logout" label={t.logOut} busyLabel={t.signingOut} />
       </div>
-      {load.kind === "ready" && profile && (
-        <div className="pc-profile">
-          <ParentAvatar profile={profile} />
-          <span className="pc-profile-name">{profile.name}</span>
-          {profiles.length > 1 && (
-            <button type="button" className="pc-switch" onClick={switchProfile} disabled={phase !== "idle"}>
-              {t.switchProfile}
+      <div className="pc-header-bottom">
+        {load.kind === "ready" && profile && (
+          <div className="pc-profile">
+            <ParentAvatar profile={profile} />
+            <span className="pc-profile-name">{profile.name}</span>
+            {profiles.length > 1 && (
+              <button type="button" className="pc-switch" onClick={switchProfile} disabled={phase !== "idle"}>
+                {t.switchProfile}
+              </button>
+            )}
+          </div>
+        )}
+        <div className="pc-header-actions">
+          {load.kind === "ready" && familyId && (
+            <Link to={`/family/${familyId}`} className="pc-portal-btn">
+              {t.moveToPortal}
+            </Link>
+          )}
+          {load.kind === "ready" && (
+            <button
+              type="button"
+              className="pc-help-btn"
+              aria-expanded={helpOpen}
+              aria-controls="pc-help-panel"
+              onClick={() => (helpOpen ? setHelpOpen(false) : setEmergency("ask"))}
+            >
+              {t.help}
             </button>
           )}
+          <LogoutButton className="pc-logout" label={t.logOut} busyLabel={t.signingOut} />
         </div>
-      )}
+      </div>
     </header>
   );
 
@@ -1073,6 +1087,15 @@ export default function ParentChat() {
           <p className="pc-notice" role="alert">
             {notice}
           </p>
+        )}
+
+        {audioBusy && (
+          <button type="button" className="pc-stop-audio" onClick={stopAudio}>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+            {t.stopAudio}
+          </button>
         )}
 
         {useMic && (

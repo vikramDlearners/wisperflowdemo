@@ -50,12 +50,39 @@
   top: 0;
   z-index: 2;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
   padding: 10px 14px;
   background: var(--pc-cream);
   border-bottom: 1px solid var(--pc-line);
+}
+
+/* Row 1: brand on the left, language and voice grouped on the right. */
+.pc-header-top,
+.pc-header-bottom {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pc-header-top .pc-brand {
+  flex: none;
+}
+.pc-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+/* Row 2: who you are on the left, the action buttons grouped on the right. */
+.pc-header-bottom .pc-profile {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+.pc-header-bottom .pc-header-actions {
+  flex: none;
+  margin-left: auto;
 }
 
 .pc-brand {
@@ -147,17 +174,6 @@
 }
 .pc-voice[aria-checked="true"] .pc-voice-track { background: var(--pc-teal); }
 .pc-voice[aria-checked="true"] .pc-voice-track::after { transform: translateX(16px); }
-
-/* Brand, language and voice on the first row, the buttons on the second. */
-.pc-header {
-  flex-wrap: wrap;
-  row-gap: 6px;
-}
-.pc-header .pc-lang { margin-left: auto; }
-.pc-header-actions {
-  width: 100%;
-  justify-content: space-between;
-}
 
 @media (max-width: 480px) {
   .pc-lang svg { display: none; }
@@ -388,6 +404,25 @@
   background: #fbeceb;
   color: #7a2a20;
   font-size: 20px;
+}
+
+.pc-stop-audio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid var(--pc-teal);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--pc-teal-dark);
+  font-size: 19px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pc-stop-audio:active {
+  background: var(--pc-teal);
+  color: #fff;
 }
 
 .pc-mic {

@@ -44,7 +44,7 @@ from app.services.parent_context import ParentContext
 from app.services.meals import meals_due, save_meals
 from app.services.permissions import role_name_for
 from app.services.profile import get_care_profile_onboarding
-from app.services.replies import is_photo_offer, reply, reply_list
+from app.services.replies import is_photo_offer, reply, reply_list, shows_photos
 from app.services.understanding import (
     ALL,
     DEFAULT_DELAY_MINUTES,
@@ -720,7 +720,23 @@ def _after_question(db: Session, ctx: ParentContext, checkin: HealthCheckin, now
 
 # ---------- public API ----------
 
+def _cap_messages(msgs: list[str]) -> list[str]:
+    """At most two bubbles per turn: the answer in one bubble, the step's next question in the other.
+
+    An answer is built as one short line per category (taken, due now, each later time, any time), and every
+    new bot line becomes its own bubble that the voice reads on its own. Many such lines read as a wall of
+    bubbles all speaking at once. Join the answer into a single bubble and keep only the last line, the
+    follow-up question, apart. A "here is the photo" line leads the joined bubble so its photos still show
+    (shows_photos matches that text at the start of the bubble)."""
+    if len(msgs) <= 2:
+        return msgs
+    answer, question = msgs[:-1], msgs[-1]
+    answer.sort(key=lambda text: not shows_photos(text))  # photo line first; sort is stable, so the rest keep order
+    return ["\n".join(answer), question]
+
+
 def _turn(db: Session, ctx: ParentContext, checkin: HealthCheckin, msgs: list[str]) -> Turn:
+    msgs = _cap_messages(msgs)
     _store(db, ctx, checkin, "bot", msgs)
     db.commit()
     db.refresh(checkin)

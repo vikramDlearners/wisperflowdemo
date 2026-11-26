@@ -56,6 +56,7 @@ export interface ParentStrings {
   audio: string;
   tapToListen: string;
   cannotPlay: string;
+  stopAudio: string;
 }
 
 const en: ParentStrings = {
@@ -68,6 +69,7 @@ const en: ParentStrings = {
   audio: "Audio",
   tapToListen: "Tap to listen",
   cannotPlay: "This message can't be played right now.",
+  stopAudio: "Stop audio",
   language: "Language",
   recommended: "recommended",
   logOut: "Log out",
@@ -122,6 +124,7 @@ const hi: ParentStrings = {
   audio: "ऑडियो",
   tapToListen: "सुनने के लिए दबाएँ",
   cannotPlay: "यह संदेश अभी सुनाया नहीं जा सकता।",
+  stopAudio: "ऑडियो रोकें",
   language: "भाषा",
   recommended: "सुझाई गई",
   logOut: "लॉग आउट",
@@ -176,6 +179,7 @@ const ta: ParentStrings = {
   audio: "ஆடியோ",
   tapToListen: "கேட்கத் தட்டவும்",
   cannotPlay: "இந்தச் செய்தியை இப்போது ஒலிக்க முடியவில்லை.",
+  stopAudio: "ஒலியை நிறுத்து",
   language: "மொழி",
   recommended: "பரிந்துரை",
   logOut: "வெளியேறு",
@@ -230,6 +234,7 @@ const te: ParentStrings = {
   audio: "ఆడియో",
   tapToListen: "వినడానికి నొక్కండి",
   cannotPlay: "ఈ సందేశాన్ని ఇప్పుడు వినిపించలేము.",
+  stopAudio: "ఆడియో ఆపండి",
   language: "భాష",
   recommended: "సూచించినది",
   logOut: "లాగ్ అవుట్",
@@ -284,6 +289,7 @@ const ml: ParentStrings = {
   audio: "ഓഡിയോ",
   tapToListen: "കേൾക്കാൻ അമർത്തുക",
   cannotPlay: "ഈ സന്ദേശം ഇപ്പോൾ കേൾപ്പിക്കാനാവില്ല.",
+  stopAudio: "ഓഡിയോ നിർത്തുക",
   language: "ഭാഷ",
   recommended: "ശുപാർശ ചെയ്തത്",
   logOut: "ലോഗ് ഔട്ട്",
@@ -338,6 +344,7 @@ const kn: ParentStrings = {
   audio: "ಆಡಿಯೋ",
   tapToListen: "ಕೇಳಲು ಒತ್ತಿ",
   cannotPlay: "ಈ ಸಂದೇಶವನ್ನು ಈಗ ಕೇಳಿಸಲು ಆಗುತ್ತಿಲ್ಲ.",
+  stopAudio: "ಆಡಿಯೋ ನಿಲ್ಲಿಸಿ",
   language: "ಭಾಷೆ",
   recommended: "ಶಿಫಾರಸು",
   logOut: "ಲಾಗ್ ಔಟ್",
