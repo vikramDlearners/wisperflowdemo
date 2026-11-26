@@ -75,6 +75,19 @@ def day_part(local: datetime) -> str:
     return NIGHT
 
 
+def dose_in_part(dose: DueDose, part: str, profile: CareProfile) -> bool:
+    """True when this dose belongs to the named day part (morning/noon/night).
+
+    An untimed day-part dose matches its own part. An "any time" dose has no fixed time, so it matches
+    every part. A timed dose matches by its local hour, using the same cut points as day_part.
+    """
+    if dose.slot in DAY_PARTS:
+        return dose.slot == part
+    if dose.due_at is None:  # "any", or an unreadable time: a part filter never hides it
+        return True
+    return day_part(_aware(dose.due_at).astimezone(ZoneInfo(profile.timezone))) == part
+
+
 def no_time_slots(medicine_id: str, logged_keys, fallback: str) -> list[str]:
     """Slots shown for a medicine without reminder times: the day parts already answered, else one open slot.
 

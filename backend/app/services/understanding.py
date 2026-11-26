@@ -24,6 +24,7 @@ from app.services.adapters.intent import (
     RuleBasedIntentParser,
 )
 from app.services.doses import DueDose
+from app.services.doses import MORNING, NIGHT, NOON
 from app.services.prescription_scan import GEMINI_ENDPOINT, GEMINI_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
@@ -256,8 +257,8 @@ def named_medicines(text: str, names: dict[str, str]) -> list[str]:
 # "What medicine do I take tonight?" is a question, not a health note or a dose answer: it needs a medicine word
 # and a question cue. Answers ("yes I took my tablets") have no question cue.
 _QUESTION_CUES_EN = re.compile(
-    r"\b(?:what|which|when|what's|whats|tell me|list|schedule|do i have|need to take|have to take|should i take"
-    r"|do i take|am i taking|to be taken)\b"
+    r"\b(?:what|which|when|what's|whats|tell me|asking about|talking about|list|schedule|do i have|need to take"
+    r"|have to take|should i take|do i take|am i taking|to be taken)\b"
 )
 _QUESTION_CUES_NON_LATIN = (
     "என்ன", "எந்த", "எப்போ", "எப்ப", "எத்தனை",
@@ -279,6 +280,22 @@ def is_medicine_question(text: str) -> bool:
         return True
     padded = f" {normalised} "
     return any(c in padded for c in _QUESTION_CUES_NON_LATIN)
+
+
+# A medicine question can name a part of the day ("what do I take in the morning?"). English words only;
+# other languages fall back to the whole day's answer. A question naming two parts is treated as the whole day.
+_DAY_PART_WORDS_EN = {
+    MORNING: re.compile(r"\b(?:morning|this morning)\b"),
+    NOON: re.compile(r"\b(?:afternoon|noon|midday|mid-day)\b"),
+    NIGHT: re.compile(r"\b(?:evening|night|tonight|bedtime)\b"),
+}
+
+
+def named_day_part(text: str) -> str | None:
+    """The part of the day a medicine question asks about (morning/noon/night), or None for the whole day."""
+    normalised = (text or "").strip().lower()
+    matched = [part for part, rx in _DAY_PART_WORDS_EN.items() if rx.search(normalised)]
+    return matched[0] if len(matched) == 1 else None
 
 
 @dataclass

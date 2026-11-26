@@ -23,6 +23,7 @@ from app.services.app_settings import get_intent_mode
 from app.services.doses import (
     DueDose,
     current_doses,
+    dose_in_part,
     doses_today,
     local_now,
     logged_today,
@@ -53,6 +54,7 @@ from app.services.understanding import (
     count_scope,
     is_dose_report,
     is_medicine_question,
+    named_day_part,
     is_all_well,
     is_bare_confusion,
     is_bare_no,
@@ -602,15 +604,21 @@ def _with_instructions(name: str, med: Medicine | None) -> str:
 
 
 def _schedule_answer(
-    db: Session, ctx: ParentContext, now: datetime, only: list[str] | None = None
+    db: Session, ctx: ParentContext, now: datetime, only: list[str] | None = None, part: str | None = None
 ) -> list[str]:
     """Today's medicines, from the database only: taken, due now, later at a time, or any time today.
-    `only` limits the answer to these medicine ids (nothing is said when none of them is due today)."""
+    `only` limits the answer to these medicine ids (nothing is said when none of them is due today).
+    `part` narrows it to a part of the day the parent named; a named part with no dose falls back to the
+    whole day rather than wrongly claim there are no medicines."""
     doses = doses_today(db, ctx.profile, now)
     if only is not None:
         doses = [d for d in doses if d.medicine_id in only]
         if not doses:
             return []
+    if part is not None:
+        in_part = [d for d in doses if dose_in_part(d, part, ctx.profile)]
+        if in_part:
+            doses = in_part
     if not doses:
         return [_say(ctx, "sched_none")]
     meds = {m.id: m for m in db.execute(
@@ -685,13 +693,12 @@ def _medicine_help(
     due = {d.medicine_id for d in doses_today(db, ctx.profile, now)}
     if not due:
         return schedule
-    missing = [name for mid, name, photo in rows if mid in due and not photo]
     msgs = [intro, *schedule]
+    # Only offer the photos that exist. The parent named no medicine, so listing every one that lacks a photo
+    # ("ask your family to add one") is noise; that prompt is kept for a specifically named medicine above.
     have = [name for mid, name, photo in rows if mid in due and photo]
     if have:
         msgs.append(_say(ctx, "photo_here", names=_names(have)))
-    if wants_photo and missing:
-        msgs.append(_say(ctx, "photo_missing", names=_names(missing)))
     return msgs
 
 
@@ -887,7 +894,10 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
 
     if is_medicine_question(text) and not is_urgent(text):
         # A question about today's medicines: answer it from the database; record and share nothing.
-        return _turn(db, ctx, checkin, _schedule_answer(db, ctx, now) + _after_question(db, ctx, checkin, now))
+        # If the parent named a part of the day ("the morning medicine"), narrow the answer to it.
+        part = named_day_part(text)
+        return _turn(db, ctx, checkin,
+                     _schedule_answer(db, ctx, now, part=part) + _after_question(db, ctx, checkin, now))
 
     if checkin.step == HEALTH:
         checkin.health_text = text
