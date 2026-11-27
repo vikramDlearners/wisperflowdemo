@@ -4,6 +4,7 @@ Every query is scoped by family_id or by the selected care_profile_id. Permissio
 """
 
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -23,6 +24,7 @@ from app.services.profile import age_from, get_care_profile_onboarding
 from app.services.reminders import list_reminder_times
 
 LOW_STOCK_DAYS = 7
+NEXT_MONTH_DAYS = 30  # horizon for the "next month's medicines" cost estimate
 RECENT_ACTIVITY_LIMIT = 10
 TAKEN = "taken"
 MISSED = "missed"
@@ -181,6 +183,12 @@ def build_family_dashboard(
             "medicines_today": {"taken": 0, "total": 0},
             "today_schedule": [],
             "medicine_stock": [],
+            "next_month_estimate": {
+                "amount": None,
+                "days": NEXT_MONTH_DAYS,
+                "priced_count": 0,
+                "unpriced_count": 0,
+            },
             "next_appointment": None,
             "emergency": {"active": False, "last_check_at": None},
             "recent_activity": recent,
@@ -194,9 +202,17 @@ def build_family_dashboard(
     stock: list[dict[str, Any]] = []
     taken = total = 0
     medicine_count = 0  # "N Medicine(s) daily" counts medicines; total counts today's dose slots
+    estimate = Decimal("0")  # cost to run the priced medicines for the next month
+    priced_count = unpriced_count = 0
     for med, slots in _active_medicines(db, selected.id, logged):
         medicine_count += 1
         total += len(slots)
+        # Next month's supply is one unit per dose slot per day, for NEXT_MONTH_DAYS.
+        if med.unit_price is not None:
+            estimate += med.unit_price * len(slots) * NEXT_MONTH_DAYS
+            priced_count += 1
+        else:
+            unpriced_count += 1
         for slot in slots:
             row = logged.get((med.id, slot))
             status = row.status if row is not None else None
@@ -251,6 +267,12 @@ def build_family_dashboard(
         "medicines_today": {"taken": taken, "total": total},
         "today_schedule": schedule,
         "medicine_stock": stock,
+        "next_month_estimate": {
+            "amount": float(estimate) if priced_count else None,
+            "days": NEXT_MONTH_DAYS,
+            "priced_count": priced_count,
+            "unpriced_count": unpriced_count,
+        },
         "next_appointment": next_appointment,
         "emergency": {
             "active": any(r.status == MISSED for r in logged.values()),

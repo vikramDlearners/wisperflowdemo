@@ -26,6 +26,7 @@ import {
   type TaskOut,
 } from "../api";
 import { canRecord, doseLabel, slotName, sortDoses } from "../doses";
+import { formatPrice } from "../medicineImage";
 import { isChild } from "../lib/constants";
 
 // Family dashboard: GET /api/families/{familyId}/dashboard, optionally scoped
@@ -568,6 +569,23 @@ export default function Dashboard() {
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {data.next_month_estimate.priced_count > 0 && (
+          <div className="ov-estimate">
+            <span className="ov-estimate-tile" aria-hidden="true">₹</span>
+            <div className="ov-estimate-text">
+              <span className="ov-estimate-label">Next month's medicines</span>
+              <strong className="ov-estimate-value">{formatPrice(data.next_month_estimate.amount)}</strong>
+              <span className="pp-muted">
+                Estimated for about {data.next_month_estimate.days} days
+                {data.next_month_estimate.unpriced_count > 0 &&
+                  ` · ${data.next_month_estimate.unpriced_count} ${
+                    data.next_month_estimate.unpriced_count === 1 ? "medicine has" : "medicines have"
+                  } no price yet`}
+              </span>
+            </div>
           </div>
         )}
 

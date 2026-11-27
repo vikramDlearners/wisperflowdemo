@@ -821,6 +821,15 @@ export interface DashboardStockItemOut {
   low: boolean;
 }
 
+export interface DashboardNextMonthEstimateOut {
+  /** Rupees to run the selected profile's priced medicines for the next month, or null when none are priced. */
+  amount: number | null;
+  days: number;
+  priced_count: number;
+  /** Active medicines left out of the estimate because they have no price yet. */
+  unpriced_count: number;
+}
+
 export interface DashboardAppointmentOut {
   id: string;
   title: string;
@@ -849,6 +858,7 @@ export interface DashboardResponse {
   medicines_today: DashboardMedicinesTodayOut;
   today_schedule: DashboardScheduleItemOut[];
   medicine_stock: DashboardStockItemOut[];
+  next_month_estimate: DashboardNextMonthEstimateOut;
   next_appointment: DashboardAppointmentOut | null;
   emergency: DashboardEmergencyOut;
   recent_activity: DashboardActivityOut[];

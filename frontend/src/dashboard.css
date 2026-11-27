@@ -246,6 +246,51 @@
 .ov-stat-value { font-size: 1.8rem; line-height: 1.2; letter-spacing: -0.02em; }
 .ov-stat-sub { font-size: 0.84rem; color: #586a66; }
 
+.ov-estimate {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--db-line);
+  background: var(--db-teal-soft, #e3f1ee);
+}
+
+.ov-estimate-tile {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--db-teal-dark);
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.ov-estimate-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ov-estimate-label {
+  font-weight: 600;
+  color: #586a66;
+}
+
+.ov-estimate-value {
+  font-size: 1.5rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--db-ink);
+}
+
+.ov-estimate .pp-muted {
+  font-size: 0.84rem;
+}
+
 .ov-tile {
   width: 40px;
   height: 40px;

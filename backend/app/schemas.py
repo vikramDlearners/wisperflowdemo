@@ -735,6 +735,14 @@ class DashboardStockItemOut(BaseModel):
     low: bool
 
 
+class DashboardNextMonthEstimateOut(BaseModel):
+    # What it would cost to keep the selected profile's priced medicines running for the next month.
+    amount: float | None  # None when no active medicine has a price yet
+    days: int
+    priced_count: int
+    unpriced_count: int  # active medicines left out of the estimate for want of a price
+
+
 class DashboardAppointmentOut(BaseModel):
     id: str
     title: str
@@ -781,6 +789,7 @@ class DashboardResponse(BaseModel):
     medicines_today: DashboardMedicinesTodayOut
     today_schedule: list[DashboardScheduleItemOut]
     medicine_stock: list[DashboardStockItemOut]
+    next_month_estimate: DashboardNextMonthEstimateOut
     next_appointment: DashboardAppointmentOut | None
     emergency: DashboardEmergencyOut
     recent_activity: list[DashboardActivityOut]
