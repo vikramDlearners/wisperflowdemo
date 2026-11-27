@@ -93,6 +93,49 @@ def _active_medicines(
             for med in meds]
 
 
+def _next_month_estimate(active: list[tuple[Medicine, list[str]]], day: date) -> dict[str, Any]:
+    """What to keep aside for the next NEXT_MONTH_DAYS days, starting on `day`.
+
+    Each medicine needs one tablet per dose a day, for the days its course still runs. The stock
+    in hand is used first, and only the shortfall is priced.
+    """
+    items: list[dict[str, Any]] = []
+    amount = Decimal("0")
+    priced_count = unpriced_count = 0
+    for med, slots in active:
+        days = NEXT_MONTH_DAYS
+        if med.take_until is not None:
+            days = max(0, min(NEXT_MONTH_DAYS, (med.take_until - day).days + 1))
+        needed = len(slots) * days
+        to_buy = max(0, needed - (med.quantity_remaining or 0))
+        cost = None
+        if med.unit_price is not None:
+            cost = (med.unit_price * to_buy).quantize(Decimal("0.01"))
+            amount += cost
+            priced_count += 1
+        elif to_buy > 0:
+            unpriced_count += 1
+        items.append({
+            "medicine_id": med.id,
+            "display_name": med.display_name,
+            "doses_per_day": len(slots),
+            "days_needed": days,
+            "take_until": med.take_until,
+            "tablets_needed": needed,
+            "in_stock": med.quantity_remaining,
+            "to_buy": to_buy,
+            "unit_price": float(med.unit_price) if med.unit_price is not None else None,
+            "cost": float(cost) if cost is not None else None,
+        })
+    return {
+        "amount": float(amount) if priced_count else None,
+        "days": NEXT_MONTH_DAYS,
+        "priced_count": priced_count,
+        "unpriced_count": unpriced_count,
+        "items": items,
+    }
+
+
 def _day_for(profile: CareProfile, on_date: date | None, now: datetime) -> date:
     return on_date if on_date is not None else today_for(profile, now)
 
@@ -183,12 +226,7 @@ def build_family_dashboard(
             "medicines_today": {"taken": 0, "total": 0},
             "today_schedule": [],
             "medicine_stock": [],
-            "next_month_estimate": {
-                "amount": None,
-                "days": NEXT_MONTH_DAYS,
-                "priced_count": 0,
-                "unpriced_count": 0,
-            },
+            "next_month_estimate": _next_month_estimate([], now.date()),
             "next_appointment": None,
             "emergency": {"active": False, "last_check_at": None},
             "recent_activity": recent,
@@ -202,17 +240,10 @@ def build_family_dashboard(
     stock: list[dict[str, Any]] = []
     taken = total = 0
     medicine_count = 0  # "N Medicine(s) daily" counts medicines; total counts today's dose slots
-    estimate = Decimal("0")  # cost to run the priced medicines for the next month
-    priced_count = unpriced_count = 0
-    for med, slots in _active_medicines(db, selected.id, logged):
+    active = _active_medicines(db, selected.id, logged)
+    for med, slots in active:
         medicine_count += 1
         total += len(slots)
-        # Next month's supply is one unit per dose slot per day, for NEXT_MONTH_DAYS.
-        if med.unit_price is not None:
-            estimate += med.unit_price * len(slots) * NEXT_MONTH_DAYS
-            priced_count += 1
-        else:
-            unpriced_count += 1
         for slot in slots:
             row = logged.get((med.id, slot))
             status = row.status if row is not None else None
@@ -267,12 +298,7 @@ def build_family_dashboard(
         "medicines_today": {"taken": taken, "total": total},
         "today_schedule": schedule,
         "medicine_stock": stock,
-        "next_month_estimate": {
-            "amount": float(estimate) if priced_count else None,
-            "days": NEXT_MONTH_DAYS,
-            "priced_count": priced_count,
-            "unpriced_count": unpriced_count,
-        },
+        "next_month_estimate": _next_month_estimate(active, day),
         "next_appointment": next_appointment,
         "emergency": {
             "active": any(r.status == MISSED for r in logged.values()),

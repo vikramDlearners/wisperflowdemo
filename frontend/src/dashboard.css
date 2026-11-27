@@ -247,13 +247,58 @@
 .ov-stat-sub { font-size: 0.84rem; color: #586a66; }
 
 .ov-estimate {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  display: grid;
+  gap: 12px;
   padding: 14px 18px;
   border-radius: 16px;
   border: 1px solid var(--db-line);
   background: var(--db-teal-soft, #e3f1ee);
+}
+
+.ov-estimate-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ov-estimate-scroll {
+  overflow-x: auto;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.ov-estimate-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.ov-estimate-table th,
+.ov-estimate-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--db-line);
+  white-space: nowrap;
+}
+
+.ov-estimate-table thead th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #586a66;
+}
+
+.ov-estimate-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.ov-estimate-table tbody th {
+  font-weight: 600;
+  color: var(--db-ink);
+}
+
+.ov-estimate-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .ov-estimate-tile {

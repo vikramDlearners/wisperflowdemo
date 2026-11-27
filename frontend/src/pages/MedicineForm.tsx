@@ -230,6 +230,8 @@ export default function MedicineForm({
   const [refillDate, setRefillDate] = useState("");
   // The refill date follows the tablets left and the schedule until someone picks a date by hand.
   const [refillTouched, setRefillTouched] = useState(false);
+  // Last day of the course; empty means ongoing.
+  const [takeUntil, setTakeUntil] = useState("");
   const [responsible, setResponsible] = useState("");
   const [active, setActive] = useState(true);
   // Pricing: price per tablet and how many tablets were bought; the server computes the total.
@@ -325,6 +327,7 @@ export default function MedicineForm({
           setQuantity(med.quantity_remaining?.toString() ?? "");
           setRefillDate(med.refill_date ?? "");
           setRefillTouched(Boolean(med.refill_date));
+          setTakeUntil(med.take_until ?? "");
           setResponsible(med.responsible_user_id ?? "");
           setActive(med.active);
           setUnitPrice(med.unit_price != null ? String(Number(med.unit_price)) : "");
@@ -426,6 +429,7 @@ export default function MedicineForm({
     setError(null);
     try {
       const refill = refillDate === "" ? null : refillDate;
+      const until = takeUntil === "" ? null : takeUntil;
       const owner = responsible === "" ? null : responsible;
       const pricing = {
         unit_price: unitPrice.trim() === "" ? null : Number(unitPrice),
@@ -438,6 +442,7 @@ export default function MedicineForm({
           display_name: displayName.trim(),
           instructions_text: instructions.trim() || null,
           refill_date: refill,
+          take_until: until,
           responsible_user_id: owner,
           active,
           ...pricing,
@@ -458,6 +463,7 @@ export default function MedicineForm({
           instructions_text: instructions.trim() || null,
           quantity_remaining: quantity === "" ? null : Number(quantity),
           refill_date: refill,
+          take_until: until,
           responsible_user_id: owner,
         };
         result = await medicines.create(familyId, body);
@@ -639,6 +645,14 @@ export default function MedicineForm({
           )}
         </span>
       )}
+    </label>
+  );
+
+  const takeUntilField = (
+    <label className="pp-field">
+      Take until
+      <input type="date" value={takeUntil} onChange={(e) => setTakeUntil(e.target.value)} />
+      <span className="mf-refill-hint">Leave empty if the medicine is ongoing.</span>
     </label>
   );
 
@@ -985,6 +999,7 @@ export default function MedicineForm({
                 {timesField}
                 {quantityField}
                 {refillField}
+                {takeUntilField}
                 {pricingField}
               </div>
             </section>
@@ -1022,6 +1037,7 @@ export default function MedicineForm({
                 {instructionsField}
                 {quantityField}
                 {refillField}
+                {takeUntilField}
                 {caretakerField(!isEdit)}
                 {pricingField}
                 {timesField}

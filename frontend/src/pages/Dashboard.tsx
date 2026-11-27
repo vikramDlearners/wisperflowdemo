@@ -23,6 +23,7 @@ import {
   type DoseToday,
   type MemberOut,
   tasks,
+  type DashboardNextMonthEstimateOut,
   type TaskOut,
 } from "../api";
 import { canRecord, doseLabel, slotName, sortDoses } from "../doses";
@@ -572,22 +573,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {data.next_month_estimate.priced_count > 0 && (
-          <div className="ov-estimate">
-            <span className="ov-estimate-tile" aria-hidden="true">₹</span>
-            <div className="ov-estimate-text">
-              <span className="ov-estimate-label">Next month's medicines</span>
-              <strong className="ov-estimate-value">{formatPrice(data.next_month_estimate.amount)}</strong>
-              <span className="pp-muted">
-                Estimated for about {data.next_month_estimate.days} days
-                {data.next_month_estimate.unpriced_count > 0 &&
-                  ` · ${data.next_month_estimate.unpriced_count} ${
-                    data.next_month_estimate.unpriced_count === 1 ? "medicine has" : "medicines have"
-                  } no price yet`}
-              </span>
-            </div>
-          </div>
-        )}
+        <NextMonthCard estimate={data.next_month_estimate} />
 
         {parent ? (
           <section className="ov-pulse" aria-label="Care pulse">
@@ -885,5 +871,71 @@ export default function Dashboard() {
         {content}
       </div>
     </WorkspaceLayout>
+  );
+}
+
+function shortDay(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+// What to keep aside for next month: per medicine, the tablets the course still needs,
+// minus what is in stock, times the price.
+function NextMonthCard({ estimate }: { estimate: DashboardNextMonthEstimateOut }) {
+  // An older backend sends no items; show nothing rather than break the Overview.
+  const items = estimate.items ?? [];
+  if (items.length === 0) return null;
+  const { amount, days, unpriced_count } = estimate;
+  return (
+    <section className="ov-estimate" aria-label="Next month's medicines">
+      <div className="ov-estimate-head">
+        <span className="ov-estimate-tile" aria-hidden="true">₹</span>
+        <div className="ov-estimate-text">
+          <span className="ov-estimate-label">Keep aside for next month's medicines</span>
+          <strong className="ov-estimate-value">{amount === null ? "Add prices to see" : formatPrice(amount)}</strong>
+          <span className="pp-muted">
+            Next {days} days, after the tablets already in stock
+            {unpriced_count > 0 &&
+              ` · ${unpriced_count} ${unpriced_count === 1 ? "medicine has" : "medicines have"} no price yet`}
+          </span>
+        </div>
+      </div>
+      <div className="ov-estimate-scroll">
+        <table className="ov-estimate-table">
+          <thead>
+            <tr>
+              <th scope="col">Medicine</th>
+              <th scope="col">Course</th>
+              <th scope="col" className="num">Needed</th>
+              <th scope="col" className="num">In stock</th>
+              <th scope="col" className="num">To buy</th>
+              <th scope="col" className="num">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.medicine_id}>
+                <th scope="row">{item.display_name}</th>
+                <td>
+                  {item.doses_per_day} a day × {item.days_needed} {item.days_needed === 1 ? "day" : "days"}
+                  <span className="pp-muted">
+                    {item.take_until ? ` · until ${shortDay(item.take_until)}` : " · ongoing"}
+                  </span>
+                </td>
+                <td className="num">{item.tablets_needed}</td>
+                <td className="num">{item.in_stock ?? "—"}</td>
+                <td className="num">{item.to_buy}</td>
+                <td className="num">
+                  {item.cost !== null
+                    ? formatPrice(item.cost)
+                    : item.to_buy > 0
+                      ? <span className="pp-muted">No price</span>
+                      : formatPrice(0)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

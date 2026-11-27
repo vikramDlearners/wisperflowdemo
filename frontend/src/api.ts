@@ -144,6 +144,8 @@ export interface MedicineCreate {
   instructions_text?: string | null;
   quantity_remaining?: number | null;
   refill_date?: string | null; // ISO date (YYYY-MM-DD)
+  /** Last day of the course (YYYY-MM-DD); null means ongoing. */
+  take_until?: string | null;
   responsible_user_id?: string | null;
 }
 
@@ -151,6 +153,7 @@ export interface MedicineUpdate {
   display_name?: string | null;
   instructions_text?: string | null;
   refill_date?: string | null;
+  take_until?: string | null;
   responsible_user_id?: string | null;
   active?: boolean | null;
   // Pricing (edit only; the server computes total_price = unit_price x total_medicine_count).
@@ -169,6 +172,7 @@ export interface MedicineOut {
   instructions_text: string | null;
   quantity_remaining: number | null;
   refill_date: string | null;
+  take_until?: string | null;
   responsible_user_id: string | null;
   active: boolean;
   /** Set when the medicine was confirmed from a prescription scan. */
@@ -821,13 +825,30 @@ export interface DashboardStockItemOut {
   low: boolean;
 }
 
+export interface DashboardNextMonthItemOut {
+  medicine_id: string;
+  display_name: string;
+  doses_per_day: number;
+  /** Days of the next month the course still runs (up to take_until), else the whole month. */
+  days_needed: number;
+  take_until: string | null;
+  tablets_needed: number;
+  /** Tablets in stock, or null when never entered (counted as 0). */
+  in_stock: number | null;
+  /** Tablets needed minus stock, never below 0. */
+  to_buy: number;
+  unit_price: number | null;
+  cost: number | null;
+}
+
 export interface DashboardNextMonthEstimateOut {
-  /** Rupees to run the selected profile's priced medicines for the next month, or null when none are priced. */
+  /** Rupees to keep aside for the tablets the stock won't cover next month, or null when none are priced. */
   amount: number | null;
   days: number;
   priced_count: number;
-  /** Active medicines left out of the estimate because they have no price yet. */
+  /** Medicines that need buying but have no price yet. */
   unpriced_count: number;
+  items: DashboardNextMonthItemOut[];
 }
 
 export interface DashboardAppointmentOut {

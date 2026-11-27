@@ -156,6 +156,7 @@ class MedicineCreate(BaseModel):
     purpose: str | None = Field(default=None, max_length=120)
     quantity_remaining: int | None = None
     refill_date: date | None = None
+    take_until: date | None = None
     responsible_user_id: str | None = None
 
 
@@ -164,6 +165,7 @@ class MedicineUpdate(BaseModel):
     instructions_text: str | None = None
     purpose: str | None = Field(default=None, max_length=120)
     refill_date: date | None = None
+    take_until: date | None = None
     responsible_user_id: str | None = None
     active: bool | None = None
     unit_price: Decimal | None = Field(default=None, ge=0)
@@ -207,6 +209,7 @@ class MedicineOut(BaseModel):
     purpose: str | None = None
     quantity_remaining: int | None
     refill_date: date | None
+    take_until: date | None = None
     responsible_user_id: str | None
     active: bool
     prescription_scan_id: str | None = None
@@ -735,12 +738,27 @@ class DashboardStockItemOut(BaseModel):
     low: bool
 
 
+class DashboardNextMonthItemOut(BaseModel):
+    # One medicine's share of the money to keep aside for the next month.
+    medicine_id: str
+    display_name: str
+    doses_per_day: int
+    days_needed: int  # days of the next month the course still runs (take_until), else the whole month
+    take_until: date | None
+    tablets_needed: int
+    in_stock: int | None  # None when the stock was never entered; counted as 0
+    to_buy: int  # tablets_needed minus what is in stock, never below 0
+    unit_price: float | None
+    cost: float | None  # None when the medicine has no price
+
+
 class DashboardNextMonthEstimateOut(BaseModel):
-    # What it would cost to keep the selected profile's priced medicines running for the next month.
+    # Money to keep aside so the selected profile's medicines don't run out over the next month.
     amount: float | None  # None when no active medicine has a price yet
     days: int
     priced_count: int
-    unpriced_count: int  # active medicines left out of the estimate for want of a price
+    unpriced_count: int  # medicines that need buying but have no price, so are left out of amount
+    items: list[DashboardNextMonthItemOut] = []
 
 
 class DashboardAppointmentOut(BaseModel):

@@ -26,6 +26,8 @@ class Medicine(Base):
     purpose: Mapped[str | None] = mapped_column(String(120), nullable=True)
     quantity_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
     refill_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Last day of the course; None means the medicine is ongoing.
+    take_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     responsible_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=True
     )
