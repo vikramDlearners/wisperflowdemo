@@ -91,12 +91,13 @@ def _finish(db, world):
 def test_note_comes_softly_before_goodbye(db_session, world):
     _set_profile(db_session, world, deficiencies="Sugar", notes="Drink 3 litres of water daily")
     turn = _finish(db_session, world)
-    assert turn.bot_messages[-2:] == [
-        "Before you go, Amma, a small note from your family: "
+    # The note closes the answer bubble, just before the last question.
+    assert turn.bot_messages[-2].endswith(
+        "\nBefore you go, Amma, a small note from your family: "
         "Please remember to drink about 3 litres of water today. "
-        "Did you check your sugar today? Please go easy on sweets.",
-        "Is there anything you would like to tell me or note down?",
-    ]
+        "Did you check your sugar today? Please go easy on sweets."
+    )
+    assert turn.bot_messages[-1] == "Is there anything you would like to tell me or note down?"
 
 
 def test_note_is_said_once_a_day(db_session, world):
@@ -122,4 +123,4 @@ def test_note_in_the_parents_language(db_session, world):
     engine.start_or_resume(db_session, world["ctx"], NOW)
     engine.handle_parent_text(db_session, world["ctx"], "நலம்", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "ஆமா", NOW)
-    assert any(m.startswith("போகும் முன், Amma") for m in turn.bot_messages)
+    assert any(line.startswith("போகும் முன், Amma") for m in turn.bot_messages for line in m.split("\n"))

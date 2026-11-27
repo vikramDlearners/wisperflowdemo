@@ -20,6 +20,19 @@ NIGHT = datetime(2026, 11, 22, 15, 0, tzinfo=timezone.utc)
 NOTE_ASK = "Is there anything you would like to tell me or note down?"
 
 
+def test_care_note_is_not_repeated_when_the_meal_question_reopens(db_session, world):
+    # The note shares a bubble with other lines; it must still count as said for the rest of the day.
+    from app.models.parent_onboarding_profile import ParentOnboardingProfile
+    db_session.add(ParentOnboardingProfile(user_id=world["parent"].id, deficiencies="BP"))
+    db_session.commit()
+    _to_meal_question(db_session, world)
+    first = engine.handle_parent_text(db_session, world["ctx"], "Idli", NOW)
+    assert any("small note from your family" in m for m in first.bot_messages)
+    engine.start_or_resume(db_session, world["ctx"], NIGHT)
+    later = engine.handle_parent_text(db_session, world["ctx"], "Rice and soup", NIGHT)
+    assert not any("small note from your family" in m for m in later.bot_messages)
+
+
 def _meals(db):
     return [(r.meals, r.text) for r in db.execute(select(MealLog).order_by(MealLog.recorded_at)).scalars()]
 
@@ -125,8 +138,8 @@ def test_appointment_is_not_repeated_when_the_meal_question_reopens(db_session, 
     _to_meal_question(db_session, world)
     first = engine.handle_parent_text(db_session, world["ctx"], "Idli", NOW)
     reminder = "Tomorrow at 10:00 AM you have Doctor follow-up with Dr. Rao."
-    assert reminder in first.bot_messages
+    assert reminder in first.bot_messages[0].split("\n")
     engine.start_or_resume(db_session, world["ctx"], NIGHT)
     later = engine.handle_parent_text(db_session, world["ctx"], "Rice and soup", NIGHT)
-    assert reminder not in later.bot_messages
+    assert not any(reminder in m for m in later.bot_messages)
     assert later.bot_messages[-1] == NOTE_ASK

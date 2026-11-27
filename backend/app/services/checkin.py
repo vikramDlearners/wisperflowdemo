@@ -506,12 +506,18 @@ def _upcoming_appointments(db: Session, ctx: ParentContext, now: datetime) -> li
     )
 
 
+def _bot_lines(db: Session, checkin: HealthCheckin) -> set[str]:
+    """Every line the bot has said today. A turn is stored as at most two bubbles, with an answer's lines joined
+    by newlines (_cap_messages), so "already said" checks look at the lines, not whole bubbles."""
+    return {line for m in conversation(db, checkin) if m.sender == "bot" for line in m.text.split("\n")}
+
+
 def _appointments_and_done(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: datetime) -> list[str]:
     checkin.pending_medicine_id = None
     _set_step(db, ctx, checkin, APPOINTMENTS, now)
     today = today_for(ctx.profile, now)
     msgs = []
-    already_said = {m.text for m in conversation(db, checkin) if m.sender == "bot"}
+    already_said = _bot_lines(db, checkin)
     for a in _upcoming_appointments(db, ctx, now):
         key = "appt_today" if a.scheduled_date == today else "appt_tomorrow"
         line = _say(ctx, key, time=format_time(a.start_time), reason=a.reason, provider=a.provider)
@@ -550,7 +556,7 @@ def _care_note(db: Session, ctx: ParentContext, checkin: HealthCheckin) -> str |
     if not tips:
         return None
     intro = _say(ctx, "care_intro", name=ctx.greeting_name)
-    if any(m.sender == "bot" and m.text.startswith(intro) for m in conversation(db, checkin)):
+    if any(line.startswith(intro) for line in _bot_lines(db, checkin)):
         return None
     return " ".join([intro, *(_say(ctx, key, **values) for key, values in tips)])
 

@@ -292,11 +292,20 @@ _DAY_PART_WORDS_EN = {
 }
 
 
+# "now" / "today" alongside a part ("what do I take now or at night?") asks about more than that part.
+_WHOLE_DAY_WORDS_EN = re.compile(r"\b(?:now|right now|currently|today|all day|all)\b")
+
+
 def named_day_part(text: str) -> str | None:
     """The part of the day a medicine question asks about (morning/noon/night), or None for the whole day."""
     normalised = (text or "").strip().lower()
     matched = [part for part, rx in _DAY_PART_WORDS_EN.items() if rx.search(normalised)]
-    return matched[0] if len(matched) == 1 else None
+    if len(matched) != 1:
+        return None
+    # "this morning" / "tonight" contain no whole-day word, so only a separate "now" or "today" widens it.
+    if _WHOLE_DAY_WORDS_EN.search(normalised.replace("this morning", "").replace("tonight", "")):
+        return None
+    return matched[0]
 
 
 @dataclass

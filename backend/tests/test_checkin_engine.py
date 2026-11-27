@@ -178,8 +178,9 @@ def test_full_flow_medicines_then_appointment_then_goodbye(db_session, world):
     turn = engine.handle_parent_text(db_session, world["ctx"], "yes took both", NOW)
     doses = db_session.execute(select(MedicineDose)).scalars().all()
     assert len(doses) == 2 and {d.status for d in doses} == {"taken"}
-    assert turn.bot_messages[0] == "Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM."
-    assert any(m.startswith("Tomorrow at 10:00 AM you have Doctor follow-up with Dr. Rao") for m in turn.bot_messages)
+    assert turn.bot_messages[0].startswith("Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM.")
+    assert "\nTomorrow at 10:00 AM you have Doctor follow-up with Dr. Rao" in turn.bot_messages[0]
+    assert len(turn.bot_messages) == 2  # the answer in one bubble, the next question in the other
     assert not any("Cancelled visit" in m for m in turn.bot_messages)
     assert turn.checkin.step == "note"
     assert turn.bot_messages[-1] == "Is there anything you would like to tell me or note down?"
@@ -251,7 +252,7 @@ def test_no_medicines_due_says_none_and_skips_skipped(db_session, world):
                           world["manager"].id, "manual", NOW)
     engine.start_or_resume(db_session, world["ctx"], NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
-    assert "You have no medicines due right now." in turn.bot_messages
+    assert "You have no medicines due right now." in turn.bot_messages[0].split("\n")
     assert turn.checkin.step == "note"
 
 
@@ -419,8 +420,8 @@ def test_urgent_during_medicines_still_records_the_answer(db_session, world):
     engine.start_or_resume(db_session, world["ctx"], NOW)
     engine.handle_parent_text(db_session, world["ctx"], "fine", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "I took both but I feel dizzy", NOW)
-    assert turn.bot_messages[0] == URGENT_EN
-    assert "Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM." in turn.bot_messages
+    assert turn.bot_messages[0].split("\n")[0] == URGENT_EN  # the alert still comes first
+    assert "Okay, I've noted that you took Amlodipine, Metformin at 8:30 AM." in turn.bot_messages[0].split("\n")
     assert {d.status for d in db_session.execute(select(MedicineDose)).scalars()} == {"taken"}
     assert turn.checkin.step == "note"
     assert len(_urgent_notes(db_session)) == 3
@@ -607,8 +608,7 @@ def test_medicine_question_in_health_step_answers_schedule_and_is_not_shared(db_
         db_session, world["ctx"], "What medicine do I need to take now or in the night?", NOW
     )
     assert turn.bot_messages == [
-        "Now:\n• Amlodipine\n• Metformin",
-        "At 8:00 PM: Metformin.",
+        "Now:\n• Amlodipine\n• Metformin\nAt 8:00 PM: Metformin.",
         "How are you feeling today?",
     ]
     assert turn.checkin.step == "health"
@@ -634,8 +634,7 @@ def test_medicine_question_after_done_lists_taken_and_later(db_session, world):
     engine.handle_parent_text(db_session, world["ctx"], "yes I took both", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "when is my next medicine?", NOW)
     assert turn.bot_messages == [
-        "Already taken today:\n• Amlodipine\n• Metformin",
-        "At 8:00 PM: Metformin.",
+        "Already taken today:\n• Amlodipine\n• Metformin\nAt 8:00 PM: Metformin.",
         "Is there anything you would like to tell me or note down?",
     ]
     assert turn.checkin.step == "note"
@@ -647,8 +646,9 @@ def test_medicine_question_with_everything_taken(db_session, world):
     engine.handle_parent_text(db_session, world["ctx"], "I am fine", NOW)
     engine.handle_parent_text(db_session, world["ctx"], "yes I took both", NOW)
     turn = engine.handle_parent_text(db_session, world["ctx"], "what medicines do I have today?", NOW)
-    assert turn.bot_messages[0] == "Already taken today:\n• Amlodipine\n• Metformin"
-    assert turn.bot_messages[1] == "You've taken all your medicines for today."
+    assert turn.bot_messages[0] == (
+        "Already taken today:\n• Amlodipine\n• Metformin\nYou've taken all your medicines for today."
+    )
 
 
 def test_medicine_question_with_no_medicines(db_session, world):
@@ -835,7 +835,8 @@ def _with_offer(db_session, world):
     db_session.commit()
     engine.start_or_resume(db_session, world["ctx"], NOW)
     turn = _ask(db_session, world, "I am fine")
-    assert turn.bot_messages[-2:] == [MEDS_LIST, OFFER]
+    assert turn.bot_messages[-1] == OFFER
+    assert turn.bot_messages[-2].endswith(MEDS_LIST)
 
 
 @pytest.mark.parametrize("answer", ["Yes", "yes please", "show me the images", "Okay", "ஆமா", "हाँ"])
@@ -843,8 +844,8 @@ def test_yes_to_the_images_shows_them_and_records_no_dose(db_session, world, ans
     _with_offer(db_session, world)
     turn = _ask(db_session, world, answer)
     assert turn.bot_messages == [
-        "Here is the photo of Amlodipine.",
-        "There is no photo of Metformin yet. Please ask your family to add one.",
+        # The photo line leads its bubble, so the chat shows the photo.
+        "Here is the photo of Amlodipine.\nThere is no photo of Metformin yet. Please ask your family to add one.",
         MEDS_LIST,
     ]
     assert db_session.execute(select(MedicineDose)).scalars().all() == []
@@ -896,14 +897,14 @@ def test_confused_while_asked_about_medicines_lists_them(db_session, world):
     _to_medicines(db_session, world)
     turn = _ask(db_session, world, "I'm confused")
     assert turn.bot_messages == [
-        "Let me help. Here are today's medicines.", "Now:\n• Amlodipine\n• Metformin", MEDS_LIST,
+        "Let me help. Here are today's medicines.\nNow:\n• Amlodipine\n• Metformin", MEDS_LIST,
     ]
 
 
 def test_photo_of_a_medicine_not_on_the_list_does_not_guess(db_session, world):
     _to_medicines(db_session, world)
     turn = _ask(db_session, world, "Show me the photo of vitamin B12")
-    assert turn.bot_messages[0] == "I'm not sure which medicine you mean. Here are today's medicines."
+    assert turn.bot_messages[0].startswith("I'm not sure which medicine you mean. Here are today's medicines.")
 
 
 def test_confused_as_a_health_answer_reaches_the_family(db_session, world):
