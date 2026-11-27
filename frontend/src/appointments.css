@@ -662,3 +662,155 @@
 .ap-modal:has(.ap-voice) {
   max-width: 600px;
 }
+
+/* After the visit: fee, doctor's notes and medicines given (pages/Appointments.tsx). */
+.ap-visit {
+  margin: 4px 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #d6e6e1;
+  border-radius: 12px;
+  background: #f7fbfa;
+}
+.ap-visit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ap-visit-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.ap-visit-head h4 {
+  margin: 14px 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pp-muted);
+}
+.ap-visit .ap-visit-dl {
+  margin: 10px 0 0;
+  gap: 10px;
+}
+.ap-fee {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.ap-doctor-notes {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.ap-visit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+.ap-visit-form textarea,
+.ap-form-visit textarea {
+  padding: 10px 11px;
+  border: 1px solid var(--pp-line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.88rem;
+  resize: vertical;
+}
+.ap-med-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ap-med-chips a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid #cfe6e0;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--pp-teal-dark);
+  text-decoration: none;
+}
+.ap-med-chips a:hover {
+  border-color: var(--pp-teal);
+}
+.ap-med-chips a.is-stopped {
+  color: var(--pp-muted);
+}
+.ap-none {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.ap-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ap-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.ap-pick-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--pp-line);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.ap-pick-item.is-on {
+  border-color: var(--pp-teal);
+  background: #eef7f4;
+}
+.ap-pick-item input {
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  accent-color: var(--pp-teal);
+}
+.ap-pick-item span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.88rem;
+}
+.ap-pick-item small {
+  font-size: 0.75rem;
+  color: var(--pp-muted);
+}
+.ap-new-med {
+  align-self: flex-start;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.ap-form-visit {
+  border: 1px solid var(--pp-line);
+  border-radius: 10px;
+  padding: 0 12px;
+}
+.ap-form-visit summary {
+  padding: 10px 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ap-form-visit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+}

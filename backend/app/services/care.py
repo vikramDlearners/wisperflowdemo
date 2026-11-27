@@ -219,6 +219,7 @@ def create_medicine(
     responsible_user_id: str | None = None,
     purpose: str | None = None,
     take_until: date | None = None,
+    appointment_id: str | None = None,
 ) -> Medicine:
     require(db, actor_id, family_id, "medicines.edit")
     _profile_in_family(db, family_id, care_profile_id)
@@ -234,6 +235,11 @@ def create_medicine(
         take_until=take_until,
         responsible_user_id=responsible_user_id,
     )
+    if appointment_id:
+        from app.services.appointments import check_medicine_appointment  # noqa: PLC0415
+
+        check_medicine_appointment(db, medicine, appointment_id)
+        medicine.appointment_id = appointment_id
     db.add(medicine)
     db.flush()
     log_activity(db, family_id, actor_id, "medicine.created", "medicine", medicine.id)
@@ -248,11 +254,15 @@ def update_medicine(
     medicine = _medicine_in_family(db, family_id, medicine_id)
     allowed = {
         "display_name", "instructions_text", "purpose", "refill_date", "take_until", "responsible_user_id", "active",
-        "unit_price", "total_medicine_count",
+        "unit_price", "total_medicine_count", "appointment_id",
     }
     unknown = set(changes) - allowed
     if unknown:
         raise ValueError(f"Cannot update fields: {sorted(unknown)}")
+    if changes.get("appointment_id"):
+        from app.services.appointments import check_medicine_appointment  # noqa: PLC0415
+
+        check_medicine_appointment(db, medicine, changes["appointment_id"])
     for field, value in changes.items():
         setattr(medicine, field, value)
     if "unit_price" in changes or "total_medicine_count" in changes:

@@ -12,6 +12,8 @@ from app.models.care_profile import CareProfile
 from app.models.user import User
 from app.schemas import (
     AppointmentCreate,
+    AppointmentMedicineOut,
+    AppointmentMedicinesIn,
     AppointmentListOut,
     AppointmentOut,
     AppointmentTextIn,
@@ -25,7 +27,8 @@ from app.services.permissions import require
 router = APIRouter(prefix="/api/appointments", tags=["appointments"])
 
 
-def _out(appointment: Appointment) -> AppointmentOut:
+def _out(appointment: Appointment, db: Session | None = None) -> AppointmentOut:
+    medicines = svc.appointment_medicines(db, appointment.id) if db is not None else []
     return AppointmentOut(
         id=appointment.id,
         care_recipient_id=appointment.care_profile_id,
@@ -36,6 +39,9 @@ def _out(appointment: Appointment) -> AppointmentOut:
         location=appointment.location,
         notes=appointment.notes,
         status=appointment.status,
+        fee=appointment.fee,
+        doctor_notes=appointment.doctor_notes,
+        medicines=[AppointmentMedicineOut(id=m.id, display_name=m.display_name, active=m.active) for m in medicines],
     )
 
 
@@ -47,8 +53,8 @@ def list_appointments(
         raise ValueError("care_recipient_id is required")
     upcoming, past = svc.list_appointments(db, user.id, care_recipient_id)
     return AppointmentListOut(
-        upcoming=[_out(a) for a in upcoming],
-        past=[_out(a) for a in past],
+        upcoming=[_out(a, db) for a in upcoming],
+        past=[_out(a, db) for a in past],
     )
 
 
@@ -72,7 +78,7 @@ def parse_text(body: AppointmentTextIn, db: Session = DbSession, user: User = Cu
 def get_appointment(
     appointment_id: str, db: Session = DbSession, user: User = CurrentUser
 ) -> AppointmentOut:
-    return _out(svc.get_appointment(db, user.id, appointment_id))
+    return _out(svc.get_appointment(db, user.id, appointment_id), db)
 
 
 @router.post("", response_model=AppointmentOut, status_code=201)
@@ -90,8 +96,10 @@ def create_appointment(
         body.reason,
         body.notes,
         location=body.location,
+        fee=body.fee,
+        doctor_notes=body.doctor_notes,
     )
-    return _out(appointment)
+    return _out(appointment, db)
 
 
 @router.patch("/{appointment_id}", response_model=AppointmentOut)
@@ -100,7 +108,16 @@ def update_appointment(
     db: Session = DbSession, user: User = CurrentUser,
 ) -> AppointmentOut:
     changes = body.model_dump(exclude_unset=True)
-    return _out(svc.update_appointment(db, user.id, appointment_id, changes))
+    return _out(svc.update_appointment(db, user.id, appointment_id, changes), db)
+
+
+@router.put("/{appointment_id}/medicines", response_model=AppointmentOut)
+def set_appointment_medicines(
+    appointment_id: str, body: AppointmentMedicinesIn,
+    db: Session = DbSession, user: User = CurrentUser,
+) -> AppointmentOut:
+    """Which medicines the doctor gave at this appointment (replaces the list)."""
+    return _out(svc.set_appointment_medicines(db, user.id, appointment_id, body.medicine_ids), db)
 
 
 @router.delete("/{appointment_id}", status_code=204)

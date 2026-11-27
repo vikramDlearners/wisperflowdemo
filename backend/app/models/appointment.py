@@ -1,7 +1,9 @@
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Text
+from decimal import Decimal
+
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -28,6 +30,9 @@ class Appointment(Base):
     reason: Mapped[str] = mapped_column(String(255))
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
+    # After the visit: what it cost and what the doctor said.
+    fee: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    doctor_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Allowed values: scheduled, completed, cancelled, rescheduled.
     status: Mapped[str] = mapped_column(String(16), default="scheduled")
     created_at: Mapped[datetime] = mapped_column(

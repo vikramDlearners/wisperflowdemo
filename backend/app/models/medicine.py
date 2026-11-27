@@ -43,6 +43,10 @@ class Medicine(Base):
     prescription_scan_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("prescription_scans.id"), nullable=True
     )
+    # The appointment at which the doctor gave this medicine.
+    appointment_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("appointments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     unit_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     total_medicine_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)

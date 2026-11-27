@@ -158,6 +158,7 @@ class MedicineCreate(BaseModel):
     refill_date: date | None = None
     take_until: date | None = None
     responsible_user_id: str | None = None
+    appointment_id: str | None = None
 
 
 class MedicineUpdate(BaseModel):
@@ -166,6 +167,7 @@ class MedicineUpdate(BaseModel):
     purpose: str | None = Field(default=None, max_length=120)
     refill_date: date | None = None
     take_until: date | None = None
+    appointment_id: str | None = None
     responsible_user_id: str | None = None
     active: bool | None = None
     unit_price: Decimal | None = Field(default=None, ge=0)
@@ -210,6 +212,7 @@ class MedicineOut(BaseModel):
     quantity_remaining: int | None
     refill_date: date | None
     take_until: date | None = None
+    appointment_id: str | None = None
     responsible_user_id: str | None
     active: bool
     prescription_scan_id: str | None = None
@@ -408,6 +411,8 @@ class AppointmentCreate(BaseModel):
     reason: str = Field(min_length=1, max_length=255)
     location: str | None = Field(default=None, max_length=255)
     notes: str = ""
+    fee: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
+    doctor_notes: str | None = None
 
 
 class AppointmentUpdate(BaseModel):
@@ -419,6 +424,18 @@ class AppointmentUpdate(BaseModel):
     location: str | None = Field(default=None, max_length=255)
     notes: str | None = None
     status: AppointmentStatusIn | None = None
+    fee: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
+    doctor_notes: str | None = None
+
+
+class AppointmentMedicineOut(BaseModel):
+    id: str
+    display_name: str
+    active: bool
+
+
+class AppointmentMedicinesIn(BaseModel):
+    medicine_ids: list[str] = Field(max_length=100)
 
 
 class AppointmentOut(BaseModel):
@@ -431,6 +448,10 @@ class AppointmentOut(BaseModel):
     location: str | None = None
     notes: str
     status: AppointmentStatusIn
+    fee: Decimal | None = None
+    doctor_notes: str | None = None
+    # Medicines the doctor gave at this appointment.
+    medicines: list[AppointmentMedicineOut] = []
 
 
 class AppointmentTextIn(BaseModel):

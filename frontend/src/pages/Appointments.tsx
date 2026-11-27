@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import TimeSelect from "../components/TimeSelect";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import "../medicines.css";
 import "../appointments.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
@@ -9,10 +9,12 @@ import {
   ApiError,
   appointments as api,
   careProfiles,
+  medicines as medicinesApi,
   type AppointmentListOut,
   type AppointmentOut,
   type AppointmentStatus,
   type CareProfileOut,
+  type MedicineOut,
 } from "../api";
 
 // Appointments for the family's care recipient (a care profile), using
@@ -37,6 +39,16 @@ interface FormState {
   reason: string;
   location: string;
   notes: string;
+  fee: string; // rupees, "" when not known
+  doctor_notes: string;
+}
+
+/** "₹500" / "₹650.50" for a fee, or null when none was added. */
+function formatFee(fee: string | number | null | undefined): string | null {
+  if (fee === null || fee === undefined || fee === "") return null;
+  const n = Number(fee);
+  if (!Number.isFinite(n)) return null;
+  return n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 }
 
 const VOICE_EXAMPLE =
@@ -234,6 +246,8 @@ export default function Appointments() {
       reason: "",
       location: "",
       notes: "",
+      fee: "",
+      doctor_notes: "",
     });
     window.setTimeout(() => voiceRef.current?.focus(), 50);
   }
@@ -318,6 +332,8 @@ export default function Appointments() {
       reason: a.reason,
       location: a.location ?? "",
       notes: a.notes,
+      fee: a.fee != null && a.fee !== "" ? String(Number(a.fee)) : "",
+      doctor_notes: a.doctor_notes ?? "",
     });
   }
 
@@ -342,6 +358,14 @@ export default function Appointments() {
       setActionError("Please fill in the date, time, doctor or clinic, and reason.");
       return;
     }
+    if (form.fee.trim() !== "" && !(Number(form.fee) >= 0)) {
+      setActionError("The fee must be a number, 0 or more.");
+      return;
+    }
+    const visit = {
+      fee: form.fee.trim() === "" ? null : Math.round(Number(form.fee) * 100) / 100,
+      doctor_notes: form.doctor_notes.trim() || null,
+    };
     setBusy(true);
     setActionError(null);
     try {
@@ -356,6 +380,7 @@ export default function Appointments() {
           reason: form.reason.trim(),
           location: form.location.trim() || null,
           notes: form.notes.trim(),
+          ...visit,
           // Moving a scheduled visit marks it as rescheduled.
           ...(moved && original?.status === "scheduled" ? { status: "rescheduled" as const } : {}),
         });
@@ -379,6 +404,7 @@ export default function Appointments() {
           reason: form.reason.trim(),
           location: form.location.trim() || null,
           notes: form.notes.trim(),
+          ...visit,
         });
         const forName = profiles.length > 1 ? profiles.find((p) => p.id === profileId)?.display_name : null;
         setNotice(forName ? `Appointment added for ${forName}.` : "Appointment added.");
@@ -397,6 +423,78 @@ export default function Appointments() {
     }
   }
 
+  // ---------- after the visit: fee, doctor's notes, medicines given ----------
+  const [visit, setVisit] = useState<{ fee: string; doctor_notes: string } | null>(null);
+  const [picking, setPicking] = useState<string[] | null>(null); // medicine ids ticked in the picker
+  const [parentMedicines, setParentMedicines] = useState<MedicineOut[] | null>(null);
+
+  useEffect(() => {
+    // A different appointment (or none): close the inline editors.
+    setVisit(null);
+    setPicking(null);
+  }, [detail?.id]);
+
+  function openVisit(a: AppointmentOut) {
+    setVisit({
+      fee: a.fee != null && a.fee !== "" ? String(Number(a.fee)) : "",
+      doctor_notes: a.doctor_notes ?? "",
+    });
+  }
+
+  async function saveVisit(a: AppointmentOut) {
+    if (!visit) return;
+    if (visit.fee.trim() !== "" && !(Number(visit.fee) >= 0)) {
+      setActionError("The fee must be a number, 0 or more.");
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      const updated = await api.update(a.id, {
+        fee: visit.fee.trim() === "" ? null : Math.round(Number(visit.fee) * 100) / 100,
+        doctor_notes: visit.doctor_notes.trim() || null,
+      });
+      setDetail(updated);
+      setVisit(null);
+      setNotice("Visit details saved.");
+      await refresh();
+    } catch (err) {
+      setActionError(errorFrom(err).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openPicker(a: AppointmentOut) {
+    setActionError(null);
+    setPicking((a.medicines ?? []).map((m) => m.id));
+    try {
+      const list = await medicinesApi.list(familyId);
+      setParentMedicines(list.filter((m) => m.care_profile_id === a.care_recipient_id));
+    } catch (err) {
+      setParentMedicines([]);
+      setActionError(errorFrom(err).message);
+    }
+  }
+
+  async function saveMedicines(a: AppointmentOut) {
+    if (!picking) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const updated = await api.setMedicines(a.id, picking);
+      setDetail(updated);
+      setPicking(null);
+      const n = updated.medicines?.length ?? 0;
+      setNotice(n ? `${n} ${n === 1 ? "medicine" : "medicines"} linked to this appointment.` : "Medicines unlinked.");
+      await refresh();
+    } catch (err) {
+      setActionError(errorFrom(err).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setStatus(a: AppointmentOut, status: AppointmentStatus) {
     setBusy(true);
     setActionError(null);
@@ -404,6 +502,8 @@ export default function Appointments() {
       const updated = await api.update(a.id, { status });
       setDetail(updated);
       setNotice(`Appointment marked as ${STATUS_LABEL[status].toLowerCase()}.`);
+      // After the visit: ask for the fee and what the doctor said.
+      if (status === "completed") openVisit(updated);
       await refresh();
     } catch (err) {
       setActionError(errorFrom(err).message);
@@ -691,10 +791,149 @@ export default function Appointments() {
               </div>
             )}
             <div>
-              <dt>Notes</dt>
+              <dt>Notes before the visit</dt>
               <dd className={detail.notes ? "" : "pp-muted"}>{detail.notes || "No notes"}</dd>
             </div>
           </dl>
+
+          <section className="ap-visit" aria-labelledby="ap-visit-title">
+            <div className="ap-visit-head">
+              <h3 id="ap-visit-title">After the visit</h3>
+              {!visit && (
+                <button type="button" className="ap-link" onClick={() => openVisit(detail)} disabled={busy}>
+                  {formatFee(detail.fee) || detail.doctor_notes ? "Edit" : "+ Add fee and doctor's notes"}
+                </button>
+              )}
+            </div>
+
+            {visit ? (
+              <div className="ap-visit-form">
+                <label className="pp-field">
+                  Fee (₹)
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="e.g. 500"
+                    value={visit.fee}
+                    autoFocus
+                    onChange={(e) => setVisit({ ...visit, fee: e.target.value })}
+                  />
+                </label>
+                <label className="pp-field">
+                  What the doctor said
+                  <textarea
+                    rows={4}
+                    placeholder="e.g. BP is better. Reduce salt. Continue Amlodipine. Review in 3 months."
+                    value={visit.doctor_notes}
+                    onChange={(e) => setVisit({ ...visit, doctor_notes: e.target.value })}
+                  />
+                </label>
+                <div className="ap-modal-actions">
+                  <button type="button" className="pp-btn pp-btn-ghost" onClick={() => setVisit(null)} disabled={busy}>
+                    Cancel
+                  </button>
+                  <button type="button" className="pp-btn" onClick={() => void saveVisit(detail)} disabled={busy}>
+                    {busy ? "Saving…" : "Save visit details"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <dl className="ap-dl ap-visit-dl">
+                <div>
+                  <dt>Fee</dt>
+                  <dd className={formatFee(detail.fee) ? "ap-fee" : "pp-muted"}>{formatFee(detail.fee) ?? "Not added"}</dd>
+                </div>
+                <div>
+                  <dt>Doctor's notes</dt>
+                  <dd className={detail.doctor_notes ? "ap-doctor-notes" : "pp-muted"}>
+                    {detail.doctor_notes || "Not added"}
+                  </dd>
+                </div>
+              </dl>
+            )}
+
+            <div className="ap-visit-head">
+              <h4>Medicines given</h4>
+              {!picking && (
+                <button type="button" className="ap-link" onClick={() => void openPicker(detail)} disabled={busy}>
+                  {detail.medicines?.length ? "Change" : "+ Link medicines"}
+                </button>
+              )}
+            </div>
+            {picking ? (
+              <div className="ap-pick">
+                {parentMedicines === null ? (
+                  <p className="pp-muted">Loading medicines…</p>
+                ) : parentMedicines.length === 0 ? (
+                  <p className="pp-muted">No medicines added for this parent yet.</p>
+                ) : (
+                  <ul className="ap-pick-list">
+                    {parentMedicines.map((m) => {
+                      const on = picking.includes(m.id);
+                      const elsewhere = m.appointment_id && m.appointment_id !== detail.id;
+                      return (
+                        <li key={m.id}>
+                          <label className={`ap-pick-item${on ? " is-on" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={() =>
+                                setPicking(on ? picking.filter((id) => id !== m.id) : [...picking, m.id])
+                              }
+                            />
+                            <span>
+                              <strong>{m.display_name}</strong>
+                              {(elsewhere || !m.active) && (
+                                <small>
+                                  {!m.active ? "Stopped" : ""}
+                                  {!m.active && elsewhere ? " · " : ""}
+                                  {elsewhere ? "Linked to another appointment, ticking moves it here" : ""}
+                                </small>
+                              )}
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <Link
+                  className="ap-link ap-new-med"
+                  to={`/family/${familyId}/medicines/new?profile=${detail.care_recipient_id}&appointment=${detail.id}&from=appointments`}
+                >
+                  + Add a new medicine from this visit
+                </Link>
+                <div className="ap-modal-actions">
+                  <button type="button" className="pp-btn pp-btn-ghost" onClick={() => setPicking(null)} disabled={busy}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="pp-btn"
+                    onClick={() => void saveMedicines(detail)}
+                    disabled={busy || parentMedicines === null}
+                  >
+                    {busy ? "Saving…" : "Save medicines"}
+                  </button>
+                </div>
+              </div>
+            ) : detail.medicines?.length ? (
+              <ul className="ap-med-chips">
+                {detail.medicines.map((m) => (
+                  <li key={m.id}>
+                    <Link to={`/family/${familyId}/medicines/${m.id}`} className={m.active ? "" : "is-stopped"}>
+                      💊 {m.display_name}
+                      {!m.active && <small> · stopped</small>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pp-muted ap-none">No medicines linked yet.</p>
+            )}
+          </section>
 
           {actionError && <p role="alert" className="pp-alert">{actionError}</p>}
 
@@ -851,7 +1090,7 @@ export default function Appointments() {
               />
             </label>
             <label className={`pp-field${filledClass("notes")}`}>
-              Notes
+              Notes before the visit
               <textarea
                 rows={3}
                 placeholder="e.g. Bring recent lab results"
@@ -859,6 +1098,36 @@ export default function Appointments() {
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </label>
+            <details className="ap-form-visit" open={Boolean(form.fee || form.doctor_notes)}>
+              <summary>After the visit: fee and doctor's notes</summary>
+              <div className="ap-form-visit-body">
+                <label className="pp-field">
+                  <span>
+                    Fee (₹) <span className="ap-optional">Optional</span>
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="e.g. 500"
+                    value={form.fee}
+                    onChange={(e) => setForm({ ...form, fee: e.target.value })}
+                  />
+                </label>
+                <label className="pp-field">
+                  <span>
+                    What the doctor said <span className="ap-optional">Optional</span>
+                  </span>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. BP is better. Reduce salt. Review in 3 months."
+                    value={form.doctor_notes}
+                    onChange={(e) => setForm({ ...form, doctor_notes: e.target.value })}
+                  />
+                </label>
+              </div>
+            </details>
             {form.id && all.find((a) => a.id === form.id)?.status === "scheduled" && (
               <p className="pp-hint">Changing the date or time marks the appointment as rescheduled.</p>
             )}
@@ -890,7 +1159,11 @@ function ApptRow({ a, onOpen, showDate = false }: { a: AppointmentOut; onOpen: (
         </span>
         <span className="ap-row-main">
           <strong>{a.reason}</strong>
-          <span>{a.provider}</span>
+          <span>
+            {a.provider}
+            {formatFee(a.fee) && ` · ${formatFee(a.fee)}`}
+            {a.medicines?.length ? ` · ${a.medicines.length} ${a.medicines.length === 1 ? "medicine" : "medicines"}` : ""}
+          </span>
         </span>
         <span className={`ap-status is-${a.status}`}>{STATUS_LABEL[a.status]}</span>
       </button>

@@ -147,6 +147,8 @@ export interface MedicineCreate {
   /** Last day of the course (YYYY-MM-DD); null means ongoing. */
   take_until?: string | null;
   responsible_user_id?: string | null;
+  /** The appointment at which the doctor gave this medicine. */
+  appointment_id?: string | null;
 }
 
 export interface MedicineUpdate {
@@ -159,6 +161,8 @@ export interface MedicineUpdate {
   // Pricing (edit only; the server computes total_price = unit_price x total_medicine_count).
   unit_price?: number | string | null;
   total_medicine_count?: number | null;
+  /** The appointment at which the doctor gave this medicine. */
+  appointment_id?: string | null;
 }
 
 export interface QuantityUpdate {
@@ -186,6 +190,8 @@ export interface MedicineOut {
   total_price?: string | number | null;
   /** True when a photo of the prescription is saved (GET .../prescription-image). */
   has_prescription_image?: boolean;
+  /** The appointment at which the doctor gave this medicine. */
+  appointment_id?: string | null;
 }
 
 /** Voice mode: what POST .../medicines/parse-text read from the spoken sentence. Unknown fields are null. */
@@ -766,6 +772,11 @@ export interface AppointmentOut {
   location?: string | null;
   notes: string;
   status: AppointmentStatus;
+  /** After the visit: the fee (a decimal string such as "500.00") and what the doctor said. */
+  fee?: string | number | null;
+  doctor_notes?: string | null;
+  /** Medicines the doctor gave at this appointment. */
+  medicines?: { id: string; display_name: string; active: boolean }[];
 }
 
 export interface AppointmentListOut {
@@ -782,6 +793,8 @@ export interface AppointmentCreate {
   reason: string;
   location?: string | null;
   notes?: string;
+  fee?: number | null;
+  doctor_notes?: string | null;
 }
 
 /** Voice mode: what POST /api/appointments/parse-text read from the spoken appointment. Unknown fields are null. */
@@ -811,6 +824,9 @@ export const appointments = {
   remove: (appointmentId: string) => del(`/api/appointments/${appointmentId}`),
   parseText: (familyId: string, text: string, today: string) =>
     post<AppointmentTextOut>("/api/appointments/parse-text", { family_id: familyId, text, today }),
+  /** Which medicines the doctor gave at this appointment (replaces the list). */
+  setMedicines: (appointmentId: string, medicineIds: string[]) =>
+    put<AppointmentOut>(`/api/appointments/${appointmentId}/medicines`, { medicine_ids: medicineIds }),
 };
 
 // ---- ask for help (only called when the text rules are not sure) ----

@@ -16,12 +16,14 @@ import {
 } from "../medicineImage";
 import {
   ApiError,
+  appointments as appointmentsApi,
   careProfiles,
   families,
   medicines,
   members,
   type CareProfileOut,
   type MedicineCreate,
+  type AppointmentOut,
   type MedicineOut,
   type MedicineUpdate,
   type MemberOut,
@@ -223,7 +225,9 @@ export default function MedicineForm({
   const [profilesFailed, setProfilesFailed] = useState(false);
   const [people, setPeople] = useState<MemberOut[]>([]);
 
-  const [profileId, setProfileId] = useState(careProfileId ?? "");
+  const [profileId, setProfileId] = useState(
+    careProfileId ?? new URLSearchParams(window.location.search).get("profile") ?? "",
+  );
   const [displayName, setDisplayName] = useState("");
   const [instructions, setInstructions] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -232,6 +236,11 @@ export default function MedicineForm({
   const [refillTouched, setRefillTouched] = useState(false);
   // Last day of the course; empty means ongoing.
   const [takeUntil, setTakeUntil] = useState("");
+  // The appointment at which the doctor gave this medicine (?appointment=... when opened from one).
+  const query = new URLSearchParams(window.location.search);
+  const fromAppointments = query.get("from") === "appointments";
+  const [appointmentId, setAppointmentId] = useState(query.get("appointment") ?? "");
+  const [appointmentOptions, setAppointmentOptions] = useState<AppointmentOut[]>([]);
   const [responsible, setResponsible] = useState("");
   const [active, setActive] = useState(true);
   // Pricing: price per tablet and how many tablets were bought; the server computes the total.
@@ -328,6 +337,7 @@ export default function MedicineForm({
           setRefillDate(med.refill_date ?? "");
           setRefillTouched(Boolean(med.refill_date));
           setTakeUntil(med.take_until ?? "");
+          setAppointmentId(med.appointment_id ?? "");
           setResponsible(med.responsible_user_id ?? "");
           setActive(med.active);
           setUnitPrice(med.unit_price != null ? String(Number(med.unit_price)) : "");
@@ -400,6 +410,29 @@ export default function MedicineForm({
     }
   }
 
+  // The chosen parent's appointments, newest first (cancelled ones left out), for "Given at appointment".
+  useEffect(() => {
+    if (!profileId) {
+      setAppointmentOptions([]);
+      return;
+    }
+    let active = true;
+    appointmentsApi
+      .list(profileId)
+      .then((res) => {
+        if (!active) return;
+        const all = [...res.upcoming, ...res.past]
+          .filter((a) => a.status !== "cancelled" || a.id === appointmentId)
+          .sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date));
+        setAppointmentOptions(all);
+      })
+      .catch(() => active && setAppointmentOptions([]));
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!isEdit && !profileId && profilesFailed) {
@@ -443,6 +476,7 @@ export default function MedicineForm({
           instructions_text: instructions.trim() || null,
           refill_date: refill,
           take_until: until,
+          appointment_id: appointmentId || null,
           responsible_user_id: owner,
           active,
           ...pricing,
@@ -464,6 +498,7 @@ export default function MedicineForm({
           quantity_remaining: quantity === "" ? null : Number(quantity),
           refill_date: refill,
           take_until: until,
+          appointment_id: appointmentId || null,
           responsible_user_id: owner,
         };
         result = await medicines.create(familyId, body);
@@ -500,6 +535,7 @@ export default function MedicineForm({
       ].filter(Boolean);
       const notice = problems.length ? `${saved}, but ${problems.join("; ")}.` : `${saved}.`;
       if (onSaved) onSaved(result);
+      else if (fromAppointments) navigate(`/family/${familyId}/appointments`, { state: { notice } });
       else navigate(listPath, { state: { notice, warn: problems.length > 0 } });
     } catch (err) {
       setError(errorText(err, "Could not save medicine."));
@@ -645,6 +681,30 @@ export default function MedicineForm({
           )}
         </span>
       )}
+    </label>
+  );
+
+  const appointmentField = (
+    <label className="pp-field mf-span">
+      <span>
+        Given at appointment <span className="mf-req">Optional</span>
+      </span>
+      <select value={appointmentId} onChange={(e) => setAppointmentId(e.target.value)} disabled={!profileId}>
+        <option value="">Not linked to an appointment</option>
+        {appointmentOptions.map((a) => (
+          <option key={a.id} value={a.id}>
+            {new Date(`${a.scheduled_date}T00:00`).toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}{" "}
+            · {a.provider} · {a.reason}
+          </option>
+        ))}
+      </select>
+      <span className="mf-refill-hint">
+        {profileId ? "Which doctor's visit this medicine came from." : "Choose who the medicine is for first."}
+      </span>
     </label>
   );
 
@@ -1000,6 +1060,7 @@ export default function MedicineForm({
                 {quantityField}
                 {refillField}
                 {takeUntilField}
+                {appointmentField}
                 {pricingField}
               </div>
             </section>
@@ -1038,6 +1099,7 @@ export default function MedicineForm({
                 {quantityField}
                 {refillField}
                 {takeUntilField}
+                {appointmentField}
                 {caretakerField(!isEdit)}
                 {pricingField}
                 {timesField}
