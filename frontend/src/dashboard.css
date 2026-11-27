@@ -261,6 +261,14 @@
   gap: 14px;
 }
 
+.ov-estimate-link {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--db-teal-dark);
+  text-decoration: none;
+}
+
 .ov-estimate-scroll {
   overflow-x: auto;
   border-radius: 12px;
