@@ -33,6 +33,10 @@ class Appointment(Base):
     # After the visit: what it cost and what the doctor said.
     fee: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     doctor_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The family member responsible for this visit (who takes the parent); told when it is completed.
+    responsible_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     # Allowed values: scheduled, completed, cancelled, rescheduled.
     status: Mapped[str] = mapped_column(String(16), default="scheduled")
     created_at: Mapped[datetime] = mapped_column(

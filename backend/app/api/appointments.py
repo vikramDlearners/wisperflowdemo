@@ -41,6 +41,7 @@ def _out(appointment: Appointment, db: Session | None = None) -> AppointmentOut:
         status=appointment.status,
         fee=appointment.fee,
         doctor_notes=appointment.doctor_notes,
+        responsible_user_id=appointment.responsible_user_id,
         medicines=[AppointmentMedicineOut(id=m.id, display_name=m.display_name, active=m.active) for m in medicines],
     )
 
@@ -98,6 +99,7 @@ def create_appointment(
         location=body.location,
         fee=body.fee,
         doctor_notes=body.doctor_notes,
+        responsible_user_id=body.responsible_user_id,
     )
     return _out(appointment, db)
 

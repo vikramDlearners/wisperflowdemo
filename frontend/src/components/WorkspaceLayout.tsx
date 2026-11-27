@@ -223,7 +223,7 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
               <span aria-hidden="true">💬</span> Back to chat
             </Link>
           )}
-          <button type="button" className="pp-bell ws-bell" aria-label="Notifications">
+          <Link to={fam("/notifications") ?? "/"} className="pp-bell ws-bell" aria-label="Notifications">
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
               <path
                 d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Zm4.3 9.5a1.8 1.8 0 0 0 3.4 0"
@@ -235,7 +235,7 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
               />
             </svg>
             <span className="ws-bell-dot" />
-          </button>
+          </Link>
           <div className="pp-user ws-user">
             <span className="pp-avatar pp-avatar-warm">{initials(userName)}</span>
             <div className="ws-user-text">

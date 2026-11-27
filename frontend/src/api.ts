@@ -775,6 +775,8 @@ export interface AppointmentOut {
   /** After the visit: the fee (a decimal string such as "500.00") and what the doctor said. */
   fee?: string | number | null;
   doctor_notes?: string | null;
+  /** The family member responsible for the visit; told (with the managers) when it is completed. */
+  responsible_user_id?: string | null;
   /** Medicines the doctor gave at this appointment. */
   medicines?: { id: string; display_name: string; active: boolean }[];
 }
@@ -795,6 +797,7 @@ export interface AppointmentCreate {
   notes?: string;
   fee?: number | null;
   doctor_notes?: string | null;
+  responsible_user_id?: string | null;
 }
 
 /** Voice mode: what POST /api/appointments/parse-text read from the spoken appointment. Unknown fields are null. */

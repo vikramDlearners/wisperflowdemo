@@ -66,6 +66,19 @@ export function notificationLine(n: Pick<NotificationOut, "type" | "payload">): 
       const title = str(p, "title");
       return { text: title ? `Task reminder: ${title}` : "You have a task reminder.", urgent: false };
     }
+    case "appointment.completed": {
+      const reason = str(p, "reason") ?? "appointment";
+      const provider = str(p, "provider");
+      const by = str(p, "completed_by");
+      const day = str(p, "scheduled_date");
+      const when = day
+        ? ` on ${new Date(`${day}T00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`
+        : "";
+      return {
+        text: `${parent}'s ${reason}${provider ? ` with ${provider}` : ""}${when} is completed${by ? `, marked by ${by}` : ""}.`,
+        urgent: false,
+      };
+    }
     default:
       return { text: "You have a new care update.", urgent: false };
   }

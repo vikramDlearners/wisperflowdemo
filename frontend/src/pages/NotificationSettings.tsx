@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { FormEvent } from "react";
 import { ApiError, families, intentMode, notifications } from "../api";
 import type { NotificationOut } from "../api";
@@ -50,6 +51,7 @@ function look(type: string): { icon: string; tone: string } {
   if (type.startsWith("medicine")) return { icon: "💊", tone: "medicines" };
   if (type.startsWith("task")) return { icon: "✅", tone: "tasks" };
   if (type.startsWith("checkin")) return { icon: "💬", tone: "chat" };
+  if (type.startsWith("appointment")) return { icon: "📅", tone: "appointments" };
   return { icon: "🔔", tone: "settings" };
 }
 
@@ -309,6 +311,18 @@ export default function NotificationSettings({ familyId }: NotificationSettingsP
                               {unread && <span className="nt-dot" role="img" aria-label="Unread" />}
                               {line.text}
                             </p>
+                            {item.type === "appointment.completed" &&
+                              typeof item.payload?.appointment_id === "string" && (
+                                <Link
+                                  className="nt-link nt-view"
+                                  to={`/family/${item.family_id ?? familyId}/appointments?appointment=${item.payload.appointment_id}`}
+                                  onClick={() => {
+                                    if (unread) void markRead([item.id]);
+                                  }}
+                                >
+                                  View appointment details →
+                                </Link>
+                              )}
                             {unread && (
                               <button
                                 type="button"

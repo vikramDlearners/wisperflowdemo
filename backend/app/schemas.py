@@ -413,6 +413,7 @@ class AppointmentCreate(BaseModel):
     notes: str = ""
     fee: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
     doctor_notes: str | None = None
+    responsible_user_id: str | None = None
 
 
 class AppointmentUpdate(BaseModel):
@@ -426,6 +427,7 @@ class AppointmentUpdate(BaseModel):
     status: AppointmentStatusIn | None = None
     fee: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
     doctor_notes: str | None = None
+    responsible_user_id: str | None = None
 
 
 class AppointmentMedicineOut(BaseModel):
@@ -450,6 +452,7 @@ class AppointmentOut(BaseModel):
     status: AppointmentStatusIn
     fee: Decimal | None = None
     doctor_notes: str | None = None
+    responsible_user_id: str | None = None
     # Medicines the doctor gave at this appointment.
     medicines: list[AppointmentMedicineOut] = []
 

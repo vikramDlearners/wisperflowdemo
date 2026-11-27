@@ -10,11 +10,13 @@ import {
   appointments as api,
   careProfiles,
   medicines as medicinesApi,
+  members as membersApi,
   type AppointmentListOut,
   type AppointmentOut,
   type AppointmentStatus,
   type CareProfileOut,
   type MedicineOut,
+  type MemberOut,
 } from "../api";
 
 // Appointments for the family's care recipient (a care profile), using
@@ -41,6 +43,7 @@ interface FormState {
   notes: string;
   fee: string; // rupees, "" when not known
   doctor_notes: string;
+  responsible: string; // user id, "" for nobody yet
 }
 
 /** "₹500" / "₹650.50" for a fee, or null when none was added. */
@@ -127,6 +130,10 @@ export default function Appointments() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Family members (not parents) who can be responsible for taking the parent to a visit.
+  const [people, setPeople] = useState<MemberOut[]>([]);
+  const personName = (id: string | null | undefined) =>
+    (id && people.find((p) => p.user_id === id)?.display_name) || null;
 
   // Voice mode for a new appointment: say it in one go (Wispr Flow types it), "Fill the form" fills the fields.
   const [spoken, setSpoken] = useState("");
@@ -155,14 +162,27 @@ export default function Appointments() {
     setLoadError(null);
     (async () => {
       try {
-        const list = await careProfiles.list(familyId);
+        const [list, team] = await Promise.all([
+          careProfiles.list(familyId),
+          membersApi.list(familyId).catch(() => [] as MemberOut[]),
+        ]);
         if (!active) return;
         setProfiles(list);
-        const first = list[0]?.id ?? "";
+        setPeople(team.filter((m) => m.role_name.toLowerCase() !== "parent"));
+        // From a notification: open that appointment (?appointment=ID), on its parent's calendar.
+        const wanted = new URLSearchParams(window.location.search).get("appointment");
+        const opened = wanted ? await api.get(wanted).catch(() => null) : null;
+        const first = opened?.care_recipient_id ?? list[0]?.id ?? "";
         setCareProfileId(first);
         if (first) {
           const res = await api.list(first);
           if (active) setData(res);
+        }
+        if (opened && active) {
+          const d = parseDay(opened.scheduled_date);
+          setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+          setSelectedDay(opened.scheduled_date);
+          setDetail(opened);
         }
       } catch (err) {
         if (active) setLoadError(errorFrom(err));
@@ -248,6 +268,7 @@ export default function Appointments() {
       notes: "",
       fee: "",
       doctor_notes: "",
+      responsible: "",
     });
     window.setTimeout(() => voiceRef.current?.focus(), 50);
   }
@@ -334,6 +355,7 @@ export default function Appointments() {
       notes: a.notes,
       fee: a.fee != null && a.fee !== "" ? String(Number(a.fee)) : "",
       doctor_notes: a.doctor_notes ?? "",
+      responsible: a.responsible_user_id ?? "",
     });
   }
 
@@ -365,6 +387,7 @@ export default function Appointments() {
     const visit = {
       fee: form.fee.trim() === "" ? null : Math.round(Number(form.fee) * 100) / 100,
       doctor_notes: form.doctor_notes.trim() || null,
+      responsible_user_id: form.responsible || null,
     };
     setBusy(true);
     setActionError(null);
@@ -501,7 +524,11 @@ export default function Appointments() {
     try {
       const updated = await api.update(a.id, { status });
       setDetail(updated);
-      setNotice(`Appointment marked as ${STATUS_LABEL[status].toLowerCase()}.`);
+      setNotice(
+        status === "completed"
+          ? "Appointment marked as completed. The family managers and the responsible person have been notified."
+          : `Appointment marked as ${STATUS_LABEL[status].toLowerCase()}.`,
+      );
       // After the visit: ask for the fee and what the doctor said.
       if (status === "completed") openVisit(updated);
       await refresh();
@@ -783,6 +810,12 @@ export default function Appointments() {
             <div>
               <dt>Doctor / clinic</dt>
               <dd>{detail.provider}</dd>
+            </div>
+            <div>
+              <dt>Responsible</dt>
+              <dd className={detail.responsible_user_id ? "" : "pp-muted"}>
+                {personName(detail.responsible_user_id) ?? (detail.responsible_user_id ? "A family member" : "No one yet")}
+              </dd>
             </div>
             {detail.location && (
               <div>
@@ -1078,6 +1111,19 @@ export default function Appointments() {
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
               />
+            </label>
+            <label className="pp-field">
+              <span>
+                Who's responsible? <span className="ap-optional">Takes them · told when it's completed</span>
+              </span>
+              <select value={form.responsible} onChange={(e) => setForm({ ...form, responsible: e.target.value })}>
+                <option value="">No one yet</option>
+                {people.map((p) => (
+                  <option key={p.user_id} value={p.user_id}>
+                    {p.display_name} · {p.role_name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className={`pp-field${filledClass("reason")}`}>
               Reason
