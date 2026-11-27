@@ -4,6 +4,8 @@ One check-in per care profile per local day. Every bot and parent message is sto
 step change writes a "checkin.updated" activity row. Medicine names only ever come from the due-dose list.
 """
 
+import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -51,6 +53,7 @@ from app.services.understanding import (
     NONE,
     MedicineAnswer,
     MedicineAnswers,
+    ask_gemini_image,
     count_scope,
     is_dose_report,
     is_medicine_question,
@@ -66,6 +69,8 @@ from app.services.understanding import (
     photo_offer_answer,
     understand_medicines,
 )
+
+logger = logging.getLogger(__name__)
 
 GREET, HEALTH, MEDICINES, APPOINTMENTS, DONE = "greet", "health", "medicines", "appointments", "done"
 MEALS_STEP = "meals"
@@ -700,6 +705,62 @@ def _medicine_help(
     if have:
         msgs.append(_say(ctx, "photo_here", names=_names(have)))
     return msgs
+
+
+_PILL_PROMPT = (
+    "An elderly person took a photo of a medicine strip, bottle or box because they are unsure what it is. "
+    "Read the medicine name and strength printed on it. Their medicine list: {medicines}. "
+    "If the photo clearly shows one of these medicines, give its medicine_id; otherwise null. Do not guess. "
+    'Respond only with JSON: {{"name_seen": "<name and strength as printed, or null if unreadable>", '
+    '"medicine_id": "<id from the list, or null>"}}'
+)
+
+
+def _read_pill_photo(rows, image: bytes, mime_type: str) -> tuple[str | None, str | None]:
+    """(name printed on the pack, id of the parent's matching medicine). Raises when Gemini is unavailable.
+    Only an id from the parent's own list is accepted, whatever Gemini returns."""
+    medicines = json.dumps([{"medicine_id": mid, "name": name} for mid, name, *_ in rows], ensure_ascii=False)
+    result = ask_gemini_image(_PILL_PROMPT.format(medicines=medicines), image, mime_type)
+    seen = result.get("name_seen")
+    seen = " ".join(seen.split())[:80] if isinstance(seen, str) and seen.strip() else None
+    mid = result.get("medicine_id")
+    return seen, mid if mid in {r[0] for r in rows} else None
+
+
+def handle_medicine_photo(db: Session, ctx: ParentContext, image: bytes, mime_type: str, now: datetime) -> Turn:
+    """The parent photographed a medicine: say which of their medicines it is, when to take it today, and
+    whether a doctor's prescription is on file. Records and shares nothing beyond the chat lines."""
+    checkin = _get_or_create(db, ctx, now)
+    if checkin.step == GREET:
+        _set_step(db, ctx, checkin, HEALTH, now)
+    _store(db, ctx, checkin, "parent", [_say(ctx, "pill_photo_sent")])
+    checkin.updated_at = now
+    rows = db.execute(
+        select(
+            Medicine.id, Medicine.display_name, Medicine.image_data.isnot(None),
+            Medicine.prescription_scan_id.isnot(None) | Medicine.prescription_image_data.isnot(None),
+        )
+        .where(Medicine.care_profile_id == ctx.profile.id, Medicine.active.is_(True))
+    ).all()
+    try:
+        seen, mid = _read_pill_photo(rows, image, mime_type)
+    except (ValueError, RuntimeError):
+        logger.warning("Medicine photo could not be read", exc_info=True)
+        return _turn(db, ctx, checkin, [_say(ctx, "pill_unavailable", family=_family_names(db, ctx))])
+    if mid is None:
+        if seen is None:
+            return _turn(db, ctx, checkin, [_say(ctx, "pill_unreadable")])
+        return _turn(db, ctx, checkin, [_say(ctx, "pill_unknown", seen=seen, family=_family_names(db, ctx))])
+    _, name, has_photo, prescribed = next(r for r in rows if r[0] == mid)
+    lines = [
+        _say(ctx, "pill_match", name=name),
+        *(_schedule_answer(db, ctx, now, only=[mid]) or [_say(ctx, "pill_not_today")]),
+        _say(ctx, "pill_prescribed" if prescribed else "pill_not_prescribed"),
+    ]
+    msgs = ["\n".join(lines)]
+    if has_photo:  # their family's photo of it, to compare with the one in their hand
+        msgs.append(_say(ctx, "photo_here", names=name))
+    return _turn(db, ctx, checkin, msgs)
 
 
 def _after_question(db: Session, ctx: ParentContext, checkin: HealthCheckin, now: datetime) -> list[str]:

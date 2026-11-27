@@ -172,6 +172,13 @@ export function sendVoice(blob: Blob): Promise<TurnOut> {
   return send<TurnOut>("/api/parent/checkin/voice", { method: "POST", body: form });
 }
 
+// A photo of a medicine strip or box the parent is unsure about.
+export function sendMedicinePhoto(file: File, speak: boolean): Promise<TurnOut> {
+  const form = new FormData();
+  form.append("file", file, file.name || "medicine.jpg");
+  return send<TurnOut>(`/api/parent/checkin/medicine-photo?speak=${speak}`, { method: "POST", body: form });
+}
+
 
 // The parent's own medicines, for showing a photo next to a medicine the bot names.
 //   GET /medicines                 -> [{id, name, has_image}] (active medicines only)

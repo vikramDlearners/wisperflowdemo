@@ -4,6 +4,7 @@ Medicine replies use one Gemini call when online mode is on and a key is set; an
 offline rule-based intent parser, so callers never see an exception.
 """
 
+import base64
 import json
 import logging
 import re
@@ -313,11 +314,23 @@ class MedicineAnswers:
 
 def ask_gemini(prompt: str) -> dict[str, Any]:
     """The single point that calls Gemini for answer understanding. Tests mock this function."""
+    return _gemini_json([{"text": prompt}])
+
+
+def ask_gemini_image(prompt: str, image: bytes, mime_type: str) -> dict[str, Any]:
+    """Gemini reads a photo with a prompt. Tests mock this function."""
+    return _gemini_json([
+        {"text": prompt},
+        {"inline_data": {"mime_type": mime_type, "data": base64.b64encode(image).decode("ascii")}},
+    ])
+
+
+def _gemini_json(parts: list[dict[str, Any]]) -> dict[str, Any]:
     api_key = settings.gemini_api_key
     if not api_key:
         raise ValueError("GEMINI_API_KEY is not configured")
     body = {
-        "contents": [{"parts": [{"text": prompt}]}],
+        "contents": [{"parts": parts}],
         "generationConfig": {"responseMimeType": "application/json"},
     }
     request = urllib.request.Request(

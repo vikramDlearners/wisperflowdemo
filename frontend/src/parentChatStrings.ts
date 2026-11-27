@@ -57,6 +57,9 @@ export interface ParentStrings {
   tapToListen: string;
   cannotPlay: string;
   stopAudio: string;
+  checkMedicine: string;
+  checkMedicineHint: string;
+  readingPhoto: string;
 }
 
 const en: ParentStrings = {
@@ -70,6 +73,9 @@ const en: ParentStrings = {
   tapToListen: "Tap to listen",
   cannotPlay: "This message can't be played right now.",
   stopAudio: "Stop audio",
+  checkMedicine: "Check a medicine",
+  checkMedicineHint: "Take or choose a photo of the medicine strip or box",
+  readingPhoto: "Reading the photo…",
   language: "Language",
   recommended: "recommended",
   logOut: "Log out",
@@ -125,6 +131,9 @@ const hi: ParentStrings = {
   tapToListen: "सुनने के लिए दबाएँ",
   cannotPlay: "यह संदेश अभी सुनाया नहीं जा सकता।",
   stopAudio: "ऑडियो रोकें",
+  checkMedicine: "दवा जाँचें",
+  checkMedicineHint: "दवा के पत्ते या डिब्बे की फोटो लें या चुनें",
+  readingPhoto: "फोटो पढ़ी जा रही है…",
   language: "भाषा",
   recommended: "सुझाई गई",
   logOut: "लॉग आउट",
@@ -180,6 +189,9 @@ const ta: ParentStrings = {
   tapToListen: "கேட்கத் தட்டவும்",
   cannotPlay: "இந்தச் செய்தியை இப்போது ஒலிக்க முடியவில்லை.",
   stopAudio: "ஒலியை நிறுத்து",
+  checkMedicine: "மருந்தைச் சரிபார்",
+  checkMedicineHint: "மருந்து அட்டை அல்லது பெட்டியின் புகைப்படம் எடுக்கவும் அல்லது தேர்வு செய்யவும்",
+  readingPhoto: "புகைப்படம் படிக்கப்படுகிறது…",
   language: "மொழி",
   recommended: "பரிந்துரை",
   logOut: "வெளியேறு",
@@ -235,6 +247,9 @@ const te: ParentStrings = {
   tapToListen: "వినడానికి నొక్కండి",
   cannotPlay: "ఈ సందేశాన్ని ఇప్పుడు వినిపించలేము.",
   stopAudio: "ఆడియో ఆపండి",
+  checkMedicine: "మందును తనిఖీ చేయండి",
+  checkMedicineHint: "మందు స్ట్రిప్ లేదా డబ్బా ఫోటో తీయండి లేదా ఎంచుకోండి",
+  readingPhoto: "ఫోటో చదువుతున్నాను…",
   language: "భాష",
   recommended: "సూచించినది",
   logOut: "లాగ్ అవుట్",
@@ -290,6 +305,9 @@ const ml: ParentStrings = {
   tapToListen: "കേൾക്കാൻ അമർത്തുക",
   cannotPlay: "ഈ സന്ദേശം ഇപ്പോൾ കേൾപ്പിക്കാനാവില്ല.",
   stopAudio: "ഓഡിയോ നിർത്തുക",
+  checkMedicine: "മരുന്ന് പരിശോധിക്കുക",
+  checkMedicineHint: "മരുന്ന് സ്ട്രിപ്പിന്റെയോ പെട്ടിയുടെയോ ഫോട്ടോ എടുക്കുക അല്ലെങ്കിൽ തിരഞ്ഞെടുക്കുക",
+  readingPhoto: "ഫോട്ടോ വായിക്കുന്നു…",
   language: "ഭാഷ",
   recommended: "ശുപാർശ ചെയ്തത്",
   logOut: "ലോഗ് ഔട്ട്",
@@ -345,6 +363,9 @@ const kn: ParentStrings = {
   tapToListen: "ಕೇಳಲು ಒತ್ತಿ",
   cannotPlay: "ಈ ಸಂದೇಶವನ್ನು ಈಗ ಕೇಳಿಸಲು ಆಗುತ್ತಿಲ್ಲ.",
   stopAudio: "ಆಡಿಯೋ ನಿಲ್ಲಿಸಿ",
+  checkMedicine: "ಔಷಧ ಪರಿಶೀಲಿಸಿ",
+  checkMedicineHint: "ಔಷಧದ ಸ್ಟ್ರಿಪ್ ಅಥವಾ ಪೆಟ್ಟಿಗೆಯ ಫೋಟೋ ತೆಗೆಯಿರಿ ಅಥವಾ ಆರಿಸಿ",
+  readingPhoto: "ಫೋಟೋ ಓದಲಾಗುತ್ತಿದೆ…",
   language: "ಭಾಷೆ",
   recommended: "ಶಿಫಾರಸು",
   logOut: "ಲಾಗ್ ಔಟ್",

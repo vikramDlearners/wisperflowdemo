@@ -425,6 +425,44 @@
   color: #fff;
 }
 
+.pc-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 22px;
+  border: 2px solid var(--pc-teal);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--pc-teal-dark);
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pc-pill-btn:active {
+  background: var(--pc-teal);
+  color: #fff;
+}
+
+.pc-pill-btn.is-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pc-pill-btn:focus-within {
+  outline: 3px solid var(--pc-teal);
+  outline-offset: 2px;
+}
+
+.pc-sent-photo {
+  display: block;
+  max-width: min(240px, 100%);
+  max-height: 240px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
 .pc-mic {
   display: inline-flex;
   align-items: center;

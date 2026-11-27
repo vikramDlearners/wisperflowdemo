@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../parent-chat.css";
 import { ApiError } from "../api";
@@ -12,6 +12,7 @@ import {
   getParentMedicines,
   getParentProfiles,
   sendEmergency,
+  sendMedicinePhoto,
   sendText,
   sendVoice,
   setParentLanguage,
@@ -83,6 +84,8 @@ interface Bubble {
   sender: "bot" | "parent";
   text: string;
   photos?: boolean;
+  /** A photo the parent just sent, shown in their bubble (an object URL). */
+  image?: string;
 }
 
 function voiceSupported(): boolean {
@@ -147,6 +150,8 @@ export default function ParentChat() {
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [reminders, setReminders] = useState<ReminderDue[]>([]);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [readingPhoto, setReadingPhoto] = useState(false);
+  const imageUrlsRef = useRef<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [canUseVoice] = useState(voiceSupported);
   const [voiceOn, setVoiceOn] = useState(savedVoiceOn);
@@ -559,6 +564,7 @@ export default function ParentChat() {
       }
       streamRef.current?.getTracks().forEach((t) => t.stop());
       stopAudio();
+      imageUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
     };
   }, [stopAudio]);
 
@@ -656,6 +662,37 @@ export default function ParentChat() {
       }
     } finally {
       if (mountedRef.current) setPhase("idle");
+    }
+  }
+
+  async function handleMedicinePhoto(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // choosing the same photo again still fires a change
+    if (!file || phase !== "idle") return;
+    stopAudio();
+    setNotice(null);
+    seqRef.current++;
+    setPhase("sending");
+    setReadingPhoto(true);
+    const image = URL.createObjectURL(file);
+    imageUrlsRef.current.push(image);
+    setMessages((prev) => [...prev, { sender: "parent", text: "", image }]);
+    try {
+      const turn = await sendMedicinePhoto(file, audioOn);
+      if (!mountedRef.current) return;
+      applyTurn(turn);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setMessages((prev) => prev.filter((m) => m.image !== image));
+      if (!handleAuthError(err)) {
+        if (err instanceof ApiError) console.warn("Medicine photo failed:", err.status, err.detail);
+        setNotice(err instanceof ApiError && err.status === 415 ? t.checkMedicineHint : t.genericError);
+      }
+    } finally {
+      if (mountedRef.current) {
+        setPhase("idle");
+        setReadingPhoto(false);
+      }
     }
   }
 
@@ -965,7 +1002,8 @@ export default function ParentChat() {
     </button>
   );
 
-  const statusText = phase === "recording" ? t.listening : phase === "sending" ? t.thinking : "";
+  const statusText =
+    phase === "recording" ? t.listening : phase === "sending" ? (readingPhoto ? t.readingPhoto : t.thinking) : "";
 
   return (
     <div className="pc-page" lang={parentLangCode(language)}>
@@ -1060,7 +1098,10 @@ export default function ParentChat() {
                   </span>
                 </button>
               ) : (
-                m.text
+                <>
+                  {m.image && <img className="pc-sent-photo" src={m.image} alt={t.checkMedicine} />}
+                  {m.text}
+                </>
               )}
               {m.sender === "bot" && m.photos && (
                 <ParentMedicinePhotos
@@ -1128,6 +1169,27 @@ export default function ParentChat() {
             {phase === "recording" ? t.tapAgainToSend : phase === "sending" ? t.pleaseWait : t.tapToSpeak}
           </p>
         )}
+
+        <label className={`pc-pill-btn${phase !== "idle" ? " is-disabled" : ""}`} title={t.checkMedicineHint}>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="pc-sr"
+            disabled={phase !== "idle"}
+            onChange={(e) => void handleMedicinePhoto(e)}
+          />
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+            <path
+              d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            <circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+          {t.checkMedicine}
+        </label>
 
         {showText ? (
           <form className="pc-text-form" onSubmit={handleSendText}>

@@ -37,6 +37,7 @@ from app.services.adapters.speech import SpeechUnavailable, get_speech_to_text, 
 from app.services.doses import _aware, logged_today
 from app.services.parent_context import ParentContext, family_profiles, resolve_parent
 from app.services.permissions import get_membership, permission_codes_for
+from app.services.prescription_scan import ALLOWED_MIME_TYPES, MAX_IMAGE_BYTES
 from app.services.profile import get_care_profile_onboarding
 from app.services.replies import shows_photos, spoken
 
@@ -180,6 +181,25 @@ def post_text(
 ) -> TurnOut:
     ctx = resolve_parent(db, user, profile_id)
     turn = engine.handle_parent_text(db, ctx, body.text, _now())
+    return TurnOut(**_turn_fields(db, ctx, turn, speak))
+
+
+@router.post("/checkin/medicine-photo", response_model=TurnOut)
+def post_medicine_photo(
+    file: UploadFile = File(...), speak: bool = True,
+    db: Session = DbSession, user: User = CurrentUser, profile_id: str | None = ProfileId,
+) -> TurnOut:
+    """A photo of a medicine the parent is unsure about: which of their medicines it is, when to take it,
+    and whether the doctor prescribed it."""
+    ctx = resolve_parent(db, user, profile_id)
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Please send a JPEG, PNG or WebP photo")
+    image = file.file.read(MAX_IMAGE_BYTES + 1)
+    if len(image) > MAX_IMAGE_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Photo is too large (max 10 MB)")
+    if not image:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Photo is empty")
+    turn = engine.handle_medicine_photo(db, ctx, image, file.content_type, _now())
     return TurnOut(**_turn_fields(db, ctx, turn, speak))
 
 
