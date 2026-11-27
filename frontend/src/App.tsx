@@ -25,6 +25,7 @@ import ParentChat from "./pages/ParentChat";
 import ParentOnboarding from "./pages/ParentOnboarding";
 import ParentProfilePage from "./pages/ParentProfilePage";
 import ParentDetails from "./pages/ParentDetails";
+import TaskLink from "./pages/TaskLink";
 
 // Reads :familyId from the URL and renders the page with it.
 function FamilyRoute({ render }: { render: (familyId: string) => ReactNode }) {
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/start" element={<Landing />} />
         <Route path="/signin" element={<SignIn />} />
         <Route path="/parent/accept-invite" element={<ParentAcceptInvite />} />
+        <Route path="/task-link/:token" element={<TaskLink />} />
 
         <Route
           path="/family/:familyId/chat"

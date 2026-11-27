@@ -12,6 +12,7 @@ from app.models.parent_invite import ParentInvite
 from app.models.medicine import Medicine
 from app.models.prescription_scan import MedicineReminder, PrescriptionScan
 from app.models.task import Task
+from app.models.task_link import TaskImage, TaskNote, TaskShareLink
 from app.models.appointment import Appointment
 from app.models.dose import MedicineDose
 from app.models.checkin import ChatMessage, HealthCheckin
@@ -37,6 +38,9 @@ __all__ = [
     "PrescriptionScan",
     "MedicineReminder",
     "Task",
+    "TaskShareLink",
+    "TaskNote",
+    "TaskImage",
     "Appointment",
     "MedicineDose",
     "HealthCheckin",

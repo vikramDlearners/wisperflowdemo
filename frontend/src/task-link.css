@@ -1,0 +1,196 @@
+/* Shared task link page (pages/TaskLink.tsx). Scoped to .tl-* classes. */
+
+.tl-page {
+  box-sizing: border-box;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--text);
+}
+.tl-page *,
+.tl-page *::before,
+.tl-page *::after {
+  box-sizing: border-box;
+}
+.tl-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tl-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tl-card h1,
+.tl-card h2 {
+  margin: 0;
+}
+.tl-card h1 {
+  font-size: 22px;
+}
+.tl-card h2 {
+  font-size: 17px;
+}
+.tl-card--empty {
+  text-align: center;
+  padding: 40px 20px;
+}
+.tl-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tl-status {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.tl-status.is-done {
+  background: var(--accent);
+  color: var(--primary);
+  border-color: transparent;
+}
+.tl-desc {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.tl-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 14px;
+}
+.tl-meta dt {
+  color: var(--muted);
+}
+.tl-meta dd {
+  margin: 0;
+}
+.tl-muted {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+.tl-hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+.tl-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 14px;
+}
+.tl-btn {
+  position: relative;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--primary);
+}
+.tl-btn--primary {
+  background: var(--primary);
+  color: #fff;
+}
+.tl-btn--primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+.tl-btn--soft {
+  background: var(--surface);
+  color: var(--primary);
+}
+.tl-btn:disabled,
+.tl-btn.is-disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.tl-btn:focus-within,
+.tl-btn:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.tl-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.tl-photos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+.tl-photos img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.tl-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tl-notes li {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+}
+.tl-notes p {
+  margin: 0 0 4px;
+  white-space: pre-wrap;
+}
+.tl-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tl-form label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.tl-form textarea,
+.tl-form input {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+}
+.tl-form .tl-btn {
+  margin-top: 6px;
+}

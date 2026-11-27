@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { ApiError, auth, families, members, tasks } from "../api";
+import { ApiError, auth, families, members, taskLinks, tasks } from "../api";
 import type { MemberOut, TaskOut } from "../api";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import "../tasks.css";
@@ -232,6 +232,37 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
       });
     }
   };
+
+  // Tasks whose share link was copied on this page, so "Turn off link" can be offered.
+  const [shared, setShared] = useState<Record<string, boolean>>({});
+
+  const copyLink = (task: TaskOut) =>
+    run(task.id, async () => {
+      const link = await taskLinks.share(familyId, task.id);
+      const url = `${window.location.origin}${link.path}`;
+      const until = new Date(link.expires_at).toLocaleDateString();
+      setShared((s) => ({ ...s, [task.id]: true }));
+      try {
+        await navigator.clipboard.writeText(url);
+        setToast({ text: `Link copied. Anyone with it can open this task until ${until}.` });
+      } catch {
+        window.prompt("Copy this link:", url);
+      }
+    });
+
+  const turnOffLink = (task: TaskOut) =>
+    run(
+      task.id,
+      async () => {
+        await taskLinks.revoke(familyId, task.id);
+        setShared((s) => {
+          const next = { ...s };
+          delete next[task.id];
+          return next;
+        });
+      },
+      "Link turned off. Copy link again to make a new one.",
+    );
 
   const setStatus = (task: TaskOut, status: Status, done: string) =>
     run(task.id, () => tasks.updateStatus(familyId, task.id, { status }), done);
@@ -549,6 +580,27 @@ export default function FamilyTasks({ familyId }: FamilyTasksProps) {
                 }
               >
                 🔔 Remind
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                className="tasks-btn tasks-btn--ghost tasks-btn--small"
+                disabled={working}
+                title="Copy a link that opens this task without signing in"
+                onClick={() => void copyLink(task)}
+              >
+                🔗 Copy link
+              </button>
+            )}
+            {canCreate && shared[task.id] && (
+              <button
+                type="button"
+                className="tasks-btn tasks-btn--ghost tasks-btn--small"
+                disabled={working}
+                onClick={() => void turnOffLink(task)}
+              >
+                Turn off link
               </button>
             )}
             <span className="tasks-card__spacer" />

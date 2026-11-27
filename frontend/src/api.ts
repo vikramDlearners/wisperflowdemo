@@ -527,6 +527,62 @@ export const tasks = {
     patch<TaskOut>(`/api/families/${familyId}/tasks/${taskId}/status`, body),
 };
 
+// ---- shareable task links (verified against api/task_links.py) ----
+
+export interface TaskShareLinkOut {
+  token: string;
+  path: string; // frontend route, e.g. /task-link/<token>
+  expires_at: string;
+}
+
+export interface TaskLinkNoteOut {
+  id: string;
+  body: string;
+  author_name: string | null;
+  created_at: string;
+}
+
+export interface TaskLinkImageOut {
+  id: string;
+  url: string; // API path; prefix with API_BASE_URL
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface TaskLinkView {
+  id: string;
+  title: string;
+  description: string | null;
+  due_at: string | null;
+  status: string;
+  priority: string;
+  assignee_name: string | null;
+  link_expires_at: string;
+  notes: TaskLinkNoteOut[];
+  images: TaskLinkImageOut[];
+}
+
+export const taskLinks = {
+  // Family side (signed in).
+  share: (familyId: string, taskId: string) =>
+    post<TaskShareLinkOut>(`/api/families/${familyId}/tasks/${taskId}/share-link`),
+  revoke: (familyId: string, taskId: string) => del(`/api/families/${familyId}/tasks/${taskId}/share-link`),
+  // Link side: the token is the only credential.
+  view: (token: string) => get<TaskLinkView>(`/api/task-links/${encodeURIComponent(token)}`),
+  complete: (token: string) => post<void>(`/api/task-links/${encodeURIComponent(token)}/complete`),
+  addNote: (token: string, body: string, authorName: string | null) =>
+    post<TaskLinkNoteOut>(`/api/task-links/${encodeURIComponent(token)}/notes`, {
+      body,
+      author_name: authorName,
+    }),
+  addImage: (token: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return post<TaskLinkImageOut>(`/api/task-links/${encodeURIComponent(token)}/images`, form);
+  },
+};
+
 // ---- activity (verified against api/activity.py) ----
 
 export const activity = {

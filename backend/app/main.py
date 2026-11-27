@@ -19,11 +19,12 @@ from app.api import (
     prescription_scans,
     roles,
     settings,
+    task_links,
     tasks,
 )
 from app.core.config import settings as app_settings
 from app.services import scheduler
-from app.services.errors import AuthError, NotFound
+from app.services.errors import AuthError, LinkGone, NotFound
 from app.services.parent_context import ParentNotLinked
 from app.services.permissions import NotAMember, PermissionDenied
 
@@ -54,6 +55,11 @@ app.add_middleware(
 @app.exception_handler(NotFound)
 def _not_found(_: Request, exc: NotFound) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": str(exc) or "Not found"})
+
+
+@app.exception_handler(LinkGone)
+def _link_gone(_: Request, exc: LinkGone) -> JSONResponse:
+    return JSONResponse(status_code=410, content={"detail": str(exc) or "This link no longer works"})
 
 
 @app.exception_handler(PermissionDenied)
@@ -95,6 +101,8 @@ for _router in (
     medicines.router,
     prescription_scans.router,
     tasks.router,
+    task_links.family_router,
+    task_links.public_router,
     appointments.router,
     notifications.router,
     activity.router,

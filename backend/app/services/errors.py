@@ -7,3 +7,7 @@ class NotFound(Exception):
 
 class AuthError(Exception):
     """Sign-in link or session token is missing, invalid, expired or used."""
+
+
+class LinkGone(Exception):
+    """A genuine share link that was revoked or has expired."""

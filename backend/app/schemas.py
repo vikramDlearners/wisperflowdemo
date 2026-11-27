@@ -304,6 +304,45 @@ class TaskOut(BaseModel):
     created_by_user_id: str
 
 
+class TaskShareLinkOut(BaseModel):
+    token: str
+    path: str  # frontend route that opens the link, e.g. /task-link/<token>
+    expires_at: datetime
+
+
+class TaskLinkNoteIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    author_name: str | None = Field(default=None, max_length=100)
+
+
+class TaskLinkNoteOut(BaseModel):
+    id: str
+    body: str
+    author_name: str | None
+    created_at: datetime
+
+
+class TaskLinkImageOut(BaseModel):
+    id: str
+    url: str
+    content_type: str
+    size_bytes: int
+    created_at: datetime
+
+
+class TaskLinkView(BaseModel):
+    id: str
+    title: str
+    description: str | None
+    due_at: datetime | None
+    status: str
+    priority: str
+    assignee_name: str | None
+    link_expires_at: datetime
+    notes: list[TaskLinkNoteOut]
+    images: list[TaskLinkImageOut]
+
+
 class NotificationOut(BaseModel):
     id: str
     family_id: str | None
