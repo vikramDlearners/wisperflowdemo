@@ -917,9 +917,34 @@ export interface InsuranceOut {
   helpline: string | null;
   notes: string | null;
   responsible_user_id: string | null;
+  /** A policy document (PDF or photo) is attached: open it with openInsuranceDocument (insurance.ts). */
+  has_document?: boolean;
+  document_name?: string | null;
+  document_type?: string | null;
 }
 
-export type InsuranceIn = Omit<InsuranceOut, "id" | "last_renewed_on" | "sum_insured" | "premium"> & {
+/** What could be read from an uploaded policy document (POST .../insurance/read-document). */
+export interface InsuranceDocumentRead {
+  policy_type: InsuranceOut["policy_type"] | null;
+  insurer: string | null;
+  plan_name: string | null;
+  policy_number: string | null;
+  insured_name: string | null;
+  sum_insured: string | number | null;
+  premium: string | number | null;
+  premium_frequency: InsuranceOut["premium_frequency"] | null;
+  start_date: string | null;
+  renewal_date: string | null;
+  agent_name: string | null;
+  agent_phone: string | null;
+  helpline: string | null;
+  source: "gemini" | "none";
+}
+
+export type InsuranceIn = Omit<
+  InsuranceOut,
+  "id" | "last_renewed_on" | "sum_insured" | "premium" | "has_document" | "document_name" | "document_type"
+> & {
   sum_insured: number | null;
   premium: number | null;
 };

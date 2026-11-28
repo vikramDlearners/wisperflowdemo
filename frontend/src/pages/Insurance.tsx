@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import "../insurance.css";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import {
@@ -8,11 +8,17 @@ import {
   insurance as api,
   members,
   type CareProfileOut,
+  type InsuranceDocumentRead,
   type InsuranceIn,
   type InsuranceOut,
   type MemberOut,
 } from "../api";
 import {
+  attachInsuranceDocument,
+  checkDocument,
+  openInsuranceDocument,
+  readInsuranceDocument,
+  removeInsuranceDocument,
   DUE_WITHIN_DAYS,
   FREQUENCIES,
   POLICY_TYPES,
@@ -47,6 +53,11 @@ interface Draft {
   helpline: string;
   notes: string;
   responsible_user_id: string;
+  // The policy document picked in the form; uploaded when the policy is saved.
+  docFile: File | null;
+  removeDoc: boolean;
+  hasDoc: boolean; // already has one (editing)
+  docName: string | null;
 }
 
 const EMPTY: Draft = {
@@ -66,6 +77,10 @@ const EMPTY: Draft = {
   helpline: "",
   notes: "",
   responsible_user_id: "",
+  docFile: null,
+  removeDoc: false,
+  hasDoc: false,
+  docName: null,
 };
 
 const toDraft = (p: InsuranceOut): Draft => ({
@@ -85,7 +100,25 @@ const toDraft = (p: InsuranceOut): Draft => ({
   helpline: p.helpline ?? "",
   notes: p.notes ?? "",
   responsible_user_id: p.responsible_user_id ?? "",
+  docFile: null,
+  removeDoc: false,
+  hasDoc: Boolean(p.has_document),
+  docName: p.document_name ?? null,
 });
+
+/** Labels for what a document filled in, in form order. */
+const READ_LABELS: [keyof InsuranceDocumentRead, string][] = [
+  ["policy_type", "type"],
+  ["insurer", "insurance company"],
+  ["plan_name", "plan"],
+  ["policy_number", "policy number"],
+  ["renewal_date", "renewal date"],
+  ["premium", "premium"],
+  ["sum_insured", "sum insured"],
+  ["start_date", "start date"],
+  ["agent_name", "agent"],
+  ["helpline", "helpline"],
+];
 
 function messageOf(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.detail : fallback;
@@ -108,6 +141,11 @@ export default function Insurance({ familyId }: { familyId: string }) {
   const [renewing, setRenewing] = useState<{ id: string; date: string; premium: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [readNote, setReadNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  // The form as it is now, so a document read that finishes later fills the latest values.
+  const draftRef = useRef<Draft | null>(null);
+  draftRef.current = draft;
 
   useEffect(() => {
     let active = true;
@@ -157,6 +195,75 @@ export default function Insurance({ familyId }: { familyId: string }) {
 
   const replace = (p: InsuranceOut) => setPolicies((list) => list.map((x) => (x.id === p.id ? p : x)));
 
+  /** A document was picked in the form: keep it for upload and fill in what can be read from it. */
+  async function pickDocument(file: File | undefined) {
+    if (!draft || !file) return;
+    const problem = checkDocument(file);
+    if (problem) {
+      setReadNote({ text: problem, bad: true });
+      return;
+    }
+    setDraft((d) => (d ? { ...d, docFile: file, removeDoc: false } : d));
+    setReadNote(null);
+    setReading(true);
+    try {
+      const r = await readInsuranceDocument(familyId, file);
+      if (r.source === "none") {
+        setReadNote({
+          text: "The document will be attached. Its details couldn't be read automatically, so please fill them in.",
+        });
+        return;
+      }
+      const current = draftRef.current;
+      if (!current) return; // the form was closed meanwhile
+      const filled: string[] = [];
+      {
+        const next = { ...current };
+        // Fill only empty fields, so nothing already typed is replaced.
+        const put = <K extends keyof Draft>(key: K, value: Draft[K] | null | undefined, label: string) => {
+          if (value === null || value === undefined || value === "") return;
+          if (key !== "policy_type" && key !== "premium_frequency" && String(next[key] ?? "").trim() !== "") return;
+          next[key] = value as Draft[K];
+          filled.push(label);
+        };
+        put("policy_type", r.policy_type ?? undefined, "type");
+        put("insurer", r.insurer, "insurance company");
+        put("plan_name", r.plan_name, "plan");
+        put("policy_number", r.policy_number, "policy number");
+        put("renewal_date", r.renewal_date, "renewal date");
+        put("premium_frequency", r.premium_frequency ?? undefined, "how often it's paid");
+        put("premium", r.premium != null ? String(Number(r.premium)) : null, "premium");
+        put("sum_insured", r.sum_insured != null ? String(Number(r.sum_insured)) : null, "sum insured");
+        put("start_date", r.start_date, "start date");
+        put("agent_name", r.agent_name, "agent");
+        put("agent_phone", r.agent_phone, "agent phone");
+        put("helpline", r.helpline, "helpline");
+        // The insured person's name matching a parent: that parent is covered.
+        const insured = r.insured_name?.toLowerCase().trim();
+        const match = insured
+          ? parents.find((p) => {
+              const name = p.display_name.toLowerCase();
+              return name.includes(insured) || insured.includes(name);
+            })
+          : undefined;
+        if (match && !next.care_profile_id) {
+          next.care_profile_id = match.id;
+          filled.push("who it covers");
+        }
+        setDraft(next);
+      }
+      setReadNote({
+        text: filled.length
+          ? `Filled ${[...new Set(filled)].join(", ")} from the document (read by Gemini). Please check them.`
+          : "The document will be attached. Nothing more could be read from it.",
+      });
+    } catch (err) {
+      setReadNote({ text: messageOf(err, "Could not read the document. It will still be attached."), bad: true });
+    } finally {
+      setReading(false);
+    }
+  }
+
   async function save(e: FormEvent) {
     e.preventDefault();
     if (!draft) return;
@@ -188,15 +295,27 @@ export default function Insurance({ familyId }: { familyId: string }) {
     setSaving(true);
     setFormError(null);
     try {
+      let saved: InsuranceOut;
       if (draft.id) {
-        replace(await api.update(familyId, draft.id, body));
-        setNotice("Policy updated.");
+        saved = await api.update(familyId, draft.id, body);
+        replace(saved);
       } else {
-        const created = await api.create(familyId, body);
-        setPolicies((list) => [...list, created]);
-        setNotice(`Added ${created.insurer}.`);
+        saved = await api.create(familyId, body);
+        setPolicies((list) => [...list, saved]);
       }
+      // The document goes up once the policy exists.
+      let docProblem: string | null = null;
+      try {
+        if (draft.docFile) replace(await attachInsuranceDocument(familyId, saved.id, draft.docFile));
+        else if (draft.removeDoc && draft.hasDoc) replace(await removeInsuranceDocument(familyId, saved.id));
+      } catch (err) {
+        docProblem = messageOf(err, "the upload failed");
+      }
+      const done = draft.id ? "Policy updated" : `Added ${saved.insurer}`;
+      const sentence = done.endsWith(".") ? done : `${done}.`; // "Co. Ltd." already ends with a full stop
+      setNotice(docProblem ? `${done}, but the document wasn't attached: ${docProblem}` : sentence);
       setDraft(null);
+      setReadNote(null);
     } catch (err) {
       setFormError(messageOf(err, "Could not save the policy."));
     } finally {
@@ -326,6 +445,24 @@ export default function Insurance({ familyId }: { familyId: string }) {
           )}
         </dl>
         {p.notes && <p className="ins-notes">{p.notes}</p>}
+        {p.has_document && (
+          <button
+            type="button"
+            className="ins-doc"
+            onClick={() =>
+              void openInsuranceDocument(familyId, p.id).catch((err) =>
+                setError(messageOf(err, "Could not open the document.")),
+              )
+            }
+          >
+            <span aria-hidden="true">{p.document_type === "application/pdf" ? "📄" : "🖼️"}</span>
+            <span>
+              <strong>Policy document</strong>
+              <small>{p.document_name ?? "Open"}</small>
+            </span>
+            <span className="ins-doc-open">Open ↗</span>
+          </button>
+        )}
 
         {canEdit &&
           (renewing?.id === p.id ? (
@@ -385,6 +522,7 @@ export default function Insurance({ familyId }: { familyId: string }) {
                 className="pp-btn pp-btn-ghost"
                 onClick={() => {
                   setFormError(null);
+                  setReadNote(null);
                   setDraft(toDraft(p));
                 }}
               >
@@ -424,6 +562,7 @@ export default function Insurance({ familyId }: { familyId: string }) {
                 className="pp-btn"
                 onClick={() => {
                   setFormError(null);
+                  setReadNote(null);
                   setDraft({ ...EMPTY, care_profile_id: parents.length === 1 ? parents[0].id : "" });
                 }}
               >
@@ -537,6 +676,73 @@ export default function Insurance({ familyId }: { familyId: string }) {
               <button type="button" className="ins-close" aria-label="Close" onClick={() => setDraft(null)} disabled={saving}>
                 ×
               </button>
+            </div>
+
+            <div className="ins-upload">
+              {draft.docFile || (draft.hasDoc && !draft.removeDoc) ? (
+                <div className="ins-upload-file">
+                  <span aria-hidden="true">
+                    {(draft.docFile?.type ?? "") === "application/pdf" || (!draft.docFile && draft.docName?.toLowerCase().endsWith(".pdf"))
+                      ? "📄"
+                      : "🖼️"}
+                  </span>
+                  <span className="ins-upload-name">
+                    <strong>{draft.docFile?.name ?? draft.docName ?? "Policy document"}</strong>
+                    <small>
+                      {reading
+                        ? "Reading the document…"
+                        : draft.docFile
+                          ? "Attached when you save"
+                          : "Attached"}
+                    </small>
+                  </span>
+                  <label className="ins-link">
+                    Replace
+                    <input
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
+                      className="ins-file-input"
+                      onChange={(e) => {
+                        void pickDocument(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="ins-link ins-link-danger"
+                    onClick={() => {
+                      setDraft({ ...draft, docFile: null, removeDoc: draft.hasDoc });
+                      setReadNote(null);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <label className="ins-drop">
+                  <input
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/webp"
+                    className="ins-file-input"
+                    onChange={(e) => {
+                      void pickDocument(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                  <span className="ins-drop-icon" aria-hidden="true">
+                    📎
+                  </span>
+                  <strong>Upload the policy document</strong>
+                  <span>PDF or a photo (JPG, PNG, WebP) · up to 10 MB</span>
+                  <span className="ins-drop-hint">We'll fill in the details we can read from it.</span>
+                </label>
+              )}
+              {readNote && (
+                <p className={`ins-read-note${readNote.bad ? " is-bad" : ""}`} role={readNote.bad ? "alert" : "status"}>
+                  {readNote.text}
+                </p>
+              )}
             </div>
 
             <div className="ins-form">
@@ -667,8 +873,8 @@ export default function Insurance({ familyId }: { familyId: string }) {
               <button type="button" className="pp-btn pp-btn-ghost" onClick={() => setDraft(null)} disabled={saving}>
                 Cancel
               </button>
-              <button type="submit" className="pp-btn" disabled={saving}>
-                {saving ? "Saving…" : draft.id ? "Save changes" : "Add policy"}
+              <button type="submit" className="pp-btn" disabled={saving || reading}>
+                {saving ? "Saving…" : reading ? "Reading document…" : draft.id ? "Save changes" : "Add policy"}
               </button>
             </div>
           </form>

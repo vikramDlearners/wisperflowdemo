@@ -324,6 +324,27 @@ class InsuranceOut(BaseModel):
     helpline: str | None
     notes: str | None
     responsible_user_id: str | None
+    has_document: bool = False
+    document_name: str | None = None
+    document_type: str | None = None  # e.g. application/pdf
+
+
+class InsuranceDocumentRead(BaseModel):
+    """What could be read from an uploaded policy document, to fill in the form (nothing is saved)."""
+    policy_type: str | None = None
+    insurer: str | None = None
+    plan_name: str | None = None
+    policy_number: str | None = None
+    insured_name: str | None = None
+    sum_insured: Decimal | None = None
+    premium: Decimal | None = None
+    premium_frequency: str | None = None
+    start_date: date | None = None
+    renewal_date: date | None = None
+    agent_name: str | None = None
+    agent_phone: str | None = None
+    helpline: str | None = None
+    source: Literal["gemini", "none"]
 
 
 class FamilyChatIn(BaseModel):

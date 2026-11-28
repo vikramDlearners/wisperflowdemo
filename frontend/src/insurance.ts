@@ -1,6 +1,6 @@
 // Insurance policies: labels and "is the renewal due?" (shared by the Insurance page and the Overview).
 
-import type { InsuranceOut } from "./api";
+import { API_BASE_URL, ApiError, getSessionToken, type InsuranceDocumentRead, type InsuranceOut } from "./api";
 
 /** A renewal within this many days (or already past) counts as due. */
 export const DUE_WITHIN_DAYS = 30;
@@ -80,4 +80,75 @@ export function yearlyPremium(p: Pick<InsuranceOut, "premium" | "premium_frequen
   const n = Number(p.premium ?? 0);
   const per = FREQUENCIES.find((f) => f.key === p.premium_frequency)?.perYear ?? 1;
   return Number.isFinite(n) ? n * per : 0;
+}
+
+// ---- policy documents (PDF or photo) ----
+
+export const DOCUMENT_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+/** A problem with a picked file, or null when it can be uploaded. */
+export function checkDocument(file: File): string | null {
+  if (!DOCUMENT_TYPES.includes(file.type)) return "Upload a PDF, or a JPG, PNG or WebP photo.";
+  if (file.size === 0) return "This file is empty.";
+  if (file.size > MAX_DOCUMENT_BYTES) return "This file is larger than 10 MB. Please choose a smaller one.";
+  return null;
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getSessionToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fail(res: Response): Promise<never> {
+  let detail = res.statusText || "Request failed";
+  try {
+    const body = (await res.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") detail = body.detail;
+  } catch {
+    // not JSON
+  }
+  throw new ApiError(res.status, detail);
+}
+
+const base = (familyId: string) => `${API_BASE_URL}/api/families/${familyId}/insurance`;
+
+async function sendFile<T>(url: string, method: "POST" | "PUT", file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(url, { method, headers: { Accept: "application/json", ...authHeaders() }, body: form });
+  if (!res.ok) return fail(res);
+  return (await res.json()) as T;
+}
+
+/** Gemini reads the document to fill in the form; nothing is saved. */
+export const readInsuranceDocument = (familyId: string, file: File) =>
+  sendFile<InsuranceDocumentRead>(`${base(familyId)}/read-document`, "POST", file);
+
+export const attachInsuranceDocument = (familyId: string, policyId: string, file: File) =>
+  sendFile<InsuranceOut>(`${base(familyId)}/${policyId}/document`, "PUT", file);
+
+export async function removeInsuranceDocument(familyId: string, policyId: string): Promise<InsuranceOut> {
+  const res = await fetch(`${base(familyId)}/${policyId}/document`, {
+    method: "DELETE",
+    headers: { Accept: "application/json", ...authHeaders() },
+  });
+  if (!res.ok) return fail(res);
+  return (await res.json()) as InsuranceOut;
+}
+
+/** Opens the attached document in a new tab (fetched with the sign-in token, shown as a blob: URL). */
+export async function openInsuranceDocument(familyId: string, policyId: string): Promise<void> {
+  const tab = window.open("", "_blank"); // opened now, while the click still counts, so it isn't blocked
+  try {
+    const res = await fetch(`${base(familyId)}/${policyId}/document`, { headers: authHeaders() });
+    if (!res.ok) await fail(res);
+    const url = URL.createObjectURL(await res.blob());
+    if (tab) tab.location.href = url;
+    else window.location.href = url;
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (err) {
+    tab?.close();
+    throw err;
+  }
 }

@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, LargeBinary, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -45,5 +45,9 @@ class InsurancePolicy(Base):
     responsible_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # The policy document (PDF or a photo of it), loaded only when it is opened.
+    document_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    document_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    document_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
