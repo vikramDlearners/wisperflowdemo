@@ -9,6 +9,7 @@ from app.models.membership import FamilyMember
 from app.models.care_profile import CareProfile
 from app.models.parent_onboarding_profile import ParentOnboardingProfile
 from app.models.parent_invite import ParentInvite
+from app.models.parent_note import ParentNote
 from app.models.medicine import Medicine
 from app.models.prescription_scan import MedicineReminder, PrescriptionScan
 from app.models.task import Task
@@ -36,6 +37,7 @@ __all__ = [
     "CareProfile",
     "ParentOnboardingProfile",
     "ParentInvite",
+    "ParentNote",
     "Medicine",
     "PrescriptionScan",
     "MedicineReminder",

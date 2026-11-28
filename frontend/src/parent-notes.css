@@ -1,0 +1,334 @@
+/* Parent "My notes" panel (components/ParentNotes.tsx). Full screen over the chat; large text and buttons. */
+
+.pn {
+  --pn-teal: #1f7a6e;
+  --pn-teal-dark: #17645a;
+  --pn-teal-soft: #e3f1ee;
+  --pn-ink: #1b2b28;
+  --pn-muted: #6b7c78;
+  --pn-line: #e2e8e6;
+  --pn-cream: #fbf8f3;
+  --pn-red: #c0392b;
+
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow-y: auto;
+  background: var(--pn-cream);
+  color: var(--pn-ink);
+  font-size: 20px;
+  line-height: 1.45;
+}
+.pn *,
+.pn *::before,
+.pn *::after {
+  box-sizing: border-box;
+}
+.pn-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 12px 18px 40px;
+}
+.pn-head {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+}
+.pn-back {
+  border: 0;
+  background: none;
+  padding: 10px 4px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--pn-teal-dark);
+  cursor: pointer;
+}
+.pn-title,
+.pn-q {
+  margin: 8px 0 18px;
+  font-size: 28px;
+  line-height: 1.25;
+  outline: none;
+}
+.pn-q {
+  font-size: 26px;
+}
+
+/* Buttons */
+.pn-primary,
+.pn-secondary,
+.pn-danger {
+  min-height: 56px;
+  padding: 10px 22px;
+  border-radius: 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pn-primary {
+  border: 2px solid var(--pn-teal);
+  background: var(--pn-teal);
+  color: #fff;
+}
+.pn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pn-secondary {
+  border: 2px solid var(--pn-line);
+  background: #fff;
+  color: var(--pn-ink);
+}
+.pn-danger {
+  border: 2px solid var(--pn-red);
+  background: var(--pn-red);
+  color: #fff;
+}
+.pn-link {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pn-teal-dark);
+  padding: 12px;
+  cursor: pointer;
+}
+.pn-write {
+  width: 100%;
+  margin-bottom: 20px;
+}
+.pn-primary:focus-visible,
+.pn-secondary:focus-visible,
+.pn-danger:focus-visible,
+.pn-link:focus-visible,
+.pn-back:focus-visible,
+.pn-choice:focus-visible,
+.pn-example:focus-visible,
+.pn-remove:focus-visible {
+  outline: 3px solid #f0b429;
+  outline-offset: 2px;
+}
+
+/* Messages */
+.pn-saved,
+.pn-error,
+.pn-info {
+  padding: 14px 16px;
+  border-radius: 14px;
+  margin: 0 0 16px;
+}
+.pn-saved {
+  background: var(--pn-teal-soft);
+  color: var(--pn-teal-dark);
+  font-weight: 700;
+}
+.pn-error {
+  background: #fbeceb;
+  color: #8a2b20;
+  font-weight: 600;
+}
+.pn-info {
+  background: #fff;
+  border: 2px solid var(--pn-line);
+}
+.pn-muted,
+.pn-empty {
+  color: var(--pn-muted);
+}
+.pn-empty {
+  padding: 20px 4px;
+}
+
+/* Note list */
+.pn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pn-note {
+  background: #fff;
+  border: 2px solid var(--pn-line);
+  border-radius: 18px;
+  padding: 16px 18px;
+}
+.pn-note-text {
+  margin: 0 0 10px;
+  font-size: 21px;
+  overflow-wrap: anywhere;
+}
+.pn-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 17px;
+}
+.pn-tag {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--pn-teal-soft);
+  color: var(--pn-teal-dark);
+  font-weight: 700;
+}
+.pn-when {
+  color: var(--pn-muted);
+  font-weight: 600;
+}
+.pn-remove {
+  margin-top: 10px;
+  border: 0;
+  background: none;
+  padding: 8px 0;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--pn-red);
+  cursor: pointer;
+}
+.pn-confirm {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fbeceb;
+  font-weight: 700;
+}
+.pn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.pn-row > * {
+  flex: 1;
+}
+
+/* Step 1: text */
+.pn-textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid var(--pn-line);
+  border-radius: 16px;
+  background: #fff;
+  font: inherit;
+  font-size: 21px;
+  color: var(--pn-ink);
+  resize: vertical;
+}
+.pn-textarea:focus {
+  outline: none;
+  border-color: var(--pn-teal);
+}
+.pn-label {
+  margin: 18px 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--pn-muted);
+}
+.pn-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pn-example {
+  text-align: left;
+  padding: 12px 14px;
+  border: 2px dashed #b9d4cd;
+  border-radius: 14px;
+  background: #fff;
+  font: inherit;
+  font-size: 18px;
+  color: var(--pn-ink);
+  cursor: pointer;
+}
+
+/* Choices */
+.pn-quote {
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border-left: 5px solid var(--pn-teal);
+  border-radius: 8px;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+.pn-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pn-choice {
+  min-height: 60px;
+  padding: 12px 18px;
+  border: 2px solid var(--pn-line);
+  border-radius: 16px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  color: var(--pn-ink);
+  cursor: pointer;
+}
+.pn-choice.is-on {
+  border-color: var(--pn-teal);
+  background: var(--pn-teal-soft);
+  color: var(--pn-teal-dark);
+}
+.pn-choice.is-on::after {
+  content: " ✓";
+}
+.pn-person {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-right: 48px;
+}
+.pn-person.is-on::after {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px;
+}
+.pn-person span {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--pn-muted);
+}
+.pn-datetime {
+  width: 100%;
+  margin-top: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 2px solid var(--pn-teal);
+  border-radius: 14px;
+  font: inherit;
+}
+.pn-nav {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+.pn-nav > * {
+  flex: 1;
+}
+.pn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The chat header gained a "Notes" button (pages/ParentChat.tsx): on narrow phones let the
+   header buttons wrap onto a second line instead of pushing Help / Log out off screen. */
+.pc-header-bottom .pc-header-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 8px;
+}
+.pc-notes-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

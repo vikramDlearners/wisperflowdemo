@@ -17,6 +17,7 @@ from app.api import (
     medicines,
     notifications,
     parent,
+    parent_notes,
     prescription_scans,
     roles,
     settings,
@@ -111,5 +112,6 @@ for _router in (
     conversation_summaries.router,
     settings.router,
     parent.router,
+    parent_notes.router,
 ):
     app.include_router(_router)

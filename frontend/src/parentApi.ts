@@ -215,3 +215,62 @@ export interface EmergencyOut {
 export function sendEmergency(): Promise<EmergencyOut> {
   return send<EmergencyOut>("/api/parent/emergency", { method: "POST" });
 }
+
+// ---------- Parent notes (backend/app/api/parent_notes.py) ----------
+//   GET    /api/parent/notes          -> ParentNote[] (newest first)
+//   POST   /api/parent/notes          {text, remind_at?, remind_user_id?, send_reminder?} -> ParentNote
+//   DELETE /api/parent/notes/{id}     -> 204
+//   GET    /api/parent/notes/people   -> NotePerson[] (family members a note can go to)
+// A note for someone else becomes their task; send_reminder also messages them at remind_at (or now).
+
+export interface ParentNote {
+  id: string;
+  text: string;
+  remind_at: string | null;
+  /** null = the parent themselves */
+  remind_user_id: string | null;
+  remind_user_name: string | null;
+  send_reminder: boolean;
+  task_id: string | null;
+  /** The reminder has gone out (or there was none to send). */
+  reminded: boolean;
+  created_at: string;
+}
+
+export interface NotePerson {
+  user_id: string;
+  display_name: string;
+  relationship: string | null;
+}
+
+export interface ParentNoteIn {
+  text: string;
+  remind_at?: string | null;
+  remind_user_id?: string | null;
+  send_reminder?: boolean;
+}
+
+export function getParentNotes(): Promise<ParentNote[]> {
+  return send<ParentNote[]>("/api/parent/notes", { method: "GET" });
+}
+
+export function getNotePeople(): Promise<NotePerson[]> {
+  return send<NotePerson[]>("/api/parent/notes/people", { method: "GET" });
+}
+
+export function createParentNote(body: ParentNoteIn): Promise<ParentNote> {
+  return send<ParentNote>("/api/parent/notes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteParentNote(id: string): Promise<void> {
+  // 204 has no body, so this does not go through send() (which parses JSON).
+  const res = await fetch(`${API_BASE_URL}/api/parent/notes/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Accept: "application/json", ...authHeaders() },
+  });
+  if (!res.ok && res.status !== 404) throw new ApiError(res.status, res.statusText || "Request failed");
+}

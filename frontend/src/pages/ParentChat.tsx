@@ -6,7 +6,9 @@ import { ApiError } from "../api";
 import LogoutButton from "../components/LogoutButton";
 import ParentAvatar from "../components/ParentAvatar";
 import ParentMedicinePhotos from "../components/ParentMedicinePhotos";
+import ParentNotes from "../components/ParentNotes";
 import { PARENT_LANGUAGES, parentLangCode, parentStrings, type ParentLang } from "../parentChatStrings";
+import { notesStrings } from "../parentNotesStrings";
 import {
   fetchParentMedicinePhoto,
   getCheckin,
@@ -159,6 +161,8 @@ export default function ParentChat() {
   const playSeqRef = useRef(0);
   const [text, setText] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  // "My notes": a full-screen panel over the chat (components/ParentNotes.tsx).
+  const [notesOpen, setNotesOpen] = useState(false);
   // Help -> "Is this an emergency?" -> alert the family and show the number to call.
   const [emergency, setEmergency] = useState<"closed" | "ask" | "sending" | "done" | "failed">("closed");
   const [emergencyInfo, setEmergencyInfo] = useState<EmergencyOut | null>(null);
@@ -888,6 +892,16 @@ export default function ParentChat() {
           {load.kind === "ready" && (
             <button
               type="button"
+              className="pc-help-btn pc-notes-btn"
+              onClick={() => setNotesOpen(true)}
+              disabled={phase !== "idle"}
+            >
+              📝 {notesStrings(language).openNotes}
+            </button>
+          )}
+          {load.kind === "ready" && (
+            <button
+              type="button"
               className="pc-help-btn"
               aria-expanded={helpOpen}
               aria-controls="pc-help-panel"
@@ -994,6 +1008,7 @@ export default function ParentChat() {
   return (
     <div className="pc-page" lang={parentLangCode(language)}>
       {header}
+      {notesOpen && <ParentNotes language={language} onClose={() => setNotesOpen(false)} />}
 
       {emergency !== "closed" && (
         <div className="pc-emergency-backdrop">
