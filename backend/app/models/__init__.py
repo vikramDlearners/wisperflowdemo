@@ -19,6 +19,7 @@ from app.models.checkin import ChatMessage, HealthCheckin
 from app.models.meal import MealLog
 from app.models.emergency import Emergency
 from app.models.conversation_summary import ConversationSummary
+from app.models.family_chat import FamilyChatConversation, FamilyChatMessage
 from app.models.notification import Notification
 from app.models.activity import ActivityLog
 from app.models.app_setting import AppSetting

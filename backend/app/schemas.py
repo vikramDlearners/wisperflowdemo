@@ -263,6 +263,8 @@ class ChatMessageIn(BaseModel):
 
 class FamilyChatIn(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
+    # The saved conversation this question continues; omitted for a new chat. Its saved turns are the history.
+    conversation_id: str | None = None
     history: list[ChatMessageIn] = Field(default_factory=list, max_length=12)
 
 
@@ -270,6 +272,55 @@ class FamilyChatOut(BaseModel):
     reply: str
     destination: str | None = None  # a page key, as in AskOut
     source: Literal["ai", "rules"]
+    conversation_id: str | None = None
+
+
+class FamilyChatLogIn(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    reply: str = Field(min_length=1, max_length=4000)
+    destination: str | None = Field(default=None, max_length=60)
+    conversation_id: str | None = None
+
+
+class FamilyChatSavedOut(BaseModel):
+    conversation_id: str
+
+
+class FamilyChatMessageOut(BaseModel):
+    id: str
+    role: Literal["user", "assistant"]
+    text: str
+    destination: str | None = None
+    created_at: datetime
+
+
+class FamilyChatConversationOut(BaseModel):
+    id: str
+    title: str
+    updated_at: datetime
+    message_count: int = 0
+
+
+class FamilyChatConversationDetailOut(BaseModel):
+    id: str
+    title: str
+    updated_at: datetime
+    messages: list[FamilyChatMessageOut]
+
+
+class FamilyChatImportMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str = Field(max_length=4000)
+    destination: str | None = Field(default=None, max_length=60)
+
+
+class FamilyChatImportItem(BaseModel):
+    title: str = Field(default="", max_length=200)
+    messages: list[FamilyChatImportMessage] = Field(default_factory=list, max_length=200)
+
+
+class FamilyChatImportIn(BaseModel):
+    conversations: list[FamilyChatImportItem] = Field(max_length=30)
 
 
 class TaskTextIn(BaseModel):

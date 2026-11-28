@@ -855,11 +855,45 @@ export interface FamilyChatOut {
   reply: string;
   destination: string | null; // a key from lib/askHelp.ts
   source: "ai" | "rules";
+  /** The saved conversation the question and answer were added to. */
+  conversation_id: string;
 }
 
+/** A saved chat, newest first in the list. Only the member who had it can see it. */
+export interface FamilyChatConversationOut {
+  id: string;
+  title: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface FamilyChatSavedMessage extends FamilyChatTurn {
+  id: string;
+  destination: string | null;
+  created_at: string;
+}
+
+export interface FamilyChatImportItem {
+  title: string;
+  messages: { role: "user" | "assistant"; text: string; destination?: string | null }[];
+}
+
+// Chats are saved in the database: GET/DELETE .../chat/conversations[/{id}]; POST .../chat saves the question
+// and its answer (in conversation_id, or a new chat); POST .../chat/log saves a question the page answered itself.
 export const familyChat = {
-  send: (familyId: string, text: string, history: FamilyChatTurn[]) =>
-    post<FamilyChatOut>(`/api/families/${familyId}/chat`, { text, history }),
+  send: (familyId: string, text: string, conversationId: string | null) =>
+    post<FamilyChatOut>(`/api/families/${familyId}/chat`, { text, conversation_id: conversationId }),
+  log: (familyId: string, body: { text: string; reply: string; destination: string | null; conversation_id: string | null }) =>
+    post<{ conversation_id: string }>(`/api/families/${familyId}/chat/log`, body),
+  list: (familyId: string) => get<FamilyChatConversationOut[]>(`/api/families/${familyId}/chat/conversations`),
+  get: (familyId: string, conversationId: string) =>
+    get<{ id: string; title: string; updated_at: string; messages: FamilyChatSavedMessage[] }>(
+      `/api/families/${familyId}/chat/conversations/${conversationId}`,
+    ),
+  remove: (familyId: string, conversationId: string) =>
+    del(`/api/families/${familyId}/chat/conversations/${conversationId}`),
+  importChats: (familyId: string, conversations: FamilyChatImportItem[]) =>
+    post<{ imported: number }>(`/api/families/${familyId}/chat/conversations/import`, { conversations }),
 };
 
 // ---- family dashboard (verified against api/dashboard.py and schemas.py) ----

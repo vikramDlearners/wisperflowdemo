@@ -19,7 +19,13 @@ from app.schemas import (
     DashboardResponse,
     DoseHistoryItemOut,
     FamilyChatIn,
+    FamilyChatConversationDetailOut,
+    FamilyChatConversationOut,
+    FamilyChatImportIn,
+    FamilyChatLogIn,
+    FamilyChatMessageOut,
     FamilyChatOut,
+    FamilyChatSavedOut,
     FamilyCreate,
     FamilyOut,
     MemberCreate,
@@ -32,6 +38,7 @@ from app.schemas import (
 from app.services import care as care_svc
 from app.services import families as svc
 from app.services import family_chat
+from app.services import family_chat_store as chat_store
 from app.services.ask_help import choose_destination
 from app.services.emergencies import complete_emergency as complete_emergency_svc
 from app.services.profile import MAX_PHOTO_BYTES, clear_profile_photo, set_profile_photo
@@ -89,10 +96,69 @@ def ask(family_id: str, body: AskIn, db: Session = DbSession, user: User = Curre
 
 @router.post("/{family_id}/chat", response_model=FamilyChatOut)
 def chat(family_id: str, body: FamilyChatIn, db: Session = DbSession, user: User = CurrentUser) -> FamilyChatOut:
-    """Chat: answers about the parent's care. Reads only, and only what this member may view."""
+    """Chat: answers about the parent's care (reads only what this member may view). The question and the
+    answer are saved in the member's conversation; both are saved only once the answer is ready."""
     svc.get_family(db, user.id, family_id)  # members only
-    history = [m.model_dump() for m in body.history]
-    return FamilyChatOut(**family_chat.answer(db, user.id, family_id, body.text, history))
+    if body.conversation_id:
+        convo = chat_store.own_conversation(db, user.id, family_id, body.conversation_id)
+        history = chat_store.history(db, convo.id)
+    else:
+        history = [m.model_dump() for m in body.history]
+    out = family_chat.answer(db, user.id, family_id, body.text, history)
+    convo = chat_store.start_or_get(db, user.id, family_id, body.conversation_id, body.text)
+    chat_store.add(db, convo, "user", body.text)
+    chat_store.add(db, convo, "assistant", out["reply"], out.get("destination"), out.get("source"))
+    db.commit()
+    return FamilyChatOut(**out, conversation_id=convo.id)
+
+
+@router.post("/{family_id}/chat/log", response_model=FamilyChatSavedOut)
+def chat_log(
+    family_id: str, body: FamilyChatLogIn, db: Session = DbSession, user: User = CurrentUser
+) -> FamilyChatSavedOut:
+    """Save a question the page answered itself with a link (e.g. "Add a task")."""
+    convo = chat_store.log_exchange(
+        db, user.id, family_id, body.conversation_id, body.text, body.reply, body.destination
+    )
+    return FamilyChatSavedOut(conversation_id=convo.id)
+
+
+@router.get("/{family_id}/chat/conversations", response_model=list[FamilyChatConversationOut])
+def chat_conversations(
+    family_id: str, db: Session = DbSession, user: User = CurrentUser
+) -> list[FamilyChatConversationOut]:
+    """This member's saved chats, newest first."""
+    return [
+        FamilyChatConversationOut(id=c.id, title=c.title, updated_at=c.updated_at, message_count=n)
+        for c, n in chat_store.list_conversations(db, user.id, family_id)
+    ]
+
+
+@router.post("/{family_id}/chat/conversations/import")
+def chat_import(family_id: str, body: FamilyChatImportIn, db: Session = DbSession, user: User = CurrentUser) -> dict:
+    """Copy chats that were kept in this browser into the database (done once by the page)."""
+    items = [c.model_dump() for c in body.conversations]
+    return {"imported": chat_store.import_conversations(db, user.id, family_id, items)}
+
+
+@router.get("/{family_id}/chat/conversations/{conversation_id}", response_model=FamilyChatConversationDetailOut)
+def chat_conversation(
+    family_id: str, conversation_id: str, db: Session = DbSession, user: User = CurrentUser
+) -> FamilyChatConversationDetailOut:
+    convo, msgs = chat_store.get_conversation(db, user.id, family_id, conversation_id)
+    return FamilyChatConversationDetailOut(
+        id=convo.id, title=convo.title, updated_at=convo.updated_at,
+        messages=[
+            FamilyChatMessageOut(id=m.id, role=m.role, text=m.text, destination=m.destination, created_at=m.created_at)
+            for m in msgs
+        ],
+    )
+
+
+@router.delete("/{family_id}/chat/conversations/{conversation_id}", status_code=204)
+def chat_delete(family_id: str, conversation_id: str, db: Session = DbSession, user: User = CurrentUser) -> Response:
+    chat_store.delete_conversation(db, user.id, family_id, conversation_id)
+    return Response(status_code=204)
 
 
 @router.get("/{family_id}/members", response_model=list[MemberOut])
