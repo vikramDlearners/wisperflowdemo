@@ -261,6 +261,71 @@ class ChatMessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
 
 
+InsuranceType = Literal["health", "life", "accident", "critical_illness", "home", "vehicle", "other"]
+PremiumFrequency = Literal["yearly", "half_yearly", "quarterly", "monthly"]
+
+
+class InsuranceIn(BaseModel):
+    care_profile_id: str | None = None  # whose cover; empty for a family policy
+    policy_type: InsuranceType = "health"
+    insurer: str = Field(min_length=1, max_length=120)
+    plan_name: str | None = Field(default=None, max_length=160)
+    policy_number: str | None = Field(default=None, max_length=80)
+    sum_insured: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
+    premium: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    premium_frequency: PremiumFrequency = "yearly"
+    start_date: date | None = None
+    renewal_date: date
+    agent_name: str | None = Field(default=None, max_length=120)
+    agent_phone: str | None = Field(default=None, max_length=32)
+    helpline: str | None = Field(default=None, max_length=32)
+    notes: str | None = Field(default=None, max_length=4000)
+    responsible_user_id: str | None = None
+
+
+class InsuranceUpdate(BaseModel):
+    care_profile_id: str | None = None
+    policy_type: InsuranceType | None = None
+    insurer: str | None = Field(default=None, max_length=120)
+    plan_name: str | None = Field(default=None, max_length=160)
+    policy_number: str | None = Field(default=None, max_length=80)
+    sum_insured: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
+    premium: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    premium_frequency: PremiumFrequency | None = None
+    start_date: date | None = None
+    renewal_date: date | None = None
+    agent_name: str | None = Field(default=None, max_length=120)
+    agent_phone: str | None = Field(default=None, max_length=32)
+    helpline: str | None = Field(default=None, max_length=32)
+    notes: str | None = Field(default=None, max_length=4000)
+    responsible_user_id: str | None = None
+
+
+class InsuranceRenewIn(BaseModel):
+    renewal_date: date | None = None  # the insurer's new date; default: one premium period later
+    premium: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+
+
+class InsuranceOut(BaseModel):
+    id: str
+    care_profile_id: str | None
+    policy_type: str
+    insurer: str
+    plan_name: str | None
+    policy_number: str | None
+    sum_insured: Decimal | None
+    premium: Decimal | None
+    premium_frequency: str
+    start_date: date | None
+    renewal_date: date
+    last_renewed_on: date | None
+    agent_name: str | None
+    agent_phone: str | None
+    helpline: str | None
+    notes: str | None
+    responsible_user_id: str | None
+
+
 class FamilyChatIn(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
     # The saved conversation this question continues; omitted for a new chat. Its saved turns are the history.

@@ -17,6 +17,7 @@ import CareVoiceActivity from "./pages/CareVoiceActivity";
 import FamilyTasks from "./pages/FamilyTasks";
 import Appointments from "./pages/Appointments";
 import SharedRecords from "./pages/SharedRecords";
+import Insurance from "./pages/Insurance";
 import FamilyTimeline from "./pages/FamilyTimeline";
 import MembersPermissions from "./pages/MembersPermissions";
 import ManageProfile from "./pages/ManageProfile";
@@ -116,6 +117,10 @@ export default function App() {
         <Route
           path="/family/:familyId/records"
           element={<FamilyRoute render={(familyId) => <SharedRecords familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/insurance"
+          element={<FamilyRoute render={(familyId) => <Insurance familyId={familyId} />} />}
         />
         <Route path="/family/:familyId/timeline" element={<FamilyTimeline />} />
         <Route

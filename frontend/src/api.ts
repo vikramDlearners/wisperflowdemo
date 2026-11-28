@@ -896,6 +896,44 @@ export const familyChat = {
     post<{ imported: number }>(`/api/families/${familyId}/chat/conversations/import`, { conversations }),
 };
 
+// ---- insurance (api/insurance.py): policies and their renewals ----
+
+export interface InsuranceOut {
+  id: string;
+  /** Whose cover; null for a family policy. */
+  care_profile_id: string | null;
+  policy_type: "health" | "life" | "accident" | "critical_illness" | "home" | "vehicle" | "other";
+  insurer: string;
+  plan_name: string | null;
+  policy_number: string | null;
+  sum_insured: string | number | null; // decimals arrive as strings
+  premium: string | number | null;
+  premium_frequency: "yearly" | "half_yearly" | "quarterly" | "monthly";
+  start_date: string | null;
+  renewal_date: string; // YYYY-MM-DD
+  last_renewed_on: string | null;
+  agent_name: string | null;
+  agent_phone: string | null;
+  helpline: string | null;
+  notes: string | null;
+  responsible_user_id: string | null;
+}
+
+export type InsuranceIn = Omit<InsuranceOut, "id" | "last_renewed_on" | "sum_insured" | "premium"> & {
+  sum_insured: number | null;
+  premium: number | null;
+};
+
+export const insurance = {
+  list: (familyId: string) => get<InsuranceOut[]>(`/api/families/${familyId}/insurance`),
+  create: (familyId: string, body: InsuranceIn) => post<InsuranceOut>(`/api/families/${familyId}/insurance`, body),
+  update: (familyId: string, id: string, body: Partial<InsuranceIn>) =>
+    patch<InsuranceOut>(`/api/families/${familyId}/insurance/${id}`, body),
+  renew: (familyId: string, id: string, body: { renewal_date?: string | null; premium?: number | null }) =>
+    post<InsuranceOut>(`/api/families/${familyId}/insurance/${id}/renew`, body),
+  remove: (familyId: string, id: string) => del(`/api/families/${familyId}/insurance/${id}`),
+};
+
 // ---- family dashboard (verified against api/dashboard.py and schemas.py) ----
 
 export interface DashboardParentOut {

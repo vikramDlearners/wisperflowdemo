@@ -17,6 +17,7 @@ export type WorkspacePage =
   | "tasks"
   | "appointments"
   | "records"
+  | "insurance"
   | "timeline"
   | "members"
   | "manage-profile"
@@ -115,6 +116,7 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
     { key: "tasks", icon: "☷", label: "Tasks", to: fam("/tasks") },
     { key: "appointments", icon: "▦", label: "Appointments", to: fam("/appointments") },
     { key: "records", icon: "▧", label: "Records", to: fam("/records") },
+    { key: "insurance", icon: "⛨", label: "Insurance & renewals", to: fam("/insurance") },
   ];
   const settings: NavItem[] = [
     { key: "members", icon: "♙", label: "Family members", to: fam("/members") },

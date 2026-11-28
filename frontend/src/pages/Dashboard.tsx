@@ -15,6 +15,7 @@ import {
   completeEmergency,
   families,
   getFamilyDashboard,
+  insurance as insuranceApi,
   medicines,
   members,
   type DashboardParentOut,
@@ -24,8 +25,10 @@ import {
   type MemberOut,
   tasks,
   type DashboardNextMonthEstimateOut,
+  type InsuranceOut,
   type TaskOut,
 } from "../api";
+import { formatDay as formatInsuranceDay, renewalState, renewalText, typeLabel } from "../insurance";
 import { canRecord, doseLabel, slotName, sortDoses } from "../doses";
 import { formatPrice } from "../medicineImage";
 import { isChild } from "../lib/constants";
@@ -230,6 +233,8 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [familyTasks, setFamilyTasks] = useState<TaskOut[] | null>(null);
+  // Insurance renewals due in 30 days or overdue are shown under "Needs attention".
+  const [policies, setPolicies] = useState<InsuranceOut[]>([]);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [team, setTeam] = useState<MemberOut[]>([]);
   const [doses, setDoses] = useState<DoseToday[]>([]);
@@ -282,6 +287,10 @@ export default function Dashboard() {
       .list(familyId)
       .then((res) => active && setZones(Object.fromEntries(res.map((p) => [p.id, p.timezone]))))
       .catch(() => undefined);
+    insuranceApi
+      .list(familyId)
+      .then((res) => active && setPolicies(res))
+      .catch(() => undefined); // no access or none yet: nothing to show
     return () => {
       active = false;
     };
@@ -340,6 +349,9 @@ export default function Dashboard() {
   const missed = schedule.filter((d) => d.status === "missed" || d.status === "not_taken");
   const lowStock = data?.medicine_stock.filter((m) => m.low) ?? [];
 
+  const insuranceDue = policies.filter(
+    (p) => (!p.care_profile_id || p.care_profile_id === profileId) && renewalState(p) !== "ok",
+  );
   const attention: Attention[] = [
     ...missed.map((d): Attention => ({
       key: `dose-${d.medicine_id}-${d.slot}`,
@@ -386,6 +398,20 @@ export default function Dashboard() {
           tone: late ? "amber" : "blue",
           action: late ? "Review task" : "Assign caregiver",
           to: path("/tasks"),
+        };
+      }),
+    // Insurance renewals coming up (this parent's policies and family policies).
+    ...insuranceDue.map((p): Attention => {
+        const overdue = renewalState(p) === "overdue";
+        return {
+          key: `insurance-${p.id}`,
+          icon: "⛨",
+          title: `${p.insurer} ${typeLabel(p.policy_type).toLowerCase()} insurance ${overdue ? "renewal is overdue" : "is due for renewal"}`,
+          detail: `${renewalText(p)} · ${formatInsuranceDay(p.renewal_date)}`,
+          tag: overdue ? "Overdue" : "Renewal due",
+          tone: overdue ? "red" : "amber",
+          action: "Review insurance",
+          to: path("/insurance"),
         };
       }),
   ];
@@ -658,10 +684,17 @@ export default function Dashboard() {
                 missed.length > 0 && `${missed.length} missed`,
                 lowStock.length > 0 && `${lowStock.length} low stock`,
                 overdue.length > 0 && count(overdue.length, "overdue task"),
+                insuranceDue.length > 0 && count(insuranceDue.length, "insurance renewal"),
               ].filter(Boolean).join(" · ") || (onTrack ? "All clear" : "Tasks to assign")
             }
             icon="!"
-            to={path(missed.length || lowStock.length ? "/medicines" : "/tasks")}
+            to={path(
+              missed.length || lowStock.length
+                ? "/medicines"
+                : insuranceDue.length && !overdue.length
+                  ? "/insurance"
+                  : "/tasks",
+            )}
           />
           {familyTasks && (
             <Stat label="Open tasks" value={openTasks.length} sub={`${dueToday.length} due today`} icon="☷" to={path("/tasks")} />
