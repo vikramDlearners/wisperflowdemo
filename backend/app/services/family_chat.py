@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.care_profile import CareProfile
-from app.services import understanding
+from app.services import monthly_analysis, understanding
 from app.services.appointments import list_appointments
 from app.services.ask_help import DESTINATIONS
 from app.services.dashboard import CANCELLED, build_family_dashboard
@@ -330,10 +330,27 @@ def _gemini_reply(text: str, history: list[dict[str, str]], facts: dict[str, Any
     return reply.strip()[:MAX_REPLY], key if isinstance(key, str) and key in DESTINATIONS else None
 
 
+def _analysis(db: Session, user_id: str, family_id: str, text: str, asked_before: list[str]) -> dict[str, Any]:
+    """"Give me last month's analysis": a short overview plus the month's analysis card for the chat to show."""
+    codes = permission_codes_for(db, get_membership(db, user_id, family_id))
+    if "dashboard.view" not in codes:
+        return {"reply": NO_ACCESS, "destination": None, "source": "rules"}
+    dash = build_family_dashboard(db, family_id)
+    chosen = _pick_parent(dash["parents"], [text, *asked_before])
+    profile = db.get(CareProfile, chosen) if chosen else None
+    if profile is None:
+        return {"reply": NO_PROFILE, "destination": "care_profile.add", "source": "rules"}
+    start, end = monthly_analysis.asked_period(text, today_for(profile, datetime.now(timezone.utc)))
+    card = monthly_analysis.build(db, profile, start, end, set(codes))
+    return {"reply": card["overview"], "destination": None, "source": card["source"], "card": card}
+
+
 def answer(db: Session, user_id: str, family_id: str, text: str, history: list[dict[str, str]]) -> dict[str, Any]:
     if understanding.is_urgent(text) and not _has(text.lower(), "emergenc(?:y|ies)"):
         return {"reply": URGENT_REPLY, "destination": None, "source": "rules"}
     asked_before = [m["text"] for m in reversed(history) if m["role"] == "user"]
+    if monthly_analysis.asked_period(text, date.today()) is not None:
+        return _analysis(db, user_id, family_id, text, asked_before)
     facts = collect_facts(db, user_id, family_id, [text, *asked_before])
     from_gemini = _gemini_reply(text, history, facts)
     reply, destination = from_gemini or rule_reply(text, facts)

@@ -857,6 +857,43 @@ export interface FamilyChatOut {
   source: "ai" | "rules";
   /** The saved conversation the question and answer were added to. */
   conversation_id: string;
+  /** Shown under the answer: the month's analysis ("Give me last month's analysis"). */
+  card?: MonthlyAnalysis | null;
+}
+
+/** A month of the parent's care (services/monthly_analysis.py). A section the member may not view is null. */
+export interface MonthlyAnalysis {
+  kind: "monthly_analysis";
+  parent: { id: string; name: string };
+  period: { start: string; end: string; label: string };
+  overview: string;
+  source: "ai" | "rules";
+  medicines: {
+    taken: number;
+    missed: number;
+    skipped: number;
+    recorded: number;
+    taken_percent: number | null;
+    by_medicine: { name: string; taken: number; missed: number; skipped: number }[];
+  } | null;
+  spending: {
+    total: number;
+    medicines: number | null;
+    appointments: number | null;
+    insurance: number | null;
+    items: { kind: "medicine" | "appointment" | "insurance"; label: string; amount: number; date: string }[];
+    item_count: number;
+  } | null;
+  conversations: { conversations: number; days_talked: number; days_in_month: number; parent_messages: number };
+  incidents: { date: string; kind: "emergency" | "urgent" | "important"; text: string; status: string | null }[];
+  diet: {
+    days_reported: number;
+    meals: { breakfast: number; lunch: number; dinner: number };
+    skipped: number;
+    recent: { date: string; meals: string[]; text: string }[];
+    summary: string | null;
+  };
+  notes: { date: string; source: string; text: string }[];
 }
 
 /** A saved chat, newest first in the list. Only the member who had it can see it. */
@@ -870,6 +907,7 @@ export interface FamilyChatConversationOut {
 export interface FamilyChatSavedMessage extends FamilyChatTurn {
   id: string;
   destination: string | null;
+  card?: MonthlyAnalysis | null;
   created_at: string;
 }
 

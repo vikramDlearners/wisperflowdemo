@@ -2,7 +2,15 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import "../ask-help.css";
 import "../family-chat.css";
-import { ApiError, auth, familyChat, type FamilyChatConversationOut, type FamilyChatTurn } from "../api";
+import {
+  ApiError,
+  auth,
+  familyChat,
+  type FamilyChatConversationOut,
+  type FamilyChatTurn,
+  type MonthlyAnalysis,
+} from "../api";
+import MonthlyAnalysisCard from "../components/MonthlyAnalysisCard";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import { DESTINATIONS, isAskKey, matchAsk, type AskKey } from "../lib/askHelp";
 
@@ -11,6 +19,7 @@ import { DESTINATIONS, isAskKey, matchAsk, type AskKey } from "../lib/askHelp";
 
 interface Message extends FamilyChatTurn {
   destination?: AskKey | null;
+  card?: MonthlyAnalysis | null;
 }
 
 /** A question waiting for its answer, or whose answer failed (shown with "Try again"). Not saved yet. */
@@ -22,6 +31,7 @@ interface Pending {
 const MAX_TEXT = 1000;
 const SUGGESTIONS = [
   "How are things today?",
+  "Give me last month's analysis",
   "Were today's medicines taken?",
   "Which medicines need a refill?",
   "What are the upcoming appointments?",
@@ -51,8 +61,12 @@ function loadOld(key: string): OldConversation[] {
   }
 }
 
+/** "Give me last month's analysis" (also "monthly report", "recap"): answered with the analysis card. */
+const ANALYSIS = /\b(?:analys[ie]s|analy[sz]e|analytics|recap|monthly\s+(?:report|summary|review))\b/i;
+
 /** "Add a task" needs a page, not an answer: the chat itself changes nothing. */
 function pageToOpen(text: string): AskKey | null {
+  if (ANALYSIS.test(text)) return null;
   const key = matchAsk(text);
   return key && (key.endsWith(".add") || key === "prescription.scan") ? key : null;
 }
@@ -162,9 +176,10 @@ export default function FamilyChat({ familyId }: { familyId: string }) {
       } else {
         const out = await familyChat.send(familyId, question, conversationId);
         id = out.conversation_id;
+        const card = out.card ?? null;
         let destination = isAskKey(out.destination) ? out.destination : null;
-        if (!destination && out.source === "rules") destination = matchAsk(question);
-        answer = { role: "assistant", text: out.reply, destination };
+        if (!destination && !card && out.source === "rules") destination = matchAsk(question);
+        answer = { role: "assistant", text: out.reply, destination, card };
       }
       if (!mounted.current) return;
       addSaved(id, question.slice(0, 60), [{ role: "user", text: question }, answer]);
@@ -208,6 +223,7 @@ export default function FamilyChat({ familyId }: { familyId: string }) {
             role: m.role,
             text: m.text,
             destination: isAskKey(m.destination) ? m.destination : null,
+            card: m.card ?? null,
           })),
         }));
       } catch (err) {
@@ -315,6 +331,7 @@ export default function FamilyChat({ familyId }: { familyId: string }) {
                   <div key={i} className={`fc-msg is-${m.role}`}>
                     <span className="fc-sr">{m.role === "user" ? "You:" : "CareCircle:"}</span>
                     <p>{m.text}</p>
+                    {m.card?.kind === "monthly_analysis" && <MonthlyAnalysisCard data={m.card} />}
                     {isAskKey(m.destination) && (
                       <Link className="ask-chip fc-link" to={DESTINATIONS[m.destination].path(familyId)}>
                         Open {DESTINATIONS[m.destination].label}

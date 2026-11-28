@@ -102,6 +102,7 @@ def test_gemini_answers_and_only_listed_pages_pass(home, monkeypatch):
     monkeypatch.setattr(understanding, "ask_gemini", fake)
     out = home["ask"]("how is she").json()
     assert out.pop("conversation_id")  # the exchange is saved (tests/test_family_chat_saved.py)
+    assert out.pop("card") is None  # only the month's analysis has a card
     assert out == {"reply": "She is fine.", "destination": None, "source": "ai"}
     assert "Metformin" in prompts[0] and "m@example.com" not in prompts[0]
 

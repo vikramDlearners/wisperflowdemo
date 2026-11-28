@@ -1,0 +1,223 @@
+/* The month's analysis card in the Chat (components/MonthlyAnalysisCard.tsx). Scoped to .ma-* classes. */
+
+.ma-card {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--pp-line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(15, 30, 27, 0.05);
+  font-size: 0.9rem;
+}
+.ma-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.ma-head > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--pp-teal-soft);
+  font-size: 1.2rem;
+}
+.ma-head div {
+  display: flex;
+  flex-direction: column;
+}
+.ma-head strong {
+  font-size: 1.02rem;
+}
+.ma-head small {
+  color: var(--pp-muted);
+}
+
+.ma-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.ma-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 12px;
+  border: 1px solid #e3ece9;
+  border-radius: 12px;
+  background: #f7fbfa;
+}
+.ma-tile-icon {
+  font-size: 1rem;
+  color: var(--pp-teal-dark);
+  font-weight: 700;
+}
+.ma-tile strong {
+  font-size: 1.35rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.ma-tile strong small {
+  font-size: 0.85rem;
+  color: var(--pp-muted);
+  font-weight: 600;
+}
+.ma-tile > span:not(.ma-tile-icon) {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.ma-tile em {
+  font-style: normal;
+  font-size: 0.74rem;
+  color: var(--pp-muted);
+}
+.ma-tile.is-alert {
+  background: #fdecea;
+  border-color: #f5c2bd;
+}
+.ma-tile.is-alert strong {
+  color: #b42318;
+}
+
+.ma-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #eef2f1;
+}
+.ma-section h3 {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pp-muted);
+}
+.ma-section p {
+  margin: 0 0 8px;
+}
+.ma-muted {
+  color: var(--pp-muted);
+}
+
+.ma-bars,
+.ma-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ma-bar-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 3px;
+}
+.ma-bar-label span {
+  font-weight: 600;
+}
+.ma-bar-label small {
+  color: var(--pp-muted);
+  white-space: nowrap;
+}
+.ma-bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f1;
+}
+.ma-bar .is-taken {
+  background: #2e9e6b;
+}
+.ma-bar .is-missed {
+  background: #d9534f;
+}
+.ma-bar .is-skipped {
+  background: #c7cfcc;
+}
+
+.ma-split,
+.ma-meals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ma-split span,
+.ma-meals span {
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #eef7f4;
+  font-size: 0.8rem;
+}
+.ma-meals .is-alert {
+  background: #fdecea;
+  color: #b42318;
+}
+
+.ma-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.ma-list small {
+  flex: none;
+  color: var(--pp-muted);
+  font-size: 0.75rem;
+}
+.ma-grow {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ma-recent em {
+  font-style: normal;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.ma-notes li div {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f6faf9;
+  width: 100%;
+}
+.ma-more {
+  margin-top: 6px !important;
+  color: var(--pp-muted);
+  font-size: 0.8rem;
+}
+.ma-badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.ma-badge.is-emergency {
+  background: #fdecea;
+  color: #b42318;
+}
+.ma-badge.is-urgent {
+  background: #fff4e0;
+  color: #8a5a00;
+}
+.ma-badge.is-important {
+  background: #eef3ff;
+  color: #2f4fa8;
+}
+.ma-foot {
+  margin-top: 14px;
+  color: var(--pp-muted);
+  font-size: 0.72rem;
+}
+
+@media (max-width: 700px) {
+  .ma-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

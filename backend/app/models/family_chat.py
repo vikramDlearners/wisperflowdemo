@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -42,4 +42,6 @@ class FamilyChatMessage(Base):
     # For an answer: the page it offers to open (a key from frontend lib/askHelp.ts), and who wrote it.
     destination: Mapped[str | None] = mapped_column(String(60), nullable=True)
     source: Mapped[str | None] = mapped_column(String(16), nullable=True)  # ai | rules | page
+    # A card shown under the answer, e.g. the month's analysis ({"kind": "monthly_analysis", ...}).
+    card: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

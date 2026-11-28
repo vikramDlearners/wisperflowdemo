@@ -107,7 +107,7 @@ def chat(family_id: str, body: FamilyChatIn, db: Session = DbSession, user: User
     out = family_chat.answer(db, user.id, family_id, body.text, history)
     convo = chat_store.start_or_get(db, user.id, family_id, body.conversation_id, body.text)
     chat_store.add(db, convo, "user", body.text)
-    chat_store.add(db, convo, "assistant", out["reply"], out.get("destination"), out.get("source"))
+    chat_store.add(db, convo, "assistant", out["reply"], out.get("destination"), out.get("source"), out.get("card"))
     db.commit()
     return FamilyChatOut(**out, conversation_id=convo.id)
 
@@ -149,7 +149,9 @@ def chat_conversation(
     return FamilyChatConversationDetailOut(
         id=convo.id, title=convo.title, updated_at=convo.updated_at,
         messages=[
-            FamilyChatMessageOut(id=m.id, role=m.role, text=m.text, destination=m.destination, created_at=m.created_at)
+            FamilyChatMessageOut(
+                id=m.id, role=m.role, text=m.text, destination=m.destination, card=m.card, created_at=m.created_at
+            )
             for m in msgs
         ],
     )

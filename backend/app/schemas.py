@@ -359,6 +359,7 @@ class FamilyChatOut(BaseModel):
     destination: str | None = None  # a page key, as in AskOut
     source: Literal["ai", "rules"]
     conversation_id: str | None = None
+    card: dict | None = None  # e.g. the month's analysis
 
 
 class FamilyChatLogIn(BaseModel):
@@ -377,6 +378,7 @@ class FamilyChatMessageOut(BaseModel):
     role: Literal["user", "assistant"]
     text: str
     destination: str | None = None
+    card: dict | None = None
     created_at: datetime
 
 

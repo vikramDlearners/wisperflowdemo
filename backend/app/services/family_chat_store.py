@@ -60,14 +60,14 @@ def history(db: Session, conversation_id: str) -> list[dict[str, str]]:
 
 def add(
     db: Session, convo: FamilyChatConversation, role: str, text: str,
-    destination: str | None = None, source: str | None = None,
+    destination: str | None = None, source: str | None = None, card: dict | None = None,
 ) -> FamilyChatMessage:
     last = db.execute(
         select(func.max(FamilyChatMessage.seq)).where(FamilyChatMessage.conversation_id == convo.id)
     ).scalar()
     row = FamilyChatMessage(
         conversation_id=convo.id, seq=(last or 0) + 1, role=role, text=text,
-        destination=destination, source=source,
+        destination=destination, source=source, card=card,
     )
     db.add(row)
     convo.updated_at = _now()
