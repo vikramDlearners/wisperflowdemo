@@ -1,10 +1,12 @@
 """The signed-in parent's daily check-in: start/resume it, answer by text or voice, hear the bot's reply."""
 
 import base64
+from dataclasses import asdict
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, File, Header, HTTPException, Response, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -33,6 +35,7 @@ from app.schemas import (
 )
 from app.services import care as care_svc
 from app.services import checkin as engine
+from app.services import fine_checkin, today_plan
 from app.services.adapters.speech import SpeechUnavailable, get_speech_to_text, get_text_to_speech
 from app.services.doses import _aware, logged_today
 from app.services.parent_context import ParentContext, family_profiles, resolve_parent
@@ -297,3 +300,41 @@ def emergency(
     ctx = resolve_parent(db, user, profile_id)
     notified = engine.raise_emergency(db, ctx, _now())
     return EmergencyOut(notified=notified, channels=EMERGENCY_CHANNELS, emergency_number=settings.emergency_number)
+
+
+class FineOut(BaseModel):
+    day: date
+    fine_at: datetime | None
+    asked: bool
+    family_told: bool
+
+
+def _fine_out(s: fine_checkin.FineStatus) -> FineOut:
+    return FineOut(day=s.day, fine_at=s.fine_at, asked=s.asked, family_told=s.family_told)
+
+
+@router.get("/fine", response_model=FineOut)
+def get_fine(db: Session = DbSession, user: User = CurrentUser, profile_id: str | None = ProfileId) -> FineOut:
+    """Has the parent tapped "I'm fine" today, and has the app asked them yet?"""
+    return _fine_out(fine_checkin.status(db, resolve_parent(db, user, profile_id), _now()))
+
+
+@router.post("/fine", response_model=FineOut)
+def post_fine(db: Session = DbSession, user: User = CurrentUser, profile_id: str | None = ProfileId) -> FineOut:
+    """The parent tapped "I'm fine": tell the family all is well (once a day)."""
+    return _fine_out(fine_checkin.press_fine(db, resolve_parent(db, user, profile_id), _now()))
+
+
+@router.get("/today")
+def get_today(db: Session = DbSession, user: User = CurrentUser, profile_id: str | None = ProfileId) -> dict:
+    """Today only: tablets, visits in the next two days, tasks due, medicines running low, and what to tell
+    the doctor when a visit is close."""
+    return asdict(today_plan.today(db, resolve_parent(db, user, profile_id), _now()))
+
+
+@router.post("/refills/{medicine_id}")
+def ask_refill(
+    medicine_id: str, db: Session = DbSession, user: User = CurrentUser, profile_id: str | None = ProfileId,
+) -> dict:
+    """The parent said yes to a refill: one task for the family to order it. Asking again changes nothing."""
+    return asdict(today_plan.ask_refill(db, resolve_parent(db, user, profile_id), medicine_id, _now()))

@@ -17,7 +17,10 @@ import CareVoiceActivity from "./pages/CareVoiceActivity";
 import FamilyTasks from "./pages/FamilyTasks";
 import Appointments from "./pages/Appointments";
 import SharedRecords from "./pages/SharedRecords";
+import HealthNotes from "./pages/HealthNotes";
+import WeeklySummary from "./pages/WeeklySummary";
 import Insurance from "./pages/Insurance";
+import CareCircle from "./pages/CareCircle";
 import FamilyTimeline from "./pages/FamilyTimeline";
 import MembersPermissions from "./pages/MembersPermissions";
 import ManageProfile from "./pages/ManageProfile";
@@ -27,6 +30,11 @@ import ParentOnboarding from "./pages/ParentOnboarding";
 import ParentProfilePage from "./pages/ParentProfilePage";
 import ParentDetails from "./pages/ParentDetails";
 import TaskLink from "./pages/TaskLink";
+import MedicalFile from "./pages/MedicalFile";
+import SharedMedicalFile from "./pages/SharedMedicalFile";
+import Sharing from "./pages/Sharing";
+import Paperwork from "./pages/Paperwork";
+import Carer from "./pages/Carer";
 
 // Reads :familyId from the URL and renders the page with it.
 function FamilyRoute({ render }: { render: (familyId: string) => ReactNode }) {
@@ -59,6 +67,7 @@ export default function App() {
         <Route path="/signin" element={<SignIn />} />
         <Route path="/parent/accept-invite" element={<ParentAcceptInvite />} />
         <Route path="/task-link/:token" element={<TaskLink />} />
+        <Route path="/medical-file/:token" element={<SharedMedicalFile />} />
 
         <Route
           path="/family/:familyId/chat"
@@ -119,8 +128,36 @@ export default function App() {
           element={<FamilyRoute render={(familyId) => <SharedRecords familyId={familyId} />} />}
         />
         <Route
+          path="/family/:familyId/week"
+          element={<FamilyRoute render={(familyId) => <WeeklySummary familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/health"
+          element={<FamilyRoute render={(familyId) => <HealthNotes familyId={familyId} />} />}
+        />
+        <Route
           path="/family/:familyId/insurance"
           element={<FamilyRoute render={(familyId) => <Insurance familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/circle"
+          element={<FamilyRoute render={(familyId) => <CareCircle familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/file"
+          element={<FamilyRoute render={(familyId) => <MedicalFile familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/sharing"
+          element={<FamilyRoute render={(familyId) => <Sharing familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/paperwork"
+          element={<FamilyRoute render={(familyId) => <Paperwork familyId={familyId} />} />}
+        />
+        <Route
+          path="/family/:familyId/carer"
+          element={<FamilyRoute render={(familyId) => <Carer familyId={familyId} />} />}
         />
         <Route path="/family/:familyId/timeline" element={<FamilyTimeline />} />
         <Route

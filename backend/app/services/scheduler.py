@@ -17,6 +17,8 @@ from app.core.db import SessionLocal
 from app.services.conversation_summary import summarise_conversations
 from app.services.family_alerts import alert_missed_doses, send_daily_summaries
 from app.services.parent_notes import deliver_due_reminders
+from app.services.fine_checkin import nudge_fine_checkins
+from app.services.weekly_summary import send_pattern_warnings, send_weekly_summaries
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,9 @@ def build_scheduler() -> BackgroundScheduler:
     # Parent notes: reminders are chosen to the minute, so check every minute.
     sched.add_job(run_job, "interval", minutes=1, args=[deliver_due_reminders], id="deliver_note_reminders",
                   **common)
+    sched.add_job(run_job, "interval", minutes=5, args=[nudge_fine_checkins], id="nudge_fine_checkins", **common)
+    sched.add_job(run_job, "interval", minutes=30, args=[send_weekly_summaries], id="send_weekly_summaries", **common)
+    sched.add_job(run_job, "interval", minutes=60, args=[send_pattern_warnings], id="send_pattern_warnings", **common)
     return sched
 
 

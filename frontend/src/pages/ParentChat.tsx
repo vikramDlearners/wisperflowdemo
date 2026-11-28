@@ -6,6 +6,10 @@ import { ApiError } from "../api";
 import LogoutButton from "../components/LogoutButton";
 import ParentAvatar from "../components/ParentAvatar";
 import ParentMedicinePhotos from "../components/ParentMedicinePhotos";
+import ParentFine from "../components/ParentFine";
+import ParentToday from "../components/ParentToday";
+import ParentCircle from "../components/ParentCircle";
+import ParentIncomingCall from "../components/ParentIncomingCall";
 import ParentNotes from "../components/ParentNotes";
 import { PARENT_LANGUAGES, parentLangCode, parentStrings, type ParentLang } from "../parentChatStrings";
 import { notesStrings } from "../parentNotesStrings";
@@ -1078,6 +1082,12 @@ export default function ParentChat() {
         </div>
       )}
 
+      {profileId && <ParentFine language={language} profileId={profileId} />}
+      {profileId && <ParentToday language={language} profileId={profileId} />}
+      {profileId && (
+        <ParentCircle language={language} profileId={profileId} onEmergency={() => void handleEmergencyYes()} />
+      )}
+      {profileId && <ParentIncomingCall language={language} profileId={profileId} />}
       <main className="pc-main">
         <ol className="pc-messages" lang={parentLangCode(language)} aria-live="polite" aria-label={t.conversation}>
           {messages.map((m, i) => (

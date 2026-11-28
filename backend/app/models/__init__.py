@@ -25,6 +25,14 @@ from app.models.insurance import InsurancePolicy
 from app.models.notification import Notification
 from app.models.activity import ActivityLog
 from app.models.app_setting import AppSetting
+from app.models.health_note import HealthNote
+from app.models.daily_fine import DailyFine
+from app.models.care_alert import CareAlertSent
+from app.models.refill_request import RefillRequest
+from app.models.care_circle import (
+    HelpRequest, FamilyPost, CareContact, CareCard, ParentPrivacy, MedicalDocument,
+    MedicalShareLink, CareExpense, CareVisit, VideoCall, PaperworkItem, CarerReport,
+)
 
 __all__ = [
     "User",
@@ -55,4 +63,20 @@ __all__ = [
     "Notification",
     "ActivityLog",
     "AppSetting",
+    "HealthNote",
+    "DailyFine",
+    "CareAlertSent",
+    "RefillRequest",
+    "HelpRequest",
+    "FamilyPost",
+    "CareContact",
+    "CareCard",
+    "ParentPrivacy",
+    "MedicalDocument",
+    "MedicalShareLink",
+    "CareExpense",
+    "CareVisit",
+    "VideoCall",
+    "PaperworkItem",
+    "CarerReport",
 ]

@@ -20,6 +20,7 @@ from app.models.medicine import Medicine
 from app.models.membership import FamilyMember
 from app.models.parent_onboarding_profile import ParentOnboardingProfile
 from app.services.activity import log_activity
+from app.services import health_notes
 from app.services.care_notes import care_tips
 from app.services.app_settings import get_intent_mode
 from app.services.doses import (
@@ -43,6 +44,7 @@ from app.services.family_alerts import (
     other_members,
 )
 from app.services.parent_context import ParentContext
+from app.services import parent_asks
 from app.services.meals import meals_due, save_meals
 from app.services.permissions import role_name_for
 from app.services.profile import get_care_profile_onboarding
@@ -140,6 +142,42 @@ def _family_names(db: Session, ctx: ParentContext) -> str:
     if ctx.language == "en" and len(names) > 1:
         return f"{', '.join(names[:-1])} and {names[-1]}"
     return ", ".join(names)
+
+
+def _join(ctx: ParentContext, items: list[str]) -> str:
+    if ctx.language == "en" and len(items) > 1:
+        return f"{', '.join(items[:-1])} and {items[-1]}"
+    return ", ".join(items)
+
+
+def _note_health(db: Session, ctx: ParentContext, text: str, now: datetime) -> str | None:
+    """Save the readings, conditions and allergies a message mentions; the line that says what was noted."""
+    saved = health_notes.save_found(db, ctx.profile, health_notes.read_notes(text), "chat", text, ctx.user_id, now)
+    if not saved:
+        return None
+    return _say(ctx, "health_saved", items=_join(ctx, [health_notes.describe(n) for n in saved]))
+
+
+def _food_answer(db: Session, ctx: ParentContext, text: str, now: datetime) -> list[str]:
+    """Food ideas, or whether a named food is fine, from the parent's allergies and conditions."""
+    asked = health_notes.can_eat(db, ctx.profile, text)
+    if asked is not None:
+        if asked.verdict == "allergy":
+            return [_say(ctx, "food_can_allergy", food=asked.food, allergy=asked.allergy)]
+        if asked.verdict == "go_easy":
+            condition = health_notes.CONDITION_NAMES[asked.group]
+            return [_say(ctx, "food_can_go_easy", food=asked.food, condition=condition)]
+        return [_say(ctx, "food_can_ok", food=asked.food)]
+    advice = health_notes.food_ideas(db, ctx.profile, text, now)
+    meal = _say(ctx, f"meal_{advice.meal}")
+    if not advice.foods:
+        return [_say(ctx, "food_none", meal=meal, family=_family_names(db, ctx))]
+    msgs = [_say(ctx, "food_ideas", meal=meal, foods=_join(ctx, advice.foods))]
+    if advice.go_easy:
+        msgs.append(_say(ctx, "food_easy", items=_join(ctx, advice.go_easy)))
+    if advice.allergies:
+        msgs.append(_say(ctx, "food_keep", allergies=_join(ctx, advice.allergies)))
+    return msgs
 
 
 def _greeting(ctx: ParentContext, now: datetime) -> str:
@@ -802,12 +840,13 @@ def _cap_messages(msgs: list[str]) -> list[str]:
     return ["\n".join(answer), question]
 
 
-def _turn(db: Session, ctx: ParentContext, checkin: HealthCheckin, msgs: list[str]) -> Turn:
+def _turn(db: Session, ctx: ParentContext, checkin: HealthCheckin, msgs: list[str],
+          call: str | None = None) -> Turn:
     msgs = _cap_messages(msgs)
     _store(db, ctx, checkin, "bot", msgs)
     db.commit()
     db.refresh(checkin)
-    number = call_number(db, ctx) if checkin.urgent else None
+    number = call_number(db, ctx) if checkin.urgent else call
     return Turn(checkin=checkin, bot_messages=msgs, call_number=number, urgent=bool(checkin.urgent))
 
 
@@ -975,6 +1014,11 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         if medicine_help is not None:
             return _turn(db, ctx, checkin, medicine_help + _after_question(db, ctx, checkin, now))
 
+    if not is_urgent(text):
+        asked = _asks(db, ctx, checkin, text, now)
+        if asked is not None:
+            return asked
+
     if is_medicine_question(text) and not is_urgent(text):
         # A question about today's medicines: answer it from the database; record and share nothing.
         # If the parent named a part of the day ("the morning medicine"), narrow the answer to it.
@@ -982,6 +1026,10 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         return _turn(db, ctx, checkin,
                      _schedule_answer(db, ctx, now, part=part) + _after_question(db, ctx, checkin, now))
 
+    if health_notes.is_food_question(text) and not is_urgent(text):
+        return _turn(db, ctx, checkin, _food_answer(db, ctx, text, now) + _after_question(db, ctx, checkin, now))
+
+    noted = _note_health(db, ctx, text, now)
     if checkin.step == HEALTH:
         checkin.health_text = text
         msgs = [_share_health(db, ctx, checkin, text, now)]
@@ -1017,7 +1065,32 @@ def handle_parent_text(db: Session, ctx: ParentContext, text: str, now: datetime
         if is_bare_confusion(text):  # how they feel, or the medicines: cover both
             msgs += [_say(ctx, "confused_help"), *_schedule_answer(db, ctx, now)]
         msgs += _reopen_or(db, ctx, checkin, now, _say(ctx, "anything_else"))
-    return _turn(db, ctx, checkin, msgs)
+    return _turn(db, ctx, checkin, ([noted] if noted else []) + msgs)
+
+# ---------- "when is my doctor visit?" and "call my son" ----------
+
+def _asks(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str, now: datetime) -> Turn | None:
+    call = parent_asks.call_ask(db, ctx, text)
+    if call is not None:
+        if call.name is None:
+            line = _say(ctx, "call_who")
+        elif call.number is None:
+            line = _say(ctx, "call_no_phone", name=call.name)
+        else:
+            line = _say(ctx, "call_ready", name=call.name)
+        return _turn(db, ctx, checkin, [line], call=call.number)
+    if parent_asks.is_visit_question(text):
+        a = parent_asks.next_visit(db, ctx, now)
+        today = today_for(ctx.profile, now)
+        if a is None:
+            line = _say(ctx, "appt_none")
+        else:
+            key = {today: "appt_today", today + timedelta(days=1): "appt_tomorrow"}.get(a.scheduled_date, "appt_on")
+            line = _say(ctx, key, time=format_time(a.start_time), reason=a.reason, provider=a.provider,
+                        day=a.scheduled_date.strftime("%d %b").lstrip("0"))
+        return _turn(db, ctx, checkin, [line] + _after_question(db, ctx, checkin, now))
+    return None
+
 
 # ---------- emergency button ----------
 

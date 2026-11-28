@@ -103,7 +103,7 @@ def test_invoice_scan_is_rejected_and_creates_nothing(client, db_session, family
     body = response.json()
     assert body["document_type"] == "invoice"
     assert body["status"] == "rejected"
-    assert body["proposed"] == {"medicines": []}
+    assert body["proposed"] == {"medicines": [], "health_notes": []}
 
     scan = db_session.execute(select(PrescriptionScan)).scalar_one()
     assert scan.status == "rejected"

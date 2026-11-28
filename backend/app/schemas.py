@@ -765,6 +765,8 @@ class PrescriptionScanOut(BaseModel):
     document_type: str
     status: str
     proposed: dict | None
+    # What the app will keep track of from this upload, one plain line each.
+    tracking: list[str] = []
 
 
 class PrescriptionMedicineIn(BaseModel):

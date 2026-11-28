@@ -1,3 +1,4 @@
+import type { CardOut, HelpOut, PostOut } from "./parentApi";
 // Typed fetch client for the CareCircle API.
 // Interfaces mirror backend/app/schemas.py. Routes are verified against the
 // router files in backend/app/api/.
@@ -708,7 +709,9 @@ export interface PrescriptionScanOut {
   id: string;
   document_type: string; // 'prescription' | 'invoice' | 'other'
   status: string; // 'pending_review' | 'rejected' | 'confirmed'
-  proposed: { medicines: PrescriptionMedicineIn[] } | null;
+  proposed: { medicines: PrescriptionMedicineIn[]; health_notes?: string[] } | null;
+  /** What the app keeps track of from this upload: each medicine with its times, and health notes. */
+  tracking?: string[];
 }
 
 export interface PrescriptionScanConfirm {
@@ -755,6 +758,50 @@ export function confirmPrescriptionScan(
 }
 
 
+// ---- health notes (verified against api/health_notes.py) ----
+
+export interface HealthNoteOut {
+  id: string;
+  kind: "allergy" | "condition" | "reading";
+  /** Allergy: what to avoid. Condition: its name. Reading: bp, sugar, weight or pulse. */
+  label: string;
+  value: string | null;
+  value_num: number | null;
+  value_num2: number | null;
+  /** One plain line, like "BP 140/90 mmHg" or "allergy to peanuts". */
+  text: string;
+  source: "chat" | "upload" | "family";
+  source_text: string | null;
+  recorded_at: string;
+}
+
+export interface HealthListOut {
+  allergies: HealthNoteOut[];
+  conditions: HealthNoteOut[];
+  readings: HealthNoteOut[];
+  known_allergies: string[];
+  known_conditions: string[];
+}
+
+export interface HealthSavedOut {
+  tracking: string[];
+  notes: HealthNoteOut[];
+}
+
+export type ReadingKind = "bp" | "sugar" | "weight" | "pulse";
+
+const healthBase = (familyId: string, careProfileId: string) =>
+  `/api/families/${familyId}/care-profiles/${careProfileId}/health`;
+
+export const health = {
+  list: (familyId: string, careProfileId: string) => get<HealthListOut>(healthBase(familyId, careProfileId)),
+  add: (familyId: string, careProfileId: string, body: { text: string } | { kind: ReadingKind; value: string }) =>
+    post<HealthSavedOut>(healthBase(familyId, careProfileId), body),
+  remove: (familyId: string, careProfileId: string, noteId: string) =>
+    del(`${healthBase(familyId, careProfileId)}/${noteId}`),
+  readings: (familyId: string, careProfileId: string, kind: ReadingKind, days = 90) =>
+    get<HealthNoteOut[]>(`${healthBase(familyId, careProfileId)}/readings?kind=${kind}&days=${days}`),
+};
 
 // ---- appointments (verified against api/appointments.py) ----
 // The family is not in the URL: list by care_recipient_id (a care profile id);
@@ -1161,3 +1208,241 @@ export function getFamilyDashboard(familyId: string, params: DashboardParams = {
   return get<DashboardResponse>(`/api/families/${familyId}/dashboard${qs ? `?${qs}` : ""}`);
 }
 
+
+// ---- weekly summary (verified against api/weekly_summary.py) ----
+
+export interface WeekWarning {
+  kind: string;
+  text: string;
+}
+
+export interface WeeklySummaryOut {
+  parent_name: string;
+  start: string;
+  end: string;
+  taken: number;
+  skipped: number;
+  missed: number;
+  checkin_days: number;
+  fine_days: number;
+  unwell_days: number;
+  health_words: string[];
+  bp: { day: string; value: string }[];
+  sugar: { day: string; value: string }[];
+  visits_done: string[];
+  visits_next: string[];
+  tasks_done: number;
+  tasks_open: number;
+  warnings: WeekWarning[];
+  lines: string[];
+}
+
+export const weeklySummary = {
+  get: (familyId: string, careProfileId: string, end?: string) =>
+    get<WeeklySummaryOut>(
+      `/api/families/${familyId}/care-profiles/${careProfileId}/weekly-summary${end ? `?end=${end}` : ""}`,
+    ),
+};
+
+// ---- visit prep (verified against api/weekly_summary.py and services/today_plan.py) ----
+
+export interface VisitPrepOut {
+  points: { kind: "bp_high" | "sugar_high" | "missed" | "said" | "allergy"; count: number; value: string | null }[];
+  refills: { medicine_id: string; name: string; left: number | null; refill_date: string | null;
+    ask_name: string | null; asked: boolean }[];
+}
+
+export const visitPrep = {
+  get: (familyId: string, careProfileId: string) =>
+    get<VisitPrepOut>(`/api/families/${familyId}/care-profiles/${careProfileId}/weekly-summary/visit-prep`),
+};
+
+// ---- the parent's circle (verified against api/care_circle.py) ----
+
+export type { CardOut, CirclePerson, HelpKind, HelpOut, PostOut } from "./parentApi";
+
+export interface ContactOut {
+  id: string;
+  name: string;
+  role: string;
+  phone: string | null;
+  address: string | null;
+  birthday_month: number | null;
+  birthday_day: number | null;
+  sort_order: number;
+}
+
+export type ContactIn = Partial<Omit<ContactOut, "id">>;
+
+const cpBase = (familyId: string, careProfileId: string) => `/api/families/${familyId}/care-profiles/${careProfileId}`;
+
+export const circle = {
+  help: (familyId: string) => get<HelpOut[]>(`/api/families/${familyId}/help`),
+  decide: (familyId: string, helpId: string, status: HelpOut["status"], amount?: number | null) =>
+    patch<HelpOut>(`/api/families/${familyId}/help/${helpId}`, { status, amount: amount ?? null }),
+  posts: (familyId: string, careProfileId: string) => get<PostOut[]>(`${cpBase(familyId, careProfileId)}/posts`),
+  addPost: (familyId: string, careProfileId: string, kind: PostOut["kind"], text: string, file?: Blob | null) => {
+    const form = new FormData();
+    form.append("kind", kind);
+    if (text) form.append("text", text);
+    if (file) form.append("file", file, file instanceof File ? file.name : "voice.webm");
+    return post<PostOut>(`${cpBase(familyId, careProfileId)}/posts`, form);
+  },
+  contacts: (familyId: string, careProfileId: string) => get<ContactOut[]>(`${cpBase(familyId, careProfileId)}/contacts`),
+  addContact: (familyId: string, careProfileId: string, body: ContactIn) =>
+    post<ContactOut>(`${cpBase(familyId, careProfileId)}/contacts`, body),
+  updateContact: (familyId: string, contactId: string, body: ContactIn) =>
+    patch<ContactOut>(`/api/families/${familyId}/contacts/${contactId}`, body),
+  removeContact: (familyId: string, contactId: string) => del(`/api/families/${familyId}/contacts/${contactId}`),
+  card: (familyId: string, careProfileId: string) => get<CardOut>(`${cpBase(familyId, careProfileId)}/card`),
+  saveCard: (
+    familyId: string,
+    careProfileId: string,
+    body: Partial<Pick<CardOut, "blood_group" | "emergency_name" | "emergency_phone" | "notes">>,
+  ) => put<CardOut>(`${cpBase(familyId, careProfileId)}/card`, body),
+};
+
+// Photos and voice notes need the auth header, so they load as blob URLs.
+export async function fetchAuthedBlob(path: string): Promise<string | null> {
+  const token = getSessionToken();
+  const res = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  return res.ok ? URL.createObjectURL(await res.blob()) : null;
+}
+
+// ---------- medical file, siblings, paperwork, carer, video ----------
+
+export type DocKind = "prescription" | "lab" | "scan" | "discharge" | "insurance" | "other";
+
+export interface MedicalDocOut {
+  id: string;
+  kind: DocKind;
+  title: string;
+  doc_date: string | null;
+  text: string | null;
+  has_file: boolean;
+  file_name: string | null;
+  created_at: string;
+  file_url: string | null;
+  match: string | null;
+}
+
+export interface MedicalLinkOut {
+  id: string;
+  token: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface SharedFileOut {
+  card: CardOut;
+  expires_at: string;
+  documents: MedicalDocOut[];
+}
+
+export interface SharingOut {
+  total: number;
+  share: number;
+  balances: { user_id: string; name: string; paid: number; share: number; balance: number }[];
+  expenses: { id: string; what: string; amount: number; spent_on: string; paid_by: string }[];
+  visits_this_month: { user_id: string; name: string; count: number }[];
+  visits: { id: string; name: string; visit_date: string; note: string | null; appointment_id: string | null }[];
+  last_appointment: { id: string; date: string; provider: string | null; reason: string | null; went: string | null } | null;
+  members: { user_id: string; name: string }[];
+}
+
+export type PaperKind = "life_certificate" | "income_tax" | "bank_kyc" | "property_tax" | "insurance" | "other";
+
+export interface PaperOut {
+  id: string;
+  kind: PaperKind;
+  title: string;
+  due_date: string;
+  note: string | null;
+  done_on: string | null;
+  source: "paperwork" | "insurance";
+  days_left: number | null;
+}
+
+export interface CarerDayOut {
+  name: string;
+  meals: { meal: "breakfast" | "lunch" | "dinner"; done: boolean }[];
+  doses: { medicine_id: string; name: string; slot: string; status: string; due_at: string }[];
+  reports: { id: string; kind: "concern" | "note"; text: string; by: string; created_at: string }[];
+}
+
+export interface CallOut {
+  id: string;
+  status: "ringing" | "live" | "ended";
+  answer: string | null;
+}
+
+export const medicalFile = {
+  list: (familyId: string, careProfileId: string, q?: string) =>
+    get<MedicalDocOut[]>(`${cpBase(familyId, careProfileId)}/medical-file${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  add: (
+    familyId: string,
+    careProfileId: string,
+    fields: { kind?: DocKind | ""; title?: string; doc_date?: string; text?: string; file?: File | null },
+  ) => {
+    const form = new FormData();
+    if (fields.kind) form.append("kind", fields.kind);
+    if (fields.title) form.append("title", fields.title);
+    if (fields.doc_date) form.append("doc_date", fields.doc_date);
+    if (fields.text) form.append("text", fields.text);
+    if (fields.file) form.append("file", fields.file, fields.file.name);
+    return post<MedicalDocOut>(`${cpBase(familyId, careProfileId)}/medical-file`, form);
+  },
+  remove: (familyId: string, docId: string) => del(`/api/families/${familyId}/medical-file/${docId}`),
+  links: (familyId: string, careProfileId: string) =>
+    get<MedicalLinkOut[]>(`${cpBase(familyId, careProfileId)}/medical-file/links`),
+  share: (familyId: string, careProfileId: string, days: 1 | 7 | 30) =>
+    post<MedicalLinkOut>(`${cpBase(familyId, careProfileId)}/medical-file/links`, { days }),
+  revoke: (familyId: string, linkId: string) => del(`/api/families/${familyId}/medical-links/${linkId}`),
+  shared: (token: string) => get<SharedFileOut>(`/api/medical-file/${encodeURIComponent(token)}`),
+};
+
+export const siblings = {
+  get: (familyId: string, careProfileId: string) => get<SharingOut>(`${cpBase(familyId, careProfileId)}/sharing`),
+  addExpense: (
+    familyId: string,
+    careProfileId: string,
+    body: { amount: number; what: string; spent_on: string; paid_by_user_id: string | null },
+  ) => post<{ id: string }>(`${cpBase(familyId, careProfileId)}/expenses`, body),
+  removeExpense: (familyId: string, id: string) => del(`/api/families/${familyId}/expenses/${id}`),
+  addVisit: (
+    familyId: string,
+    careProfileId: string,
+    body: { visit_date: string; appointment_id: string | null; note: string | null },
+  ) => post<{ id: string }>(`${cpBase(familyId, careProfileId)}/visits`, body),
+};
+
+export const paperwork = {
+  list: (familyId: string, careProfileId: string) => get<PaperOut[]>(`${cpBase(familyId, careProfileId)}/paperwork`),
+  add: (
+    familyId: string,
+    careProfileId: string,
+    body: { kind: PaperKind; title: string | null; due_date: string; note: string | null },
+  ) => post<{ id: string }>(`${cpBase(familyId, careProfileId)}/paperwork`, body),
+  addUsual: (familyId: string, careProfileId: string) =>
+    post<{ added: number }>(`${cpBase(familyId, careProfileId)}/paperwork/usual`),
+  done: (familyId: string, id: string) =>
+    post<{ next_due: string | null }>(`/api/families/${familyId}/paperwork/${id}/done`),
+  remove: (familyId: string, id: string) => del(`/api/families/${familyId}/paperwork/${id}`),
+};
+
+export const carer = {
+  day: (familyId: string, careProfileId: string) => get<CarerDayOut>(`${cpBase(familyId, careProfileId)}/carer`),
+  meal: (familyId: string, careProfileId: string, meal: string) =>
+    post<void>(`${cpBase(familyId, careProfileId)}/carer/meals`, { meal, note: null }),
+  dose: (familyId: string, careProfileId: string, medicine_id: string, slot: string, status: "taken" | "skipped") =>
+    post<void>(`${cpBase(familyId, careProfileId)}/carer/doses`, { medicine_id, slot, status }),
+  report: (familyId: string, careProfileId: string, kind: "concern" | "note", text: string) =>
+    post<{ id: string }>(`${cpBase(familyId, careProfileId)}/carer/reports`, { kind, text }),
+};
+
+export const videoCalls = {
+  start: (familyId: string, careProfileId: string, sdp: string) =>
+    post<CallOut>(`${cpBase(familyId, careProfileId)}/calls`, { sdp }),
+  get: (familyId: string, callId: string) => get<CallOut>(`/api/families/${familyId}/calls/${callId}`),
+  end: (familyId: string, callId: string) => post<CallOut>(`/api/families/${familyId}/calls/${callId}/end`),
+};

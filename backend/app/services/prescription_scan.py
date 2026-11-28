@@ -8,6 +8,7 @@ import json
 import re
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from app.core.config import settings
 from app.models.care_profile import CareProfile
 from app.models.medicine import Medicine
 from app.models.prescription_scan import MedicineReminder, PrescriptionScan
+from app.services import health_notes
 from app.services.activity import log_activity
 from app.services.errors import NotFound
 from app.services.notifications import notify
@@ -36,10 +38,14 @@ PROMPT = (
     'Classify it as "prescription" (a doctor\'s medicine prescription), "invoice" (a bill or receipt), '
     'or "other". For a prescription, list every medicine with its name, dose, instructions, and its '
     'dosing times as 24-hour "HH:MM" strings (for example "08:00" or "20:30"). '
+    "For any document (a prescription, a lab report, a discharge summary), also list the patient's diagnosed "
+    "conditions, allergies, and readings it states (blood pressure as \"140/90\", sugar, weight in kg, pulse). "
     "Respond only with JSON in this shape: "
     '{"document_type": "prescription" | "invoice" | "other", '
-    '"medicines": [{"name": string, "dose": string, "instructions": string, "times": ["HH:MM"]}]}. '
-    "Use an empty medicines list for anything that is not a prescription."
+    '"medicines": [{"name": string, "dose": string, "instructions": string, "times": ["HH:MM"]}], '
+    '"health_notes": {"conditions": [string], "allergies": [string], '
+    '"readings": [{"kind": "bp" | "sugar" | "weight" | "pulse", "value": string}]}}. '
+    "Use an empty medicines list for anything that is not a prescription, and empty lists for anything not stated."
 )
 
 
@@ -116,7 +122,37 @@ def _normalise(result: Any) -> dict[str, Any]:
                 "times": [str(t).strip() for t in times if isinstance(t, str)],
             }
         )
-    return {"document_type": document_type, "medicines": medicines}
+    return {"document_type": document_type, "medicines": medicines, "health_notes": _health_notes(result)}
+
+
+def _health_notes(result: dict[str, Any]) -> list[health_notes.Found]:
+    """The conditions, allergies and readings Gemini read off the document."""
+    raw = result.get("health_notes")
+    if not isinstance(raw, dict):
+        return []
+    found: list[health_notes.Found] = []
+    for kind, key in ((health_notes.CONDITION, "conditions"), (health_notes.ALLERGY, "allergies")):
+        for item in raw.get(key) or []:
+            label = _text(item)
+            if label and label.lower() not in health_notes.NOTHING:
+                found.append(health_notes.Found(kind, label[:120]))
+    for item in raw.get("readings") or []:
+        if isinstance(item, dict):
+            reading = health_notes.parse_reading(_text(item.get("kind")), _text(item.get("value")))
+            if reading is not None:
+                found.append(reading)
+    return found
+
+
+def tracking_lines(proposed: dict | None) -> list[str]:
+    """What the app will keep track of from an upload, one plain line each."""
+    lines = []
+    for medicine in (proposed or {}).get("medicines") or []:
+        times = medicine.get("times") or []
+        name = " ".join(filter(None, (medicine.get("name"), medicine.get("dose"))))
+        lines.append(f"{name}, reminders at {', '.join(times)}" if times else f"{name} (set the times when you confirm)")
+    lines += (proposed or {}).get("health_notes") or []
+    return lines
 
 
 def _profile_in_family(db: Session, family_id: str, profile_id: str) -> CareProfile:
@@ -151,13 +187,21 @@ def create_scan(
         raise ValueError("Uploaded image must be 10 MB or smaller")
     result = scan_document(image_bytes, mime_type)
     is_prescription = result["document_type"] == "prescription"
+    profile = db.get(CareProfile, care_profile_id)
+    noted = health_notes.save_found(
+        db, profile, result.get("health_notes") or [], "upload", f"{result['document_type']} upload", actor_id,
+        datetime.now(timezone.utc),
+    )
     scan = PrescriptionScan(
         family_id=family_id,
         care_profile_id=care_profile_id,
         uploaded_by_user_id=actor_id,
         document_type=result["document_type"],
         status="pending_review" if is_prescription else "rejected",
-        proposed={"medicines": result["medicines"]} if is_prescription else {"medicines": []},
+        proposed={
+            "medicines": result["medicines"] if is_prescription else [],
+            "health_notes": [health_notes.describe(n) for n in noted],
+        },
         image_data=image_bytes if is_prescription else None,
         image_content_type=mime_type if is_prescription else None,
     )

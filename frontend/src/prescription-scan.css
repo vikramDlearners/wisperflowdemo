@@ -412,3 +412,17 @@
     width: 100%;
   }
 }
+
+/* What the app keeps track of from an upload */
+.ps-tracking {
+  display: block;
+  background: var(--pp-teal-soft);
+  color: var(--pp-teal-dark);
+}
+.ps-tracking ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+.ps-tracking li {
+  margin: 2px 0;
+}

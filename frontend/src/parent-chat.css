@@ -832,3 +832,145 @@
 .pc-who-btn:hover { border-color: var(--pc-teal); }
 .pc-who-btn:focus-visible, .pc-switch:focus-visible { outline: 3px solid var(--pc-teal); outline-offset: 2px; }
 .pc-who-name { min-width: 0; font-size: 24px; font-weight: 700; overflow-wrap: anywhere; }
+
+/* The daily "I'm fine" button (components/ParentFine.tsx). */
+.pc-fine {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  background: var(--pc-teal-soft);
+  border-bottom: 1px solid var(--pc-line);
+}
+.pc-fine--asked {
+  background: #fff4e0;
+}
+.pc-fine-btn {
+  min-height: 56px;
+  padding: 0 28px;
+  border: none;
+  border-radius: 28px;
+  background: var(--pc-teal);
+  color: #fff;
+  font-size: 1.35rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pc-fine-btn:hover:not(:disabled) {
+  background: var(--pc-teal-dark);
+}
+.pc-fine-btn:focus-visible {
+  outline: 3px solid var(--pc-ink);
+  outline-offset: 2px;
+}
+.pc-fine-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+.pc-fine-hint {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--pc-ink);
+}
+.pc-fine--done {
+  font-size: 1.1rem;
+  color: var(--pc-teal-dark);
+  font-weight: 600;
+}
+
+/* Today's plan under the "I'm fine" button (components/ParentToday.tsx). */
+.pc-today {
+  padding: 8px 20px 12px;
+  border-bottom: 1px solid var(--pc-line);
+  font-size: 1.15rem;
+  color: var(--pc-ink);
+}
+.pc-today > summary {
+  cursor: pointer;
+  font-size: 1.3rem;
+  font-weight: 700;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pc-today h3 {
+  margin: 12px 0 4px;
+  font-size: 1.15rem;
+}
+.pc-today ul {
+  margin: 0;
+  padding-left: 1.2em;
+  line-height: 1.6;
+}
+.pc-today-refill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fff4e0;
+}
+.pc-today-refill p {
+  margin: 0;
+  flex: 1 1 240px;
+}
+
+/* The parent's circle under today's plan (components/ParentCircle.tsx). */
+.pc-circle-calls,
+.pc-circle-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pc-circle-nudge {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #eef6ff;
+}
+.pc-posts {
+  list-style: none;
+  padding-left: 0;
+}
+.pc-posts li {
+  margin: 8px 0;
+}
+.pc-post-photo {
+  display: block;
+  max-width: min(100%, 320px);
+  border-radius: 12px;
+  margin-top: 6px;
+}
+.pc-circle-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.pc-circle-toggle input {
+  width: 24px;
+  height: 24px;
+}
+.pc-card {
+  background: #fff;
+  color: var(--pc-ink);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 520px;
+  width: calc(100% - 32px);
+  max-height: 90vh;
+  overflow: auto;
+  font-size: 1.2rem;
+}
+.pc-card-row {
+  margin: 10px 0;
+}
+.pc-card dt {
+  font-weight: 700;
+}
+.pc-card dd {
+  margin: 0;
+}

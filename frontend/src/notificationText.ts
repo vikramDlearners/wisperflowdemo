@@ -34,6 +34,30 @@ export function notificationLine(n: Pick<NotificationOut, "type" | "payload">): 
         text: said ? `${parent} reported: "${said}"` : `${parent} reported something that needs attention.`,
         urgent: true,
       };
+    case "checkin.fine":
+      return {
+        text: p?.after_alert ? `${parent} has now tapped "I'm fine".` : `${parent} tapped "I'm fine" today. All is well.`,
+        urgent: false,
+      };
+    case "refill.requested":
+      return {
+        text: `${parent} asked for a refill of ${p?.medicine ?? "a medicine"}${typeof p?.left === "number" ? ` (about ${p.left} left)` : ""}${p?.asked_name ? `. ${p.asked_name} has a task to order it.` : "."}`,
+        urgent: false,
+      };
+    case "summary.weekly":
+      return {
+        text: p?.warnings ? `${parent}'s week is ready, with ${p.warnings} thing(s) to watch.` : `${parent}'s week is ready.`,
+        urgent: false,
+      };
+    case "pattern.warning":
+      return { text: typeof p?.text === "string" ? p.text : `Something to watch for ${parent}.`, urgent: true };
+    case "checkin.fine_ask":
+      return { text: `CareCircle asked ${parent} to tap "I'm fine".`, urgent: false };
+    case "checkin.fine_missed":
+      return {
+        text: `${parent} hasn't tapped "I'm fine" today and didn't answer when asked. You may want to call.`,
+        urgent: true,
+      };
     case "medicine.missed":
       return {
         text: p?.child

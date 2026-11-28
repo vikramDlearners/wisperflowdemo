@@ -9,7 +9,7 @@ Like the rest of /api/parent, the optional X-Care-Profile-Id header picks the pr
 chat page; without it, the account's own profile is used. 409 when the parent is not linked yet.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, Response
 from pydantic import BaseModel, Field
@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser, DbSession
 from app.models.parent_note import ParentNote
 from app.models.user import User
+from app.services import health_notes
 from app.services import parent_notes as svc
 from app.services.parent_context import resolve_parent
 
@@ -47,6 +48,8 @@ class ParentNoteOut(BaseModel):
     task_id: str | None
     reminded: bool
     created_at: datetime
+    # Health details read from the note that the app now keeps track of ("BP high", "allergy to peanuts").
+    tracking: list[str] = []
 
 
 class NotePersonOut(BaseModel):
@@ -98,7 +101,10 @@ def create_note(
 ) -> ParentNoteOut:
     ctx = resolve_parent(db, user, care_profile_id)
     note = svc.create_note(db, ctx, body.text, body.remind_at, body.remind_user_id, body.send_reminder)
-    return _out(db, note)
+    found = health_notes.read_notes(note.text)
+    saved = health_notes.save_found(db, ctx.profile, found, "chat", note.text, user.id, datetime.now(timezone.utc))
+    db.commit()
+    return _out(db, note).model_copy(update={"tracking": [health_notes.describe(n) for n in saved]})
 
 
 @router.delete("/{note_id}", status_code=204)

@@ -92,10 +92,16 @@ def _email(users: list[User], subject: str, body: str) -> None:
             logger.exception("Could not email user %s: %s", user.id, subject)
 
 
+def _shares_words(db: Session, care_profile_id: str) -> bool:
+    from app.services.care_circle import shares_words  # care_circle imports this module
+
+    return shares_words(db, care_profile_id)
+
+
 def notify_family_update(db: Session, ctx: ParentContext, checkin: HealthCheckin) -> None:
     for user in other_members(db, ctx):
         notify(db, user.id, "checkin.update", family_id=ctx.family_id,
-               payload=_payload(ctx, checkin, checkin.health_text))
+               payload=_payload(ctx, checkin, checkin.health_text if _shares_words(db, ctx.profile.id) else None))
 
 
 def notify_family_urgent(db: Session, ctx: ParentContext, checkin: HealthCheckin, text: str) -> None:
@@ -228,6 +234,8 @@ def _summary_body(db: Session, checkin: HealthCheckin, profile: CareProfile) -> 
     parts = [f"Check-in summary for {name} on {checkin.checkin_date.strftime('%d %b %Y')}.", ""]
     if _no_checkin(db, checkin):
         parts.append(f"No check-in today: {name} did not talk to the assistant on this day.")
+    elif not _shares_words(db, profile.id):
+        parts.append(f"{name} checked in today and chose to keep what they said private.")
     else:
         parts += [
             f"How {name} is feeling:",

@@ -349,6 +349,7 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
                   <span>No medicines were added. Please upload a photo of the doctor's prescription instead.</span>
                 </div>
               )}
+              {scan?.status === "rejected" && <TrackingList lines={scan.tracking} />}
 
               {profiles.length > 0 && (
                 <label className="pp-field ps-profile">
@@ -427,6 +428,7 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
         {/* Step 2: review proposed medicines */}
         {step === 2 && scan && (
           <form onSubmit={handleConfirm} noValidate>
+            <TrackingList lines={scan.tracking} />
             {error?.kind === "notPending" && (
               <div className="ps-banner ps-banner-warn" role="alert">
                 <strong>This scan can't be confirmed any more.</strong>
@@ -626,5 +628,20 @@ export default function PrescriptionScan({ familyId }: PrescriptionScanProps) {
         )}
       </div>
     </WorkspaceLayout>
+  );
+}
+
+// What the app keeps track of from this upload, as the AI's reply to it.
+function TrackingList({ lines }: { lines?: string[] }) {
+  if (!lines || lines.length === 0) return null;
+  return (
+    <div className="ps-banner ps-inline ps-tracking" role="status">
+      <strong>From this document, I'll keep track of:</strong>
+      <ul>
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -216,6 +216,26 @@ export function sendEmergency(): Promise<EmergencyOut> {
   return send<EmergencyOut>("/api/parent/emergency", { method: "POST" });
 }
 
+// ---------- The daily "I'm fine" button (backend/app/api/parent.py) ----------
+//   GET  /api/parent/fine  -> FineOut (today's state)
+//   POST /api/parent/fine  -> FineOut (tells the family all is well, once a day)
+
+export interface FineOut {
+  day: string;
+  fine_at: string | null;
+  /** The app asked the parent at 11:00 because the button was not pressed yet. */
+  asked: boolean;
+  family_told: boolean;
+}
+
+export function getFine(): Promise<FineOut> {
+  return send<FineOut>("/api/parent/fine", { method: "GET" });
+}
+
+export function sendFine(): Promise<FineOut> {
+  return send<FineOut>("/api/parent/fine", { method: "POST" });
+}
+
 // ---------- Parent notes (backend/app/api/parent_notes.py) ----------
 //   GET    /api/parent/notes          -> ParentNote[] (newest first)
 //   POST   /api/parent/notes          {text, remind_at?, remind_user_id?, send_reminder?} -> ParentNote
@@ -274,3 +294,139 @@ export async function deleteParentNote(id: string): Promise<void> {
   });
   if (!res.ok && res.status !== 404) throw new ApiError(res.status, res.statusText || "Request failed");
 }
+
+// ---------- Today's plan and refills (backend/app/api/parent.py, app/services/today_plan.py) ----------
+//   GET  /api/parent/today               -> TodayPlanOut
+//   POST /api/parent/refills/{medicine}  -> RefillOut (makes one task for the family; repeat-safe)
+
+export interface RefillOut {
+  medicine_id: string;
+  name: string;
+  left: number | null;
+  refill_date: string | null;
+  ask_name: string | null;
+  asked: boolean;
+}
+
+export interface VisitPoint {
+  kind: "bp_high" | "sugar_high" | "missed" | "said" | "allergy";
+  count: number;
+  value: string | null;
+}
+
+export interface TodayPlanOut {
+  day: string;
+  doses: { medicine_id: string; name: string; time: string; status: string }[];
+  visits: { id: string; day: string; time: string; provider: string; reason: string; location: string | null }[];
+  tasks: string[];
+  refills: RefillOut[];
+  visit_points: VisitPoint[];
+  birthdays: { name: string; phone: string | null; today: boolean }[];
+}
+
+export function getToday(): Promise<TodayPlanOut> {
+  return send<TodayPlanOut>("/api/parent/today", { method: "GET" });
+}
+
+export function askRefill(medicineId: string): Promise<RefillOut> {
+  return send<RefillOut>(`/api/parent/refills/${medicineId}`, { method: "POST" });
+}
+
+// ---------- The parent's circle (backend/app/api/care_circle.py) ----------
+
+export type HelpKind = "bill" | "groceries" | "cab" | "nurse" | "physio" | "other";
+
+export interface HelpOut {
+  id: string;
+  care_profile_id: string;
+  kind: HelpKind;
+  note: string | null;
+  status: "asked" | "approved" | "declined" | "done";
+  task_id: string | null;
+  amount: number | null;
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface PostOut {
+  id: string;
+  kind: "text" | "photo" | "voice";
+  text: string | null;
+  author: string | null;
+  created_at: string;
+  seen_at: string | null;
+  media_url: string | null;
+}
+
+export interface CirclePerson {
+  name: string;
+  role: string;
+  phone: string;
+}
+
+export interface CardOut {
+  name: string;
+  blood_group: string | null;
+  allergies: string | null;
+  medicines: string[];
+  doctor: string | null;
+  doctor_phone: string | null;
+  hospital: string | null;
+  emergency_name: string | null;
+  emergency_phone: string | null;
+  notes: string | null;
+  emergency_contact: { name: string; phone: string } | null;
+  insurance: { insurer: string; policy_number: string | null; helpline: string | null } | null;
+}
+
+export interface PrivacyOut {
+  share_words: boolean;
+  share_chats: boolean;
+  video_auto_answer: boolean;
+}
+
+export interface NudgeOut {
+  kind: "birthday" | "call" | "walk";
+  name: string | null;
+  phone: string | null;
+}
+
+const json = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+export const askHelp = (kind: HelpKind, note: string | null) => send<HelpOut>("/api/parent/help", json({ kind, note }));
+export const getMyHelp = () => send<HelpOut[]>("/api/parent/help", { method: "GET" });
+export const getPosts = () => send<PostOut[]>("/api/parent/posts", { method: "GET" });
+export const getCircle = () => send<CirclePerson[]>("/api/parent/circle", { method: "GET" });
+export const getCard = () => send<CardOut>("/api/parent/card", { method: "GET" });
+export const getPrivacy = () => send<PrivacyOut>("/api/parent/privacy", { method: "GET" });
+export const setPrivacy = (values: Partial<PrivacyOut>) =>
+  send<PrivacyOut>("/api/parent/privacy", { ...json(values), method: "PUT" });
+export const getNudge = () => send<NudgeOut>("/api/parent/nudge", { method: "GET" });
+
+// Photos and voice notes need the auth header, so they load as blob URLs.
+export async function fetchPostMedia(url: string): Promise<string | null> {
+  const res = await fetch(`${API_BASE_URL}${url}`, { headers: authHeaders() });
+  return res.ok ? URL.createObjectURL(await res.blob()) : null;
+}
+
+// Video check-ins: a family member rings, the parent's app asks every few seconds whether a call is ringing.
+export interface IncomingCall {
+  id: string;
+  caller: string;
+  offer: string;
+  auto_answer: boolean;
+}
+export interface ParentCallOut {
+  id: string;
+  status: "ringing" | "live" | "ended";
+  answer: string | null;
+}
+export const getIncomingCall = () => send<IncomingCall | null>("/api/parent/calls/incoming", { method: "GET" });
+export const getParentCall = (id: string) => send<ParentCallOut>(`/api/parent/calls/${id}`, { method: "GET" });
+export const answerCall = (id: string, sdp: string) =>
+  send<ParentCallOut>(`/api/parent/calls/${id}/answer`, json({ sdp }));
+export const endParentCall = (id: string) => send<ParentCallOut>(`/api/parent/calls/${id}/end`, json({}));

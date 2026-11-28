@@ -132,7 +132,8 @@ def test_scheduler_has_its_jobs_and_is_not_started():
     sched = scheduler_svc.build_scheduler()
     jobs = {j.id: j for j in sched.get_jobs()}
     assert set(jobs) == {"alert_missed_doses", "send_daily_summaries", "summarise_conversations",
-                         "deliver_note_reminders"}
+                         "deliver_note_reminders", "nudge_fine_checkins", "send_weekly_summaries",
+                         "send_pattern_warnings"}
     assert jobs["alert_missed_doses"].trigger.interval == timedelta(minutes=10)
     assert jobs["send_daily_summaries"].trigger.interval == timedelta(minutes=30)
     assert jobs["summarise_conversations"].trigger.interval == timedelta(minutes=2)

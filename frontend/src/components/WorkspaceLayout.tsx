@@ -17,7 +17,14 @@ export type WorkspacePage =
   | "tasks"
   | "appointments"
   | "records"
+  | "health"
+  | "week"
   | "insurance"
+  | "circle"
+  | "file"
+  | "sharing"
+  | "paperwork"
+  | "carer"
   | "timeline"
   | "members"
   | "manage-profile"
@@ -110,13 +117,20 @@ export default function WorkspaceLayout({ familyId, current, title, children }: 
   const workspace: NavItem[] = [
     { key: "chat", icon: "✦", label: "Chat", to: fam("/chat") },
     { key: "overview", icon: "⌂", label: "Overview", to: fam("") },
+    { key: "week", icon: "◷", label: "This week", to: fam("/week") },
     { key: "parent-profile", icon: "♡", label: "Care profile", to: "/parent-profile" },
     { key: "medicines", icon: "▤", label: "Medicines", to: fam("/medicines") },
     { key: "activity", icon: "◉", label: "CareVoice activity", to: fam("/activity") },
     { key: "tasks", icon: "☷", label: "Tasks", to: fam("/tasks") },
     { key: "appointments", icon: "▦", label: "Appointments", to: fam("/appointments") },
     { key: "records", icon: "▧", label: "Records", to: fam("/records") },
+    { key: "health", icon: "♥", label: "Health notes", to: fam("/health") },
     { key: "insurance", icon: "⛨", label: "Insurance & renewals", to: fam("/insurance") },
+    { key: "circle", icon: "👪", label: "Care circle", to: fam("/circle") },
+    { key: "file", icon: "🗂", label: "Medical file", to: fam("/file") },
+    { key: "sharing", icon: "⚖", label: "Sharing care", to: fam("/sharing") },
+    { key: "paperwork", icon: "📄", label: "Paperwork", to: fam("/paperwork") },
+    { key: "carer", icon: "🧺", label: "Carer's day", to: fam("/carer") },
   ];
   const settings: NavItem[] = [
     { key: "members", icon: "♙", label: "Family members", to: fam("/members") },

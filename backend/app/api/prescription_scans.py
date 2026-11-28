@@ -21,6 +21,7 @@ def _out(scan: PrescriptionScan) -> PrescriptionScanOut:
         document_type=scan.document_type,
         status=scan.status,
         proposed=scan.proposed,
+        tracking=svc.tracking_lines(scan.proposed),
     )
 
 

@@ -10,9 +10,12 @@ from app.api import (
     activity,
     appointments,
     auth,
+    care_circle,
+    care_family,
     care_profiles,
     conversation_summaries,
     families,
+    health_notes,
     insurance,
     medicines,
     notifications,
@@ -23,6 +26,7 @@ from app.api import (
     settings,
     task_links,
     tasks,
+    weekly_summary,
 )
 from app.core.config import settings as app_settings
 from app.services import scheduler
@@ -113,5 +117,13 @@ for _router in (
     settings.router,
     parent.router,
     parent_notes.router,
+    health_notes.family_router,
+    health_notes.parent_router,
+    weekly_summary.router,
+    care_circle.family_router,
+    care_circle.parent_router,
+    care_family.family_router,
+    care_family.parent_router,
+    care_family.public_router,
 ):
     app.include_router(_router)
