@@ -221,3 +221,56 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Month by month (a range of months) */
+.ma-trend-wrap {
+  overflow-x: auto;
+}
+.ma-trend {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.ma-trend th,
+.ma-trend td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #eef2f1;
+  text-align: left;
+  white-space: nowrap;
+}
+.ma-trend thead th {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--pp-muted);
+}
+.ma-trend tbody th {
+  font-weight: 600;
+}
+.ma-trend td.is-alert {
+  color: #b42318;
+  font-weight: 700;
+}
+.ma-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ma-meter small {
+  color: var(--pp-muted);
+}
+.ma-meter-bar {
+  display: inline-block;
+  width: 64px;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f1;
+}
+.ma-meter-bar span {
+  display: block;
+  height: 100%;
+  background: #2e9e6b;
+}
+.ma-meter-bar.is-money span {
+  background: #3b7dd8;
+}

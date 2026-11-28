@@ -27,6 +27,11 @@ const SPEND_KIND: Record<string, string> = { medicine: "💊", appointment: "�
 export default function MonthlyAnalysisCard({ data }: { data: MonthlyAnalysis }) {
   const { medicines: med, spending: spend, conversations: talk, incidents, diet, notes } = data;
   const mealTotal = diet.meals.breakfast + diet.meals.lunch + diet.meals.dinner;
+  const incidentCount = data.incident_count ?? incidents.length;
+  const days = talk.days_in_period ?? talk.days_in_month ?? 0;
+  const months = data.months ?? [];
+  const ranged = months.length > 1;
+  const maxSpent = Math.max(1, ...months.map((m) => m.spent ?? 0));
 
   return (
     <section className="ma-card" aria-label={`${data.period.label} analysis for ${data.parent.name}`}>
@@ -63,16 +68,70 @@ export default function MonthlyAnalysisCard({ data }: { data: MonthlyAnalysis })
           <strong>{talk.conversations}</strong>
           <span>Conversations</span>
           <em>
-            Talked on {talk.days_talked} of {talk.days_in_month} days
+            Talked on {talk.days_talked} of {days} days
           </em>
         </div>
-        <div className={`ma-tile${incidents.length ? " is-alert" : ""}`}>
+        <div className={`ma-tile${incidentCount ? " is-alert" : ""}`}>
           <span className="ma-tile-icon" aria-hidden="true">⚠️</span>
-          <strong>{incidents.length}</strong>
+          <strong>{incidentCount}</strong>
           <span>Major incidents</span>
-          <em>{incidents.length ? "See below" : "A calm month"}</em>
+          <em>{incidentCount ? "See below" : ranged ? "A calm period" : "A calm month"}</em>
         </div>
       </div>
+
+      {ranged && (
+        <div className="ma-section">
+          <h3>Month by month</h3>
+          <div className="ma-trend-wrap">
+            <table className="ma-trend">
+              <thead>
+                <tr>
+                  <th scope="col">Month</th>
+                  {med && <th scope="col">Medicines taken</th>}
+                  {spend && <th scope="col">Spent</th>}
+                  <th scope="col">Chats</th>
+                  <th scope="col">Incidents</th>
+                  <th scope="col">Meal days</th>
+                </tr>
+              </thead>
+              <tbody>
+                {months.map((m) => (
+                  <tr key={m.month}>
+                    <th scope="row">{m.label}</th>
+                    {med && (
+                      <td>
+                        {m.recorded ? (
+                          <span className="ma-meter">
+                            <span className="ma-meter-bar" aria-hidden="true">
+                              <span style={{ width: `${m.taken_percent ?? 0}%` }} />
+                            </span>
+                            {m.taken_percent}%<small> ({m.taken}/{m.recorded})</small>
+                          </span>
+                        ) : (
+                          <span className="ma-muted">—</span>
+                        )}
+                      </td>
+                    )}
+                    {spend && (
+                      <td>
+                        <span className="ma-meter">
+                          <span className="ma-meter-bar is-money" aria-hidden="true">
+                            <span style={{ width: `${(100 * (m.spent ?? 0)) / maxSpent}%` }} />
+                          </span>
+                          {rupees(m.spent ?? 0)}
+                        </span>
+                      </td>
+                    )}
+                    <td>{m.conversations}</td>
+                    <td className={m.incidents ? "is-alert" : undefined}>{m.incidents}</td>
+                    <td>{m.meal_days}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {med && med.by_medicine.length > 0 && (
         <div className="ma-section">
@@ -139,7 +198,10 @@ export default function MonthlyAnalysisCard({ data }: { data: MonthlyAnalysis })
 
       {incidents.length > 0 && (
         <div className="ma-section">
-          <h3>Major incidents</h3>
+          <h3>
+            Major incidents
+            {incidentCount > incidents.length ? ` (newest ${incidents.length} of ${incidentCount})` : ""}
+          </h3>
           <ul className="ma-list">
             {incidents.map((i, n) => (
               <li key={n}>
@@ -155,7 +217,7 @@ export default function MonthlyAnalysisCard({ data }: { data: MonthlyAnalysis })
       <div className="ma-section">
         <h3>Diet</h3>
         {diet.days_reported === 0 ? (
-          <p className="ma-muted">No meals were reported this month.</p>
+          <p className="ma-muted">No meals were reported {ranged ? "in this period" : "this month"}.</p>
         ) : (
           <>
             {diet.summary && <p>{diet.summary}</p>}

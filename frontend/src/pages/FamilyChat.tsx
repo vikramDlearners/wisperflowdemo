@@ -64,9 +64,13 @@ function loadOld(key: string): OldConversation[] {
 /** "Give me last month's analysis" (also "monthly report", "recap"): answered with the analysis card. */
 const ANALYSIS = /\b(?:analys[ie]s|analy[sz]e|analytics|recap|monthly\s+(?:report|summary|review))\b/i;
 
+/** "last 6 months' report", "this year's summary", "last quarter data": also the analysis. */
+const PERIOD = /\b(?:months?|quarter|year)\b/i;
+const PERIOD_ASK = /\b(?:summary|report|review|overview|data|stats|statistics|trends?)\b/i;
+
 /** "Add a task" needs a page, not an answer: the chat itself changes nothing. */
 function pageToOpen(text: string): AskKey | null {
-  if (ANALYSIS.test(text)) return null;
+  if (ANALYSIS.test(text) || (PERIOD.test(text) && PERIOD_ASK.test(text))) return null;
   const key = matchAsk(text);
   return key && (key.endsWith(".add") || key === "prescription.scan") ? key : null;
 }

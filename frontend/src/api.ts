@@ -884,7 +884,15 @@ export interface MonthlyAnalysis {
     items: { kind: "medicine" | "appointment" | "insurance"; label: string; amount: number; date: string }[];
     item_count: number;
   } | null;
-  conversations: { conversations: number; days_talked: number; days_in_month: number; parent_messages: number };
+  conversations: {
+    conversations: number;
+    days_talked: number;
+    days_in_period?: number;
+    days_in_month?: number; // cards saved before ranges were added
+    parent_messages: number;
+  };
+  /** All incidents in the period; `incidents` lists the newest of them. */
+  incident_count?: number;
   incidents: { date: string; kind: "emergency" | "urgent" | "important"; text: string; status: string | null }[];
   diet: {
     days_reported: number;
@@ -894,6 +902,19 @@ export interface MonthlyAnalysis {
     summary: string | null;
   };
   notes: { date: string; source: string; text: string }[];
+  /** One row per month when the period is several months (empty for one month). */
+  months?: {
+    month: string;
+    label: string;
+    taken: number | null;
+    recorded: number | null;
+    taken_percent: number | null;
+    spent: number | null;
+    conversations: number;
+    days_talked: number;
+    incidents: number;
+    meal_days: number;
+  }[];
 }
 
 /** A saved chat, newest first in the list. Only the member who had it can see it. */

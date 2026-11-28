@@ -149,7 +149,7 @@ def test_the_analysis_card(home):
     assert spend["total"] == 13550
     assert spend["items"][0]["label"] == "Insurance: Star"
 
-    assert card["conversations"] == {"conversations": 2, "days_talked": 2, "days_in_month": 31, "parent_messages": 3}
+    assert card["conversations"] == {"conversations": 2, "days_talked": 2, "days_in_period": 31, "parent_messages": 3}
     kinds = [(i["kind"], i["text"]) for i in card["incidents"]]
     assert ("urgent", "Dizzy and fell in the bathroom") in kinds
     assert ("emergency", "Chest pain") in kinds
@@ -226,3 +226,50 @@ def test_an_empty_month(home):
     assert card["diet"]["summary"] is None
     assert "No medicine doses were recorded" in card["overview"]
     assert "no major incidents" in card["overview"]
+
+
+@pytest.mark.parametrize(
+    ("text", "period"),
+    [
+        ("Give me the last 6 months' report data.", (date(2026, 5, 1), date(2026, 10, 31))),
+        ("analysis of the past three months", (date(2026, 8, 1), date(2026, 10, 31))),
+        ("3 months analysis", (date(2026, 8, 1), date(2026, 10, 31))),
+        ("last quarter summary", (date(2026, 8, 1), date(2026, 10, 31))),
+        ("half-year report", None),  # no "last": not a range we know, and no analysis word
+        ("last half year report", (date(2026, 5, 1), date(2026, 10, 31))),
+        ("analysis for the last 24 months", (date(2025, 11, 1), date(2026, 10, 31))),  # at most 12 months
+        ("This year's analysis", (date(2026, 1, 1), date(2026, 11, 30))),
+        ("last year report", (date(2025, 1, 1), date(2025, 12, 31))),
+        ("Analysis from June to October", (date(2026, 6, 1), date(2026, 10, 31))),
+        ("analysis Nov to Feb", (date(2025, 11, 1), date(2026, 2, 28))),
+        ("analysis for May to August 2025", (date(2025, 5, 1), date(2025, 8, 31))),
+    ],
+)
+def test_ranges_of_months(text, period):
+    assert monthly_analysis.asked_period(text, TODAY) == period
+
+
+def test_period_labels():
+    label = monthly_analysis.period_label
+    assert label(date(2026, 10, 1), date(2026, 10, 31)) == "October 2026"
+    assert label(date(2026, 5, 1), date(2026, 10, 31)) == "May – October 2026"
+    assert label(date(2025, 11, 1), date(2026, 2, 28)) == "November 2025 – February 2026"
+
+
+def test_a_range_has_a_row_per_month(home):
+    body = home["ask"]("Analysis from August to October 2026").json()
+    card = body["card"]
+    assert card["period"]["label"] == "August – October 2026"
+    assert card["conversations"]["days_in_period"] == 92
+    assert [m["month"] for m in card["months"]] == ["2026-08", "2026-09", "2026-10"]
+    sep, oct_ = card["months"][1], card["months"][2]
+    assert sep["spent"] == 999  # the medicine bought in September
+    assert (oct_["taken"], oct_["recorded"], oct_["spent"]) == (4, 6, 13550)
+    assert (oct_["conversations"], oct_["incidents"], oct_["meal_days"]) == (2, 3, 2)
+    assert card["spending"]["total"] == 13550 + 999
+    assert card["incident_count"] == 3
+
+
+def test_a_single_month_has_no_rows(home):
+    card = home["ask"]("October 2026 analysis").json()["card"]
+    assert card["months"] == []
