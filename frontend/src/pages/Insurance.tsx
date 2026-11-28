@@ -124,6 +124,9 @@ function messageOf(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.detail : fallback;
 }
 
+/** Ends a notice with one full stop, even after a name like "Co. Ltd.". */
+const sentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
+
 const amount = (s: string) => (s.trim() === "" ? null : Math.round(Number(s) * 100) / 100);
 
 export default function Insurance({ familyId }: { familyId: string }) {
@@ -312,8 +315,7 @@ export default function Insurance({ familyId }: { familyId: string }) {
         docProblem = messageOf(err, "the upload failed");
       }
       const done = draft.id ? "Policy updated" : `Added ${saved.insurer}`;
-      const sentence = done.endsWith(".") ? done : `${done}.`; // "Co. Ltd." already ends with a full stop
-      setNotice(docProblem ? `${done}, but the document wasn't attached: ${docProblem}` : sentence);
+      setNotice(docProblem ? `${done}, but the document wasn't attached: ${docProblem}` : sentence(done));
       setDraft(null);
       setReadNote(null);
     } catch (err) {
@@ -353,7 +355,7 @@ export default function Insurance({ familyId }: { familyId: string }) {
       await api.remove(familyId, p.id);
       setPolicies((list) => list.filter((x) => x.id !== p.id));
       setConfirmDelete(null);
-      setNotice(`Deleted ${p.insurer}.`);
+      setNotice(sentence(`Deleted ${p.insurer}`));
     } catch (err) {
       setError(messageOf(err, "Could not delete the policy."));
     } finally {
