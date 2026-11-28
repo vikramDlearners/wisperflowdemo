@@ -160,27 +160,44 @@ export default function FamilyChat({ familyId }: { familyId: string }) {
     });
   }
 
+  /** Drops a chat that no longer exists on the server from the list and the page. */
+  function forget(conversationId: string) {
+    setConversations((list) => list.filter((c) => c.id !== conversationId));
+    setThreads((t) => {
+      const next = { ...t };
+      delete next[conversationId];
+      return next;
+    });
+  }
+
   async function ask(question: string, conversationId: string | null) {
     setPending({ conversationId, text: question });
     setError(null);
     setBusy(true);
-    try {
+    const answerIn = async (chatId: string | null): Promise<{ id: string; answer: Message }> => {
       const page = pageToOpen(question);
-      let id: string;
-      let answer: Message;
       if (page) {
         const reply = "You can do that here:";
-        id = (await familyChat.log(familyId, { text: question, reply, destination: page, conversation_id: conversationId }))
-          .conversation_id;
-        answer = { role: "assistant", text: reply, destination: page };
-      } else {
-        const out = await familyChat.send(familyId, question, conversationId);
-        id = out.conversation_id;
-        const card = out.card ?? null;
-        let destination = isAskKey(out.destination) ? out.destination : null;
-        if (!destination && !card && out.source === "rules") destination = matchAsk(question);
-        answer = { role: "assistant", text: out.reply, destination, card };
+        const saved = await familyChat.log(familyId, { text: question, reply, destination: page, conversation_id: chatId });
+        return { id: saved.conversation_id, answer: { role: "assistant", text: reply, destination: page } };
       }
+      const out = await familyChat.send(familyId, question, chatId);
+      const card = out.card ?? null;
+      let destination = isAskKey(out.destination) ? out.destination : null;
+      if (!destination && !card && out.source === "rules") destination = matchAsk(question);
+      return { id: out.conversation_id, answer: { role: "assistant", text: out.reply, destination, card } };
+    };
+    try {
+      let result;
+      try {
+        result = await answerIn(conversationId);
+      } catch (err) {
+        // The open chat was deleted (e.g. from another tab or device): ask again in a new chat.
+        if (!(conversationId && err instanceof ApiError && err.status === 404)) throw err;
+        forget(conversationId);
+        result = await answerIn(null);
+      }
+      const { id, answer } = result;
       if (!mounted.current) return;
       addSaved(id, question.slice(0, 60), [{ role: "user", text: question }, answer]);
       setPending(null);
